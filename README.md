@@ -5,10 +5,10 @@
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/license-private-red?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![Status](https://img.shields.io/badge/status-active-brightgreen?style=flat-square)
 
-**DocxCraft-Editor** is a local-first `.docx` editor built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), featuring a document library, smart anchor navigation, and a Neo-Brutalism UI — crafted for a seamless, Word-like editing experience right in the browser.
+**DocxCraft-Editor** is an open-source, local-first `.docx` editor built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), featuring a document library, smart anchor navigation, and a Neo-Brutalism UI — crafted for a seamless, Word-like editing experience right in the browser.
 
 ## Features
 
