@@ -1,4 +1,4 @@
-# Docx Editor
+# DocxCraft-Editor
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-private-red?style=flat-square)
 ![Status](https://img.shields.io/badge/status-active-brightgreen?style=flat-square)
 
-A local-first `.docx` editor built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/) with a document library, anchor navigation, and a Neo-Brutalism UI.
+**DocxCraft-Editor** is a local-first `.docx` editor built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), featuring a document library, smart anchor navigation, and a Neo-Brutalism UI — crafted for a seamless, Word-like editing experience right in the browser.
 
 ## Features
 
