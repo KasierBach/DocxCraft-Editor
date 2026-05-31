@@ -1,0 +1,55 @@
+.app-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--nb-grey-100);
+  background-image:
+    radial-gradient(circle at 2px 2px, var(--nb-grey-200) 1px, transparent 0);
+  background-size: 24px 24px;
+  color: var(--nb-black);
+  overflow: hidden;
+}
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 260px;
+  gap: 16px;
+  padding: 16px 16px 0 16px;
+  min-height: 0;
+  overflow: hidden;
+  transition: all 300ms ease;
+}
+
+.workspace.sidebar--hidden {
+  grid-template-columns: minmax(0, 1fr) 260px;
+}
+
+.workspace.info--hidden {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.workspace.sidebar--hidden.info--hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar,
+.right-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow-y: auto; 
+  padding-bottom: 24px; 
+}
+
+.sidebar::-webkit-scrollbar,
+.right-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.right-sidebar::-webkit-scrollbar-thumb {
+  background: var(--nb-grey-200);
+  border-radius: 2px;
+}

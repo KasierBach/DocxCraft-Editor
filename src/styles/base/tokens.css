@@ -1,0 +1,12 @@
+:root {
+  --nb-black: #201F1E;
+  --nb-white: #FFFFFF;
+  --nb-grey-100: #F3F4F6;
+  --nb-grey-200: #E5E7EB;
+  --nb-green: #C7F284;
+  --nb-blue: #A5D8FF;
+  --nb-border: 2px;
+  --nb-shadow: 3px 3px 0px var(--nb-black);
+  --nb-shadow-hover: 5px 5px 0px var(--nb-black);
+  --nb-shadow-active: 1px 1px 0px var(--nb-black);
+}

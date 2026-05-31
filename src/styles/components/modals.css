@@ -1,0 +1,125 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: modal-fade-in 200ms ease-out;
+}
+
+.modal-content {
+  background: var(--nb-white);
+  border: 3px solid var(--nb-black);
+  box-shadow: 8px 8px 0px var(--nb-black);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: modal-slide-up 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 3px solid var(--nb-black);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--nb-blue);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.close-button {
+  background: transparent;
+  border: none;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  color: var(--nb-black);
+  transition: transform 100ms ease;
+}
+
+.close-button:hover {
+  transform: scale(1.2);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.shortcut-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.shortcut-description {
+  font-weight: 600;
+  color: var(--nb-black);
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.key-cap {
+  background: var(--nb-grey-100);
+  border: 2px solid var(--nb-black);
+  border-bottom-width: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  min-width: 2.5em;
+  text-align: center;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.1);
+}
+
+.key-plus {
+  font-weight: 900;
+  font-size: 0.85rem;
+}
+
+.modal-footer {
+  padding: 20px 24px;
+  border-top: 3px solid var(--nb-black);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--nb-grey-100);
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-slide-up {
+  from { transform: translateY(40px); }
+  to { transform: translateY(0); }
+}

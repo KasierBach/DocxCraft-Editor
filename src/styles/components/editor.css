@@ -1,0 +1,52 @@
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--nb-white);
+  border: 2.5px solid var(--nb-black) !important;
+  box-shadow: 6px 6px 0px var(--nb-black);
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 12px;
+  margin-right: 12px;
+}
+
+.editor-host {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.docx-editor-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.status-bar {
+  padding: 6px 16px;
+  background: var(--nb-black);
+  color: var(--nb-white);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-bar__message {
+  opacity: 0.9;
+}
+
+/* Override editor selection style */
+.ce-block--selected .ce-block__content {
+  background: rgba(199, 242, 132, 0.3) !important;
+}
