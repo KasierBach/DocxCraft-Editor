@@ -35,6 +35,7 @@ export type CreateDocumentStoreOptions = {
 };
 
 export interface DocumentStorePort {
+  verifyIntegrity(): Promise<void>;
   listDocuments(): Promise<SavedDocumentSummary[]>;
   listDocumentVersions(documentId: string): Promise<SavedDocumentVersionSummary[]>;
   saveNewDocument(input: SaveDocumentInput): Promise<SavedDocumentSummary>;

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 
@@ -91,6 +91,28 @@ export class FileDocumentStore implements DocumentStorePort {
       () => undefined,
     );
     return result;
+  }
+
+  async verifyIntegrity() {
+    const index = await this.readIndex();
+    const documentIds = new Set(index.documents.map((document) => document.id));
+    const versionIds = new Set(index.versions.map((version) => `${version.documentId}:${version.id}`));
+
+    for (const document of index.documents) {
+      if (!document.latestVersionId || !versionIds.has(`${document.id}:${document.latestVersionId}`)) {
+        throw new Error(`Document ${document.id} has no valid latest version.`);
+      }
+      const versions = index.versions.filter((version) => version.documentId === document.id);
+      for (const version of versions) {
+        await stat(this.documentVersionPath(document.id, version.id));
+      }
+    }
+
+    for (const entry of await readdir(this.dataDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && !documentIds.has(entry.name)) {
+        throw new Error(`Orphan document directory found: ${entry.name}.`);
+      }
+    }
   }
   async listDocuments() {
     const index = await this.readIndex();

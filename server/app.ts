@@ -173,7 +173,7 @@ export function buildDocumentApiApp({
 
   app.get('/api/ready', async (_request, reply) => {
     try {
-      await store.listDocuments();
+      await store.verifyIntegrity();
       return { status: 'ready', apiVersion: API_VERSION };
     } catch {
       return reply.code(503).send({ status: 'not_ready', apiVersion: API_VERSION });

@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { mkdtemp, rm } from 'node:fs/promises';
+import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -123,5 +124,14 @@ describe('createDocumentStore', () => {
     }
     expect((await store.listDocumentVersions(created.id))).toHaveLength(100);
     expect((await store.listDocuments())[0]?.versionCount).toBe(100);
+  });
+
+  it('detects a missing version file', async () => {
+    const dataDir = await createTempDir();
+    const store = createDocumentStore({ dataDir });
+    const created = await store.saveNewDocument({ name: 'Integrity.docx', buffer: Buffer.from('data') });
+    const versions = await store.listDocumentVersions(created.id);
+    await unlink(join(dataDir, created.id, `${versions[0]!.id}.docx`));
+    await expect(store.verifyIntegrity()).rejects.toThrow(/ENOENT|not found/i);
   });
 });
