@@ -2,7 +2,16 @@ name: CI
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   quality:
@@ -19,3 +28,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test -- --maxWorkers=2
       - run: npm run build
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docx-editor-dist-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
