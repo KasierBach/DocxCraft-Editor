@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { DocumentConflictError } from './documentStore.ts';
+import { validateDocx } from './docxValidation.ts';
 import type { DocumentStorePort } from './types.ts';
 
 export const API_VERSION = '2026-05-25-fastify-ts';
@@ -46,7 +47,7 @@ function readDocumentName(headers: Record<string, unknown>) {
   }
 }
 
-function readDocumentBuffer(body: unknown) {
+async function readDocumentBuffer(body: unknown) {
   if (!(body instanceof Uint8Array) || body.byteLength < 4) {
     throw new RequestValidationError();
   }
@@ -55,6 +56,11 @@ function readDocumentBuffer(body: unknown) {
     throw new RequestValidationError();
   }
 
+  try {
+    await validateDocx(body);
+  } catch {
+    throw new RequestValidationError();
+  }
   return body;
 }
 
@@ -182,9 +188,10 @@ export function buildDocumentApiApp({
   });
 
   app.post('/api/documents', async (request, reply) => {
+    const buffer = await readDocumentBuffer(request.body);
     const document = await store.saveNewDocument({
       name: readDocumentName(request.headers as Record<string, unknown>),
-      buffer: readDocumentBuffer(request.body),
+      buffer,
     });
 
     return reply.code(201).send(document);
@@ -192,9 +199,10 @@ export function buildDocumentApiApp({
 
   app.put('/api/documents/:documentId', async (request, reply) => {
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
+    const buffer = await readDocumentBuffer(request.body);
     const document = await store.updateDocument(documentId, {
       name: readDocumentName(request.headers as Record<string, unknown>),
-      buffer: readDocumentBuffer(request.body),
+      buffer,
       expectedRevision: readExpectedRevision(request.headers as Record<string, unknown>),
     });
 

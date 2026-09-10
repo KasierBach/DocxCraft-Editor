@@ -4,15 +4,18 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import JSZip from 'jszip';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { API_VERSION, buildDocumentApiApp } from './app.ts';
 import { createDocumentStore } from './documentStore.ts';
 
-const DOCX_HEADER = [0x50, 0x4b, 0x03, 0x04];
-
-function docxPayload(bytes: number[]) {
-  return Buffer.from([...DOCX_HEADER, ...bytes]);
+async function docxPayload(bytes: number[]) {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<Types/>');
+  zip.file('word/document.xml', '<document/>');
+  zip.file('word/test.bin', Buffer.from(bytes));
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array', compression: 'STORE' }));
 }
 
 describe('buildDocumentApiApp', () => {
@@ -40,6 +43,8 @@ describe('buildDocumentApiApp', () => {
     const app = await createApp();
 
     try {
+      const firstPayload = await docxPayload([1, 2, 3]);
+      const secondPayload = await docxPayload([9, 8, 7, 6]);
       const createResponse = await app.inject({
         method: 'POST',
         url: '/api/documents',
@@ -47,7 +52,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: docxPayload([1, 2, 3]),
+        payload: firstPayload,
       });
 
       expect(createResponse.statusCode).toBe(201);
@@ -60,7 +65,7 @@ describe('buildDocumentApiApp', () => {
         revision: number;
       }>();
       expect(created.name).toBe('Proposal.docx');
-      expect(created.sizeInBytes).toBe(7);
+      expect(created.sizeInBytes).toBe(firstPayload.byteLength);
       expect(created.versionCount).toBe(1);
       expect(created.revision).toBe(1);
       expect(created.lastOpenedAt).toBeNull();
@@ -82,13 +87,13 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal Final.docx',
         },
-        payload: docxPayload([9, 8, 7, 6]),
+        payload: secondPayload,
       });
 
       expect(updateResponse.statusCode).toBe(200);
       const updated = updateResponse.json<{ name: string; sizeInBytes: number; versionCount: number }>();
       expect(updated.name).toBe('Proposal Final.docx');
-      expect(updated.sizeInBytes).toBe(8);
+      expect(updated.sizeInBytes).toBe(secondPayload.byteLength);
       expect(updated.versionCount).toBe(2);
 
       const versionsResponse = await app.inject({
@@ -108,7 +113,7 @@ describe('buildDocumentApiApp', () => {
         url: `/api/documents/${created.id}/content?markOpened=true`,
       });
       expect(contentResponse.statusCode).toBe(200);
-      expect(Array.from(contentResponse.rawPayload)).toEqual(Array.from(docxPayload([9, 8, 7, 6])));
+      expect(Array.from(contentResponse.rawPayload)).toEqual(Array.from(secondPayload));
 
       const contentListResponse = await app.inject({
         method: 'GET',
@@ -123,7 +128,7 @@ describe('buildDocumentApiApp', () => {
         url: `/api/documents/${created.id}/versions/${versions[1]!.id}/content`,
       });
       expect(historicalContentResponse.statusCode).toBe(200);
-      expect(Array.from(historicalContentResponse.rawPayload)).toEqual(Array.from(docxPayload([1, 2, 3])));
+      expect(Array.from(historicalContentResponse.rawPayload)).toEqual(Array.from(firstPayload));
 
       const missingResponse = await app.inject({
         method: 'GET',
@@ -147,7 +152,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': encodeURIComponent(documentName),
         },
-        payload: docxPayload([1, 2, 3]),
+        payload: await docxPayload([1, 2, 3]),
       });
 
       expect(createResponse.statusCode).toBe(201);
@@ -179,7 +184,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: docxPayload([1, 2, 3]),
+        payload: await docxPayload([1, 2, 3]),
       });
       const created = createResponse.json<{ id: string }>();
 
@@ -224,7 +229,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: docxPayload([1, 2, 3]),
+        payload: await docxPayload([1, 2, 3]),
       });
       const created = createResponse.json<{ id: string }>();
 
@@ -315,7 +320,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'a'.repeat(256),
         },
-        payload: docxPayload([1]),
+        payload: await docxPayload([1]),
       });
       expect(longNameResponse.statusCode).toBe(400);
     } finally {
@@ -330,7 +335,7 @@ describe('buildDocumentApiApp', () => {
         method: 'POST',
         url: '/api/documents',
         headers: { 'content-type': 'application/octet-stream', 'x-document-name': 'Conflict.docx' },
-        payload: docxPayload([1]),
+        payload: await docxPayload([1]),
       });
       const created = createResponse.json<{ id: string }>();
 
@@ -342,7 +347,7 @@ describe('buildDocumentApiApp', () => {
           'x-document-name': 'Conflict.docx',
           'if-match': '"1"',
         },
-        payload: docxPayload([2]),
+        payload: await docxPayload([2]),
       });
       expect(firstUpdate.statusCode).toBe(200);
 
@@ -354,7 +359,7 @@ describe('buildDocumentApiApp', () => {
           'x-document-name': 'Conflict.docx',
           'if-match': '"1"',
         },
-        payload: docxPayload([3]),
+        payload: await docxPayload([3]),
       });
       expect(staleUpdate.statusCode).toBe(409);
     } finally {
