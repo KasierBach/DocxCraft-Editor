@@ -25,52 +25,58 @@ export function Sidebar({
   filterStyle,
   onStyleChange,
   uniqueStyles,
-  onResetFilters
+  onResetFilters,
 }: SidebarProps) {
-  const isFiltered = searchQuery !== '' || filterStyle !== 'all';
+  const isFiltered = searchQuery !== '' || filterStyle !== 'outline';
 
   return (
-    <aside className="sidebar">
-      <Panel title="Anchor map">
+    <aside className="sidebar" aria-label="Document outline">
+      <Panel title="Document outline">
         <div className="filter-group">
-          <input 
-            type="text" 
-            placeholder="Search headings..." 
+          <input
+            type="search"
+            placeholder="Search outline"
             className="filter-input"
             value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(event) => onSearchChange(event.target.value)}
+            aria-label="Search document outline"
           />
-          <select 
+          <select
             className="filter-select"
             value={filterStyle}
-            onChange={(e) => onStyleChange(e.target.value)}
+            onChange={(event) => onStyleChange(event.target.value)}
+            aria-label="Filter outline by style"
           >
-            <option value="all">Styles</option>
-            {uniqueStyles.map(style => (
-              <option key={style} value={style}>{style}</option>
+            <option value="outline">Outline</option>
+            <option value="all">All paragraphs</option>
+            {uniqueStyles.map((style) => (
+              <option key={style} value={style}>
+                {style}
+              </option>
             ))}
           </select>
           {isFiltered && (
-            <button 
-              className="filter-reset" 
+            <button
+              type="button"
+              className="filter-reset"
               onClick={onResetFilters}
-              title="Clear filters"
+              aria-label="Clear outline filters"
             >
-              ×
+              &times;
             </button>
           )}
         </div>
         <p className="panel-copy">
-          {isFiltered 
-            ? `Found ${filteredAnchors.length} matches.` 
-            : `Showing ${anchors.length} items.`}
+          {isFiltered
+            ? `Found ${filteredAnchors.length} matches.`
+            : `Showing ${filteredAnchors.length} of ${anchors.length} paragraphs.`}
         </p>
-        <AnchorNavigator 
-          anchors={filteredAnchors} 
-          activeParaId={activeParaId} 
-          onJump={onJump} 
+        <AnchorNavigator
+          anchors={filteredAnchors}
+          activeParaId={activeParaId}
+          onJump={onJump}
         />
       </Panel>
     </aside>
   );
-}
+}

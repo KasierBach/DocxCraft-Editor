@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   clearRecoverySnapshot,
@@ -25,27 +25,34 @@ export function useRecoveryDraft({
   activeParaId,
   isDirty,
   getBuffer,
-  autosaveDelayMs = 15000,
+  autosaveDelayMs = 10000,
 }: UseRecoveryDraftOptions) {
-  const [recoverySnapshot, setRecoverySnapshot] = useState<RecoverySnapshot | null>(() =>
-    readRecoverySnapshot(),
-  );
+  const [recoverySnapshot, setRecoverySnapshot] = useState<RecoverySnapshot | null>(null);
   const [isSavingRecovery, setIsSavingRecovery] = useState(false);
+  const saveRecoveryTaskRef = useRef<Promise<RecoverySnapshot | null> | null>(null);
 
-  const refreshRecovery = useCallback(() => {
-    setRecoverySnapshot(readRecoverySnapshot());
+  const refreshRecovery = useCallback(async () => {
+    const snapshot = await readRecoverySnapshot();
+    setRecoverySnapshot(snapshot);
+    return snapshot;
   }, []);
+
+  useEffect(() => {
+    void refreshRecovery().catch(() => undefined);
+  }, [refreshRecovery]);
 
   const discardRecovery = useCallback(() => {
-    clearRecoverySnapshot();
+    const target =
+      recoverySnapshot ?? { sourceKind, documentId, documentName };
     setRecoverySnapshot(null);
-  }, []);
+    void clearRecoverySnapshot(target)
+      .then(refreshRecovery)
+      .catch(() => undefined);
+  }, [documentId, documentName, recoverySnapshot, refreshRecovery, sourceKind]);
 
   const saveRecovery = useCallback(async () => {
     const buffer = await getBuffer();
-    if (!buffer) {
-      return null;
-    }
+    if (!buffer) return null;
 
     const snapshot: RecoverySnapshot = {
       sourceKind,
@@ -55,27 +62,53 @@ export function useRecoveryDraft({
       savedAt: new Date().toISOString(),
       buffer,
     };
-    saveRecoverySnapshot(snapshot);
+
+    await saveRecoverySnapshot(snapshot);
     setRecoverySnapshot(snapshot);
     return snapshot;
   }, [activeParaId, documentId, documentName, getBuffer, sourceKind]);
 
-  useEffect(() => {
-    if (!isDirty) {
-      return undefined;
-    }
+  const saveRecoverySafely = useCallback(() => {
+    if (saveRecoveryTaskRef.current) return saveRecoveryTaskRef.current;
 
-    const timerId = window.setTimeout(() => {
-      setIsSavingRecovery(true);
-      void saveRecovery().finally(() => {
+    setIsSavingRecovery(true);
+    const task = saveRecovery()
+      .catch(() => null)
+      .finally(() => {
+        saveRecoveryTaskRef.current = null;
         setIsSavingRecovery(false);
       });
+    saveRecoveryTaskRef.current = task;
+    return task;
+  }, [saveRecovery]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const timerId = window.setTimeout(() => {
+      void saveRecoverySafely();
     }, autosaveDelayMs);
 
-    return () => {
-      window.clearTimeout(timerId);
+    return () => window.clearTimeout(timerId);
+  }, [autosaveDelayMs, isDirty, saveRecoverySafely]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') void saveRecoverySafely();
     };
-  }, [autosaveDelayMs, isDirty, saveRecovery]);
+    const saveOnPageHide = () => {
+      void saveRecoverySafely();
+    };
+
+    document.addEventListener('visibilitychange', saveWhenHidden);
+    window.addEventListener('pagehide', saveOnPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', saveWhenHidden);
+      window.removeEventListener('pagehide', saveOnPageHide);
+    };
+  }, [isDirty, saveRecoverySafely]);
 
   return {
     recoverySnapshot,
@@ -84,4 +117,4 @@ export function useRecoveryDraft({
     discardRecovery,
     refreshRecovery,
   };
-}
+}

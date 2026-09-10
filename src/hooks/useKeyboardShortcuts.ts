@@ -41,16 +41,14 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions): void
 
       for (const shortcut of shortcutsRef.current) {
         const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase();
-        const ctrlMatch = shortcut.ctrlKey ? event.ctrlKey : !event.ctrlKey;
-        const metaMatch = shortcut.metaKey ? event.metaKey : !event.metaKey;
         const shiftMatch = shortcut.shiftKey ? event.shiftKey : !event.shiftKey;
         const altMatch = shortcut.altKey ? event.altKey : !event.altKey;
 
         // Allow either Ctrl or Meta (Cmd) for cross-platform support
         const modifierMatch =
           (shortcut.ctrlKey || shortcut.metaKey)
-            ? (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey
-            : ctrlMatch && metaMatch && shiftMatch && altMatch;
+            ? (event.ctrlKey || event.metaKey) && shiftMatch && altMatch
+            : !event.ctrlKey && !event.metaKey && shiftMatch && altMatch;
 
         if (keyMatch && modifierMatch) {
           event.preventDefault();

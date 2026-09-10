@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedDocumentSummary } from '../../lib/documentApi';
 
 type CommandAction = {
   id: string;
   label: string;
   section: string;
-  icon?: string;
   handler: () => void;
+};
+
+type CommandResult = {
+  id: string;
+  label: string;
+  type: 'document' | 'anchor' | 'action';
+  section: string;
 };
 
 type CommandPaletteProps = {
@@ -30,109 +36,161 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
 
-  const filteredResults = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    
-    const docResults = documents
-      .filter(d => d.name.toLowerCase().includes(q))
-      .map(d => ({ id: d.id, label: d.name, type: 'document', section: 'Documents' }));
+  const filteredResults = useMemo<CommandResult[]>(() => {
+    const normalizedQuery = query.toLowerCase().trim();
+    const actionResults: CommandResult[] = actions
+      .filter((action) => action.label.toLowerCase().includes(normalizedQuery))
+      .map((action) => ({ ...action, type: 'action' }));
+    const documentResults: CommandResult[] = documents
+      .filter((document) => document.name.toLowerCase().includes(normalizedQuery))
+      .map((document) => ({
+        id: document.id,
+        label: document.name,
+        type: 'document',
+        section: 'Documents',
+      }));
+    const anchorResults: CommandResult[] = anchors
+      .filter((anchor) => anchor.label.toLowerCase().includes(normalizedQuery))
+      .slice(0, 8)
+      .map((anchor) => ({
+        id: anchor.id,
+        label: anchor.label,
+        type: 'anchor',
+        section: 'Outline',
+      }));
 
-    const anchorResults = anchors
-      .filter(a => a.label.toLowerCase().includes(q))
-      .slice(0, 5) // Limit anchors to prevent clutter
-      .map(a => ({ id: a.id, label: a.label, type: 'anchor', section: 'Headings' }));
+    return [...actionResults, ...documentResults, ...anchorResults];
+  }, [actions, anchors, documents, query]);
 
-    const actionResults = actions
-      .filter(a => a.label.toLowerCase().includes(q))
-      .map(a => ({ id: a.id, label: a.label, type: 'action', section: 'Actions' }));
-
-    return [...actionResults, ...docResults, ...anchorResults];
-  }, [query, documents, anchors, actions]);
+  const handleSelect = useCallback(
+    (item: CommandResult) => {
+      if (item.type === 'document') onOpenDocument(item.id);
+      else if (item.type === 'anchor') onJumpToAnchor(item.id);
+      else actions.find((action) => action.id === item.id)?.handler();
+      onClose();
+    },
+    [actions, onClose, onJumpToAnchor, onOpenDocument],
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    } else if (wasOpenRef.current) {
+      previousFocusRef.current?.focus();
       setQuery('');
-      return;
     }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % Math.max(1, filteredResults.length));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + filteredResults.length) % Math.max(1, filteredResults.length));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedIndex((index) => (index + 1) % Math.max(1, filteredResults.length));
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedIndex(
+          (index) => (index - 1 + filteredResults.length) % Math.max(1, filteredResults.length),
+        );
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
         const selected = filteredResults[selectedIndex];
-        if (selected) {
-          handleSelect(selected);
-        }
-      } else if (e.key === 'Escape') {
+        if (selected) handleSelect(selected);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredResults, selectedIndex, onClose]);
-
-  const handleSelect = (item: any) => {
-    if (item.type === 'document') onOpenDocument(item.id);
-    else if (item.type === 'anchor') onJumpToAnchor(item.id);
-    else if (item.type === 'action') {
-      const action = actions.find(a => a.id === item.id);
-      action?.handler();
-    }
-    onClose();
-  };
+  }, [filteredResults, handleSelect, isOpen, onClose, selectedIndex]);
 
   if (!isOpen) return null;
 
+  const activeOptionId = filteredResults[selectedIndex]
+    ? `command-option-${filteredResults[selectedIndex].type}-${filteredResults[selectedIndex].id}`
+    : undefined;
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="command-palette modal-content" onClick={e => e.stopPropagation()}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="command-palette modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
+      >
+        <h2 id="command-palette-title" className="visually-hidden">
+          Command palette
+        </h2>
         <div className="command-palette__input-wrapper">
-          <span className="command-palette__icon">🔍</span>
+          <span className="command-palette__icon" aria-hidden="true">/</span>
           <input
-            autoFocus
+            ref={inputRef}
             className="command-palette__input"
-            placeholder="Search documents, headings, or commands..."
+            placeholder="Search documents, outline, or commands"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
+            role="combobox"
+            aria-label="Search commands"
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-activedescendant={activeOptionId}
+            aria-expanded="true"
           />
         </div>
 
         <div className="command-palette__results">
           {filteredResults.length === 0 ? (
-            <div className="command-palette__empty">No results found for "{query}"</div>
+            <p className="command-palette__empty" aria-live="polite">
+              No results for &quot;{query}&quot;
+            </p>
           ) : (
-            <div className="command-palette__list">
-              {filteredResults.map((item, index) => (
-                <div
-                  key={`${item.type}-${item.id}`}
-                  className={`command-palette__item ${index === selectedIndex ? 'command-palette__item--selected' : ''}`}
-                  onClick={() => handleSelect(item)}
-                >
-                  <span className="command-palette__item-type">{item.section}</span>
-                  <span className="command-palette__item-label">{item.label}</span>
-                </div>
-              ))}
+            <div id="command-palette-results" className="command-palette__list" role="listbox">
+              {filteredResults.map((item, index) => {
+                const optionId = `command-option-${item.type}-${item.id}`;
+                return (
+                  <button
+                    id={optionId}
+                    key={optionId}
+                    type="button"
+                    role="option"
+                    aria-selected={index === selectedIndex}
+                    className={`command-palette__item ${index === selectedIndex ? 'command-palette__item--selected' : ''}`}
+                    onMouseMove={() => setSelectedIndex(index)}
+                    onClick={() => handleSelect(item)}
+                  >
+                    <span className="command-palette__item-type">{item.section}</span>
+                    <span className="command-palette__item-label">{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="command-palette__footer">
-          <span>↑↓ to navigate</span>
-          <span>↵ to select</span>
-          <span>esc to close</span>
+        <div className="command-palette__footer" aria-hidden="true">
+          <span>Arrow keys navigate</span>
+          <span>Enter selects</span>
+          <span>Esc closes</span>
         </div>
-      </div>
+      </section>
     </div>
   );
-}
+}

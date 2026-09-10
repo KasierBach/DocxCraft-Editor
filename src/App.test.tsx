@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
+import type { RecoverySnapshot } from './lib/recoveryStore';
 
 const docxEditorRenderLog: Array<{ document?: unknown; documentBuffer?: ArrayBuffer }> = [];
 const openSavedDocument = vi.fn();
@@ -19,6 +20,7 @@ const discardRecovery = vi.fn();
 const editorSave = vi.fn();
 const triggerEditorContentChange = vi.fn();
 const triggerEditorSelectionChange = vi.fn();
+let mockedRecoverySnapshot: RecoverySnapshot | null = null;
 let nextSelectionInfo:
   | {
       paraId: string | null;
@@ -28,6 +30,10 @@ let nextSelectionInfo:
       after: string;
     }
   | null = null;
+
+async function openUtilityMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /more actions/i }));
+}
 
 vi.mock('@eigenpal/docx-editor-react', async () => {
   const React = await import('react');
@@ -52,7 +58,10 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
     React.useImperativeHandle(ref, () => ({
       save: editorSave,
       getTotalPages: () => 1,
-      getPageContent: () => ({ pageNumber: 1, blocks: [] }),
+      getPageContent: () => ({ pageNumber: 1, text: '', paragraphs: [] }),
+      getAgent: () => ({ getWordCount: () => 0 }),
+      getEditorRef: () => null,
+      openPrintPreview: vi.fn(),
       getSelectionInfo: () => nextSelectionInfo,
       getCurrentPage: () => 1,
       scrollToPage: vi.fn(),
@@ -217,7 +226,7 @@ vi.mock('./hooks/useApiStatus', () => ({
 
 vi.mock('./hooks/useRecoveryDraft', () => ({
   useRecoveryDraft: () => ({
-    recoverySnapshot: null,
+    recoverySnapshot: mockedRecoverySnapshot,
     isSavingRecovery: false,
     saveRecovery: vi.fn(),
     discardRecovery,
@@ -254,6 +263,7 @@ describe('App', () => {
     refreshVersions.mockReset();
     discardRecovery.mockReset();
     triggerEditorSelectionChange.mockReset();
+    mockedRecoverySnapshot = null;
     nextSelectionInfo = null;
   });
 
@@ -262,28 +272,29 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(screen.getByRole('button', { name: /^reload$/i })).toBeDisabled();
+    await openUtilityMenu(user);
+    expect(screen.getByRole('button', { name: /reload current document/i })).toBeDisabled();
 
-    const localBuffer = Uint8Array.from([9, 8, 7, 6]);
+    const localBuffer = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 9, 8, 7, 6]);
     const file = new File([localBuffer], 'External Draft.docx', {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
-    await user.upload(screen.getByLabelText(/open \.docx/i), file);
-    expect(screen.getByRole('button', { name: /^reload$/i })).toBeEnabled();
-    await user.click(screen.getByRole('button', { name: /^reload$/i }));
+    await user.upload(screen.getByLabelText(/^open$/i), file);
+    await openUtilityMenu(user);
+    expect(screen.getByRole('button', { name: /reload current document/i })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: /reload current document/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/reloaded external draft\.docx\./i)).toBeInTheDocument();
-    });
+    const reloadToast = await screen.findByRole('status');
+    expect(reloadToast).toHaveTextContent(/reloaded external draft\.docx\./i);
 
     const renderedBuffers = docxEditorRenderLog
       .map((entry) => entry.documentBuffer)
       .filter((buffer): buffer is ArrayBuffer => buffer instanceof ArrayBuffer);
 
     expect(renderedBuffers.length).toBeGreaterThanOrEqual(2);
-    expect(Array.from(new Uint8Array(renderedBuffers.at(-2)!))).toEqual([9, 8, 7, 6]);
-    expect(Array.from(new Uint8Array(renderedBuffers.at(-1)!))).toEqual([9, 8, 7, 6]);
+    expect(Array.from(new Uint8Array(renderedBuffers.at(-2)!))).toEqual(Array.from(localBuffer));
+    expect(Array.from(new Uint8Array(renderedBuffers.at(-1)!))).toEqual(Array.from(localBuffer));
   });
 
   it('marks the editor dirty after a content change and clears it after save with a toast', async () => {
@@ -316,7 +327,7 @@ describe('App', () => {
     expect(screen.queryByText(/^unsaved changes$/i)).not.toBeInTheDocument();
 
     const toast = await screen.findByRole('status');
-    expect(toast).toHaveTextContent(/saved built-in sample\.docx to the local library\./i);
+    expect(toast).toHaveTextContent(/document "built-in sample\.docx" saved to library/i);
   });
 
   it('replaces the current toast instead of stacking multiple notifications', async () => {
@@ -324,11 +335,13 @@ describe('App', () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: /sample/i }));
+    await openUtilityMenu(user);
+    await user.click(screen.getByRole('button', { name: /load sample/i }));
     const firstToast = await screen.findByRole('status');
     expect(firstToast).toHaveTextContent(/sample reloaded\./i);
     expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /^reload$/i })).toBeDisabled();
+    await openUtilityMenu(user);
+    expect(screen.getByRole('button', { name: /reload current document/i })).toBeDisabled();
   });
 
   it('keeps the active anchor in sync when selection info has no paraId', async () => {
@@ -351,5 +364,29 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByTestId('active-para')).toHaveTextContent('para-2');
     });
+  });
+
+  it('does not replace the requested document with recovery data on startup', () => {
+    mockedRecoverySnapshot = {
+      sourceKind: 'sample',
+      documentId: null,
+      documentName: 'Recovered sample.docx',
+      activeParaId: 'para-2',
+      savedAt: '2026-06-04T10:00:00.000Z',
+      buffer: Uint8Array.from([7, 6, 5, 4]).buffer,
+    };
+
+    render(<App />);
+
+    expect(discardRecovery).not.toHaveBeenCalled();
+    expect(screen.getByTestId('active-para')).toHaveTextContent('para-1');
+    expect(screen.queryByText(/recovered unsaved work/i)).not.toBeInTheDocument();
+    expect(
+      docxEditorRenderLog.some((entry) =>
+        entry.documentBuffer
+          ? Array.from(new Uint8Array(entry.documentBuffer)).join(',') === '7,6,5,4'
+          : false,
+      ),
+    ).toBe(false);
   });
 });

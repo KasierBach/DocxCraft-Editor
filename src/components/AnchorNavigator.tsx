@@ -38,25 +38,21 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
     const activeAnchor = anchors.find(a => a.id === activeParaId);
     if (!activeAnchor) return;
 
-    const wasCollapsed = collapsedPages.has(activeAnchor.pageNumber);
-    if (wasCollapsed) {
+    if (collapsedPages.has(activeAnchor.pageNumber)) {
       setCollapsedPages(prev => {
         const next = new Set(prev);
         next.delete(activeAnchor.pageNumber);
         return next;
       });
+      return;
     }
 
-    const timer = setTimeout(() => {
-      activeButtonRef.current?.scrollIntoView({
-        block: 'center',
-        inline: 'nearest',
-        behavior: 'smooth',
-      });
-    }, wasCollapsed ? 150 : 50);
-
-    return () => clearTimeout(timer);
-  }, [activeParaId, anchors]);
+    activeButtonRef.current?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'smooth',
+    });
+  }, [activeParaId, anchors, collapsedPages]);
 
   const collapseAll = () => {
     const allPageNums = groupedAnchors.map(([page]) => Number(page));

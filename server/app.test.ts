@@ -9,6 +9,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { API_VERSION, buildDocumentApiApp } from './app.ts';
 import { createDocumentStore } from './documentStore.ts';
 
+const DOCX_HEADER = [0x50, 0x4b, 0x03, 0x04];
+
+function docxPayload(bytes: number[]) {
+  return Buffer.from([...DOCX_HEADER, ...bytes]);
+}
+
 describe('buildDocumentApiApp', () => {
   const tempDirectories: string[] = [];
 
@@ -41,7 +47,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: Buffer.from([1, 2, 3]),
+        payload: docxPayload([1, 2, 3]),
       });
 
       expect(createResponse.statusCode).toBe(201);
@@ -53,7 +59,7 @@ describe('buildDocumentApiApp', () => {
         lastOpenedAt: string | null;
       }>();
       expect(created.name).toBe('Proposal.docx');
-      expect(created.sizeInBytes).toBe(3);
+      expect(created.sizeInBytes).toBe(7);
       expect(created.versionCount).toBe(1);
       expect(created.lastOpenedAt).toBeNull();
 
@@ -74,13 +80,13 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal Final.docx',
         },
-        payload: Buffer.from([9, 8, 7, 6]),
+        payload: docxPayload([9, 8, 7, 6]),
       });
 
       expect(updateResponse.statusCode).toBe(200);
       const updated = updateResponse.json<{ name: string; sizeInBytes: number; versionCount: number }>();
       expect(updated.name).toBe('Proposal Final.docx');
-      expect(updated.sizeInBytes).toBe(4);
+      expect(updated.sizeInBytes).toBe(8);
       expect(updated.versionCount).toBe(2);
 
       const versionsResponse = await app.inject({
@@ -100,7 +106,7 @@ describe('buildDocumentApiApp', () => {
         url: `/api/documents/${created.id}/content?markOpened=true`,
       });
       expect(contentResponse.statusCode).toBe(200);
-      expect(Array.from(contentResponse.rawPayload)).toEqual([9, 8, 7, 6]);
+      expect(Array.from(contentResponse.rawPayload)).toEqual(Array.from(docxPayload([9, 8, 7, 6])));
 
       const contentListResponse = await app.inject({
         method: 'GET',
@@ -115,7 +121,7 @@ describe('buildDocumentApiApp', () => {
         url: `/api/documents/${created.id}/versions/${versions[1]!.id}/content`,
       });
       expect(historicalContentResponse.statusCode).toBe(200);
-      expect(Array.from(historicalContentResponse.rawPayload)).toEqual([1, 2, 3]);
+      expect(Array.from(historicalContentResponse.rawPayload)).toEqual(Array.from(docxPayload([1, 2, 3])));
 
       const missingResponse = await app.inject({
         method: 'GET',
@@ -139,7 +145,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': encodeURIComponent(documentName),
         },
-        payload: Buffer.from([1, 2, 3]),
+        payload: docxPayload([1, 2, 3]),
       });
 
       expect(createResponse.statusCode).toBe(201);
@@ -171,7 +177,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: Buffer.from([1, 2, 3]),
+        payload: docxPayload([1, 2, 3]),
       });
       const created = createResponse.json<{ id: string }>();
 
@@ -216,7 +222,7 @@ describe('buildDocumentApiApp', () => {
           'content-type': 'application/octet-stream',
           'x-document-name': 'Proposal.docx',
         },
-        payload: Buffer.from([1, 2, 3]),
+        payload: docxPayload([1, 2, 3]),
       });
       const created = createResponse.json<{ id: string }>();
 
@@ -254,6 +260,62 @@ describe('buildDocumentApiApp', () => {
         status: 'ok',
         apiVersion: API_VERSION,
       });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('adds basic response hardening headers and a request id', async () => {
+    const app = await createApp();
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/health' });
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['x-request-id']).toBeTruthy();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('exposes readiness separately from liveness', async () => {
+    const app = await createApp();
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/ready' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: 'ready', apiVersion: API_VERSION });
+    } finally {
+      await app.close();
+    }
+  });
+  it('rejects empty, non-DOCX, and overlong uploads', async () => {
+    const app = await createApp();
+
+    try {
+      const invalidPayloads = [Buffer.alloc(0), Buffer.from([1, 2, 3, 4])];
+
+      for (const payload of invalidPayloads) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/documents',
+          headers: {
+            'content-type': 'application/octet-stream',
+            'x-document-name': 'Invalid.docx',
+          },
+          payload,
+        });
+        expect(response.statusCode).toBe(400);
+      }
+
+      const longNameResponse = await app.inject({
+        method: 'POST',
+        url: '/api/documents',
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-document-name': 'a'.repeat(256),
+        },
+        payload: docxPayload([1]),
+      });
+      expect(longNameResponse.statusCode).toBe(400);
     } finally {
       await app.close();
     }

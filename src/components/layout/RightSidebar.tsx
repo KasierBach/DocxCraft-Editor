@@ -1,5 +1,7 @@
 import type { SavedDocumentSummary, SavedDocumentVersionSummary } from '../../lib/documentApi';
 import type { RecoverySnapshot } from '../../lib/recoveryStore';
+import type { MediaItem } from '../../lib/mediaScanner';
+import { MediaManagerPanel } from '../MediaManagerPanel';
 import { SavedDocumentsPanel } from '../SavedDocumentsPanel';
 import { VersionHistoryPanel } from '../VersionHistoryPanel';
 import { Panel } from '../ui/Panel';
@@ -15,6 +17,7 @@ type RightSidebarProps = {
   isLoadingDocuments: boolean;
   isLoadingVersions: boolean;
   recoverySnapshot: RecoverySnapshot | null;
+  mediaItems: MediaItem[];
   onRestoreRecovery: () => void;
   onDiscardRecovery: () => void;
   onOpenDocument: (documentId: string) => void | Promise<void>;
@@ -25,6 +28,7 @@ type RightSidebarProps = {
   onRefreshDocuments: () => void | Promise<void>;
   onRestoreVersion: (documentId: string, versionId: string) => void | Promise<void>;
   onDownloadVersion: (documentId: string, versionId: string) => void | Promise<void>;
+  onJumpToMedia: (paraId: string) => void;
 };
 
 export function RightSidebar({
@@ -38,6 +42,7 @@ export function RightSidebar({
   isLoadingDocuments,
   isLoadingVersions,
   recoverySnapshot,
+  mediaItems,
   onRestoreRecovery,
   onDiscardRecovery,
   onOpenDocument,
@@ -48,6 +53,7 @@ export function RightSidebar({
   onRefreshDocuments,
   onRestoreVersion,
   onDownloadVersion,
+  onJumpToMedia,
 }: RightSidebarProps) {
   return (
     <aside className="right-sidebar">
@@ -71,6 +77,8 @@ export function RightSidebar({
           </div>
         </dl>
       </Panel>
+
+      <MediaManagerPanel items={mediaItems} onJumpToParaId={onJumpToMedia} />
 
       {recoverySnapshot && (
         <Panel title="Recovery draft">

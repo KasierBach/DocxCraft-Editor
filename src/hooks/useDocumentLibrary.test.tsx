@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDocumentLibrary } from './useDocumentLibrary';
 import {
   deleteDocument,
+  duplicateDocument,
   listDocuments,
   listDocumentVersions,
   readDocumentContent,
@@ -22,6 +23,7 @@ vi.mock('../lib/documentApi', () => ({
   readDocumentVersionContent: vi.fn(),
   renameDocument: vi.fn(),
   deleteDocument: vi.fn(),
+  duplicateDocument: vi.fn(),
 }));
 
 const mockedListDocuments = vi.mocked(listDocuments);
@@ -31,6 +33,7 @@ const mockedReadDocumentContent = vi.mocked(readDocumentContent);
 const mockedReadDocumentVersionContent = vi.mocked(readDocumentVersionContent);
 const mockedRenameDocument = vi.mocked(renameDocument);
 const mockedDeleteDocument = vi.mocked(deleteDocument);
+const mockedDuplicateDocument = vi.mocked(duplicateDocument);
 
 const EXISTING_DOCUMENT: SavedDocumentSummary = {
   id: 'doc-1',
@@ -181,9 +184,10 @@ describe('useDocumentLibrary', () => {
 
     mockedRenameDocument.mockResolvedValue(renamedDocument);
     mockedReadDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
-    mockedSaveDocument.mockResolvedValueOnce(duplicatedDocument).mockResolvedValueOnce(restoredDocument);
+    mockedSaveDocument.mockResolvedValue(restoredDocument);
     mockedReadDocumentVersionContent.mockResolvedValue(new Uint8Array([5, 5, 5]).buffer);
     mockedDeleteDocument.mockResolvedValue(undefined);
+    mockedDuplicateDocument.mockResolvedValue(duplicatedDocument);
     mockedListDocuments
       .mockResolvedValueOnce([EXISTING_DOCUMENT])
       .mockResolvedValueOnce([renamedDocument])
@@ -220,7 +224,7 @@ describe('useDocumentLibrary', () => {
     });
 
     expect(duplicated!).toEqual(duplicatedDocument);
-    expect(mockedReadDocumentContent).toHaveBeenCalledWith('doc-1', { markOpened: false });
+    expect(mockedDuplicateDocument).toHaveBeenCalledWith('doc-1');
 
     let restored: Awaited<ReturnType<typeof result.current.restoreDocumentVersion>>;
     await act(async () => {

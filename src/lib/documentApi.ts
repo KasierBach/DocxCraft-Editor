@@ -116,7 +116,8 @@ export async function deleteDocument(documentId: string) {
 }
 
 export async function readDocumentContent(documentId: string, options?: ReadDocumentOptions) {
-  return dedupeRequest(`read-content-${documentId}`, async () => {
+  const markOpened = options?.markOpened === true ? 'opened' : 'plain';
+  return dedupeRequest(`read-content-${documentId}-${markOpened}`, async () => {
     const response = await fetch(createContentUrl(documentId, options));
     if (!response.ok) {
       throw new Error(await readErrorMessage(response));

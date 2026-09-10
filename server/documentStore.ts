@@ -67,11 +67,22 @@ export class FileDocumentStore implements DocumentStorePort {
 
   readonly indexPath: string;
 
+  private writeQueue: Promise<void> = Promise.resolve();
+
   constructor({ dataDir }: { dataDir: string }) {
     this.dataDir = dataDir;
     this.indexPath = join(dataDir, INDEX_FILENAME);
   }
 
+
+  private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.writeQueue.then(operation, operation);
+    this.writeQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
   async listDocuments() {
     const index = await this.readIndex();
     return index.documents.map(this.toPublicDocumentSummary).sort(byUpdatedAtDescending);
@@ -84,6 +95,7 @@ export class FileDocumentStore implements DocumentStorePort {
   }
 
   async saveNewDocument({ name, buffer }: SaveDocumentInput) {
+    return this.runExclusive(async () => {
     const index = await this.readIndex();
     const documentId = randomUUID();
     const versionId = randomUUID();
@@ -112,9 +124,11 @@ export class FileDocumentStore implements DocumentStorePort {
     await this.writeDocumentFile(documentId, versionId, buffer);
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(document);
+    });
   }
 
   async updateDocument(id: string, { name, buffer }: UpdateDocumentInput) {
+    return this.runExclusive(async () => {
     const index = await this.readIndex();
     const existingDocument = this.getStoredDocumentOrThrow(index, id);
     const timestamp = createTimestamp();
@@ -141,9 +155,11 @@ export class FileDocumentStore implements DocumentStorePort {
     await this.writeDocumentFile(id, versionId, buffer);
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(updatedDocument);
+    });
   }
 
   async renameDocument(id: string, { name }: RenameDocumentInput) {
+    return this.runExclusive(async () => {
     const index = await this.readIndex();
     const existingDocument = this.getStoredDocumentOrThrow(index, id);
     const renamedDocument: StoredDocumentSummary = {
@@ -157,9 +173,11 @@ export class FileDocumentStore implements DocumentStorePort {
     );
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(renamedDocument);
+    });
   }
 
   async deleteDocument(id: string) {
+    return this.runExclusive(async () => {
     const index = await this.readIndex();
     this.getStoredDocumentOrThrow(index, id);
 
@@ -167,9 +185,11 @@ export class FileDocumentStore implements DocumentStorePort {
     index.versions = index.versions.filter((version) => version.documentId !== id);
     await this.writeIndex(index);
     await rm(this.documentDirectoryPath(id), { recursive: true, force: true });
+    });
   }
 
   async duplicateDocument(id: string) {
+    return this.runExclusive(async () => {
     const index = await this.readIndex();
     const existingDocument = this.getStoredDocumentOrThrow(index, id);
     const latestVersion = this.getVersionOrThrow(index, id, existingDocument.latestVersionId);
@@ -204,6 +224,7 @@ export class FileDocumentStore implements DocumentStorePort {
     await this.writeDocumentFile(documentId, versionId, buffer);
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(document);
+    });
   }
 
   async readDocument(id: string, options?: ReadDocumentOptions) {
@@ -212,16 +233,21 @@ export class FileDocumentStore implements DocumentStorePort {
   }
 
   async readDocumentRecord(id: string, options?: ReadDocumentOptions): Promise<SavedDocumentRecord> {
+    if (options?.markOpened) {
+      return this.runExclusive(() => this.readDocumentRecordFromIndex(id, true));
+    }
+
+    return this.readDocumentRecordFromIndex(id, false);
+  }
+
+  private async readDocumentRecordFromIndex(id: string, markOpened: boolean) {
     const index = await this.readIndex();
     const document = this.getStoredDocumentOrThrow(index, id);
     const latestVersion = this.getVersionOrThrow(index, id, document.latestVersionId);
-
-    const metadata = options?.markOpened
-      ? await this.touchDocumentOpened(index, document)
-      : this.toPublicDocumentSummary(document);
-
     return {
-      metadata,
+      metadata: markOpened
+        ? await this.touchDocumentOpened(index, document)
+        : this.toPublicDocumentSummary(document),
       buffer: await this.readVersionBuffer(id, latestVersion.id),
     };
   }
@@ -405,7 +431,12 @@ export class FileDocumentStore implements DocumentStorePort {
 }
 
 export function createDocumentStore(options?: CreateDocumentStoreOptions) {
+  const dataDir = options?.dataDir ?? options?.rootDirectory;
+  if (!dataDir?.trim()) {
+    throw new Error('Document storage directory is required.');
+  }
+
   return new FileDocumentStore({
-    dataDir: options?.dataDir ?? options?.rootDirectory ?? '',
+    dataDir,
   });
 }

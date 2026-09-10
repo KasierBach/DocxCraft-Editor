@@ -9,9 +9,9 @@ describe('useRecoveryDraft', () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers();
-    clearRecoverySnapshot();
+    await clearRecoverySnapshot();
   });
 
   it('autosaves a recovery snapshot after the delay when dirty', async () => {
@@ -64,5 +64,28 @@ describe('useRecoveryDraft', () => {
     });
 
     expect(result.current.recoverySnapshot).toBeNull();
+  });
+
+  it('flushes recovery immediately when the page is hidden', async () => {
+    const getBuffer = vi.fn().mockResolvedValue(new Uint8Array([8, 9, 10]).buffer);
+    const { result } = renderHook(() =>
+      useRecoveryDraft({
+        sourceKind: 'sample',
+        documentId: null,
+        documentName: 'Built-in sample.docx',
+        activeParaId: 'para-2',
+        isDirty: true,
+        getBuffer,
+        autosaveDelayMs: 10000,
+      }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+      await Promise.resolve();
+    });
+
+    expect(getBuffer).toHaveBeenCalledTimes(1);
+    expect(Array.from(new Uint8Array(result.current.recoverySnapshot?.buffer ?? new ArrayBuffer(0)))).toEqual([8, 9, 10]);
   });
 });

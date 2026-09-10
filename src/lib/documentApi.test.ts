@@ -163,6 +163,25 @@ describe('documentApi', () => {
     expect(Array.from(new Uint8Array(versionBuffer))).toEqual([1, 2, 3]);
   });
 
+  it('does not deduplicate opened and plain content requests together', async () => {
+    let resolveFirst!: (response: Response) => void;
+    const firstResponse = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(firstResponse)
+      .mockResolvedValueOnce(new Response(new Uint8Array([2]), { status: 200 }));
+
+    const opened = readDocumentContent('doc-1', { markOpened: true });
+    const plain = readDocumentContent('doc-1', { markOpened: false });
+    resolveFirst(new Response(new Uint8Array([1]), { status: 200 }));
+
+    await Promise.all([opened, plain]);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/doc-1/content?markOpened=true');
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/documents/doc-1/content?markOpened=false');
+  });
+
   it('encodes non-ASCII document names before sending request headers', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

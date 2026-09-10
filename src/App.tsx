@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
 import type { Document } from '@eigenpal/docx-editor-core';
 import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import '@eigenpal/docx-editor-react/styles.css';
@@ -18,10 +18,13 @@ import { useDocumentLibrary } from './hooks/useDocumentLibrary';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRecoveryDraft } from './hooks/useRecoveryDraft';
 import { useToastManager } from './hooks/useToastManager';
-import { collectAnchorTargets, type PageContent } from './lib/anchors';
+import { collectAnchorTargets, type AnchorTarget, type PageContent } from './lib/anchors';
 import { buildDeepLinkSearch, readDeepLink } from './lib/deepLink';
 import { downloadBufferAsDocx } from './lib/download';
+import { convertToMarkdown, downloadMarkdown } from './lib/exportUtils';
 import { findFlashHighlightTarget } from './lib/highlightTarget';
+import { scanForMedia, type MediaItem } from './lib/mediaScanner';
+import type { RecoverySnapshot } from './lib/recoveryStore';
 import { resolveActiveAnchorId } from './lib/resolveActiveAnchor';
 import './app.css';
 import './styles/components/modals.css';
@@ -48,13 +51,37 @@ function isSavedSource(source: EditorSource): source is Extract<EditorSource, { 
   return source.kind === 'saved-document';
 }
 
+function areAnchorsEqual(currentAnchors: AnchorTarget[], nextAnchors: AnchorTarget[]) {
+  if (currentAnchors.length !== nextAnchors.length) {
+    return false;
+  }
+
+  for (let index = 0; index < currentAnchors.length; index += 1) {
+    const current = currentAnchors[index];
+    const next = nextAnchors[index];
+
+    if (
+      current?.id !== next?.id ||
+      current?.label !== next?.label ||
+      current?.pageNumber !== next?.pageNumber ||
+      current?.styleId !== next?.styleId
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export default function App() {
+
   const editorRef = useRef<DocxEditorRef>(null);
   const editorHostRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
   const activeParaIdRef = useRef<string | null>(null);
+  const anchorsRef = useRef<AnchorTarget[]>([]);
   const lastLibraryErrorRef = useRef<string | null>(null);
   const lastVersionErrorRef = useRef<string | null>(null);
 
@@ -71,7 +98,9 @@ export default function App() {
   const [showInfo, setShowInfo] = useState(true);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>('editing');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const hasHandledInitialDeepLink = useRef(false);
 
   // Use toast manager hook
@@ -122,36 +151,11 @@ export default function App() {
   const [wordCount, setWordCount] = useState(0);
   const [pageCount, setPageCount] = useState(1);
 
-  // Update metrics when anchors or source changes
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-
-    const timerId = window.setTimeout(() => {
-      setPageCount(editor.getTotalPages() || 1);
-      
-      const totalWords = filteredAnchors.reduce((acc, anchor) => {
-        return acc + (anchor.label?.trim().split(/\s+/).length || 0);
-      }, 0);
-      setWordCount(totalWords);
-    }, 500);
-
-    return () => window.clearTimeout(timerId);
-  }, [anchors, filteredAnchors, editorKey]);
-
-  useEffect(() => {
-    const handleGlobalScroll = () => {
-      if (window.scrollY !== 0 || window.scrollX !== 0) {
-        window.scrollTo(0, 0);
-      }
-    };
-    window.addEventListener('scroll', handleGlobalScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleGlobalScroll);
-  }, []);
-
   const getEditorBuffer = useCallback(async () => {
     return (await editorRef.current?.save()) ?? null;
   }, []);
+
+  const recoveryAutosaveDelayMs = source.kind === 'saved-document' ? 5000 : 2500;
 
   const { recoverySnapshot, discardRecovery } = useRecoveryDraft({
     sourceKind: source.kind,
@@ -160,8 +164,24 @@ export default function App() {
     activeParaId,
     isDirty,
     getBuffer: getEditorBuffer,
-    autosaveDelayMs: 12000,
+    autosaveDelayMs: recoveryAutosaveDelayMs,
   });
+
+  const confirmDiscardChanges = useCallback(() => {
+    return !isDirty || window.confirm('Discard the unsaved changes in the current document?');
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [isDirty]);
 
   const currentTargetLabel = useMemo(
     () => anchors.find((anchor) => anchor.id === activeParaId)?.label ?? 'No paragraph selected',
@@ -171,6 +191,10 @@ export default function App() {
   useEffect(() => {
     activeParaIdRef.current = activeParaId;
   }, [activeParaId]);
+
+  useEffect(() => {
+    anchorsRef.current = anchors;
+  }, [anchors]);
 
   useEffect(() => {
     if (libraryError && libraryError !== lastLibraryErrorRef.current) {
@@ -209,6 +233,13 @@ export default function App() {
       }
     }
 
+    setPageCount(totalPages);
+    setWordCount(
+      editor.getAgent()?.getWordCount() ??
+        pages.reduce((count, page) => count + (page.text.match(/\S+/g)?.length ?? 0), 0),
+    );
+    setMediaItems(scanForMedia(editor));
+
     const nextAnchors = collectAnchorTargets(pages);
     const nextActiveParaId = resolveActiveAnchorId({
       anchors: nextAnchors,
@@ -217,12 +248,17 @@ export default function App() {
       fallbackActiveParaId: activeParaIdRef.current,
       preferFirstAnchor: true,
     });
+    const anchorsChanged = !areAnchorsEqual(anchorsRef.current, nextAnchors);
 
-    setAnchors(nextAnchors);
-    setActiveParaId(nextActiveParaId);
-    setCurrentPage(editor.getCurrentPage());
+    startTransition(() => {
+      if (anchorsChanged) {
+        setAnchors(nextAnchors);
+      }
+      setActiveParaId(nextActiveParaId);
+      setCurrentPage(editor.getCurrentPage());
+    });
 
-    if (nextAnchors.length > 0) {
+    if (anchorsChanged && nextAnchors.length > 0) {
       setStatusMessage(`Indexed ${nextAnchors.length} paragraphs across ${totalPages} pages.`);
     }
 
@@ -288,19 +324,65 @@ export default function App() {
     });
   }, []);
 
-  const loadBuiltInSample = useCallback(() => {
+  const loadBuiltInSample = useCallback((skipConfirmation = false) => {
+    if (!skipConfirmation && !confirmDiscardChanges()) return;
+
     loadEditorSource(createSampleSource());
     setCurrentDraft({ name: SAMPLE_DOCUMENT_NAME, documentId: null });
     setPendingDeepLinkParaId(initialDeepLink.source === 'sample' ? initialDeepLink.paraId : null);
     discardRecovery();
     setStatusMessage('Sample reloaded.');
     pushToast('info', 'Sample reloaded.');
-  }, [discardRecovery, initialDeepLink.paraId, initialDeepLink.source, loadEditorSource, pushToast, setCurrentDraft]);
+  }, [confirmDiscardChanges, discardRecovery, initialDeepLink.paraId, initialDeepLink.source, loadEditorSource, pushToast, setCurrentDraft]);
+
+  const restoreRecoverySnapshot = useCallback(
+    (snapshot: RecoverySnapshot) => {
+      hasHandledInitialDeepLink.current = true;
+
+      if (snapshot.sourceKind === 'saved-document' && snapshot.documentId) {
+        loadEditorSource({
+          kind: 'saved-document',
+          name: snapshot.documentName,
+          documentId: snapshot.documentId,
+          buffer: snapshot.buffer,
+        });
+        setCurrentDraft({
+          name: snapshot.documentName,
+          documentId: snapshot.documentId,
+        });
+        void refreshVersions(snapshot.documentId).catch(() => undefined);
+      } else {
+        loadEditorSource({
+          kind: 'local-file',
+          name: snapshot.documentName,
+          buffer: snapshot.buffer,
+        });
+        setCurrentDraft({
+          name: snapshot.documentName,
+          documentId: null,
+        });
+      }
+
+      setPendingDeepLinkParaId(snapshot.activeParaId);
+      setIsDirty(true);
+      discardRecovery();
+
+      const message = `Restored unsaved work for ${snapshot.documentName}.`;
+
+      setStatusMessage(message);
+      pushToast('info', message);
+    },
+    [discardRecovery, loadEditorSource, pushToast, refreshVersions, setCurrentDraft],
+  );
 
   useEffect(() => {
     let isCancelled = false;
 
-    if (!hasHandledInitialDeepLink.current && initialDeepLink.source === 'saved' && initialDeepLink.documentId) {
+    if (
+      !hasHandledInitialDeepLink.current &&
+      initialDeepLink.source === 'saved' &&
+      initialDeepLink.documentId
+    ) {
       hasHandledInitialDeepLink.current = true;
       void (async () => {
         try {
@@ -336,6 +418,7 @@ export default function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDeepLink.documentId, initialDeepLink.paraId, initialDeepLink.source]);
+
 
   useEffect(() => {
     if (!pendingDeepLinkParaId) {
@@ -395,15 +478,37 @@ export default function App() {
     [documentName, setDocumentName],
   );
 
+  const handleToggleSidebar = useCallback(() => {
+    setShowSidebar((show) => !show);
+  }, []);
+
+  const handleToggleInfo = useCallback(() => {
+    setShowInfo((show) => !show);
+  }, []);
+
+  const handleHeaderRefresh = useCallback(() => {
+    scheduleAnchorRefresh();
+  }, [scheduleAnchorRefresh]);
+
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      if (!file) {
+      if (!file) return;
+      if (!confirmDiscardChanges()) {
+        event.target.value = '';
         return;
       }
 
       try {
+        if (!/\.docx$/i.test(file.name) || file.size > 50 * 1024 * 1024) {
+          throw new Error('Choose a .docx file no larger than 50 MiB.');
+        }
+
         const buffer = await file.arrayBuffer();
+        const signature = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+        if (signature.length < 4 || signature[0] !== 0x50 || signature[1] !== 0x4b || signature[2] !== 0x03 || signature[3] !== 0x04) {
+          throw new Error('The selected file is not a valid DOCX document.');
+        }
         loadEditorSource({
           kind: 'local-file',
           name: file.name,
@@ -420,7 +525,7 @@ export default function App() {
         event.target.value = '';
       }
     },
-    [loadEditorSource, pushToast, setCurrentDraft],
+    [confirmDiscardChanges, loadEditorSource, pushToast, setCurrentDraft],
   );
 
   const handleSaveDocument = useCallback(async () => {
@@ -502,6 +607,8 @@ export default function App() {
 
   const handleOpenSavedDocument = useCallback(
     async (documentId: string) => {
+      if (!confirmDiscardChanges()) return;
+
       try {
         const openedDocument = await openSavedDocument(documentId);
         loadEditorSource({
@@ -518,13 +625,15 @@ export default function App() {
         pushToast('error', message);
       }
     },
-    [loadEditorSource, openSavedDocument, pushToast],
+    [confirmDiscardChanges, loadEditorSource, openSavedDocument, pushToast],
   );
 
   const handleReloadDocument = useCallback(async () => {
+    if (!confirmDiscardChanges()) return;
+
     try {
       if (source.kind === 'sample') {
-        loadBuiltInSample();
+        loadBuiltInSample(true);
         return;
       }
 
@@ -554,7 +663,22 @@ export default function App() {
       setStatusMessage('Reload failed.');
       pushToast('error', message);
     }
-  }, [currentDocumentId, discardRecovery, loadBuiltInSample, loadEditorSource, openSavedDocument, pushToast, source]);
+  }, [confirmDiscardChanges, currentDocumentId, discardRecovery, loadBuiltInSample, loadEditorSource, openSavedDocument, pushToast, source]);
+
+  const handleExportMarkdown = useCallback(() => {
+    if (!editorRef.current) return;
+    try {
+      const markdown = convertToMarkdown(editorRef.current);
+      downloadMarkdown(documentName || 'document', markdown);
+      pushToast('success', 'Document exported as Markdown.');
+    } catch (error) {
+      pushToast('error', 'Failed to export Markdown.');
+    }
+  }, [documentName, pushToast]);
+
+  const handlePrintPDF = useCallback(() => {
+    editorRef.current?.openPrintPreview();
+  }, []);
 
   const handleRefreshDocuments = useCallback(async () => {
     try {
@@ -589,10 +713,13 @@ export default function App() {
     async (documentId: string) => {
       const deletedDocument = savedDocuments.find((document) => document.id === documentId) ?? null;
 
+      const deletesCurrentDocument = isSavedSource(source) && source.documentId === documentId;
+      if (deletesCurrentDocument && !confirmDiscardChanges()) return;
+
       try {
         await deleteSavedDocument(documentId);
-        if (isSavedSource(source) && source.documentId === documentId) {
-          loadBuiltInSample();
+        if (deletesCurrentDocument) {
+          loadBuiltInSample(true);
         }
         setStatusMessage(
           deletedDocument
@@ -611,7 +738,7 @@ export default function App() {
         pushToast('error', message);
       }
     },
-    [deleteSavedDocument, loadBuiltInSample, pushToast, savedDocuments, source],
+    [confirmDiscardChanges, deleteSavedDocument, loadBuiltInSample, pushToast, savedDocuments, source],
   );
 
   const handleDuplicateSavedDocument = useCallback(
@@ -651,6 +778,8 @@ export default function App() {
 
   const handleRestoreVersion = useCallback(
     async (documentId: string, versionId: string) => {
+      if (!confirmDiscardChanges()) return;
+
       try {
         const restored = await restoreDocumentVersion(documentId, versionId);
         loadEditorSource({
@@ -668,7 +797,7 @@ export default function App() {
         pushToast('error', message);
       }
     },
-    [discardRecovery, loadEditorSource, pushToast, restoreDocumentVersion],
+    [confirmDiscardChanges, discardRecovery, loadEditorSource, pushToast, restoreDocumentVersion],
   );
 
   const handleDownloadVersion = useCallback(
@@ -691,40 +820,13 @@ export default function App() {
   );
 
   const handleRestoreRecovery = useCallback(() => {
+    if (!confirmDiscardChanges()) return;
     if (!recoverySnapshot) {
       return;
     }
 
-    if (recoverySnapshot.sourceKind === 'saved-document' && recoverySnapshot.documentId) {
-      loadEditorSource({
-        kind: 'saved-document',
-        name: recoverySnapshot.documentName,
-        documentId: recoverySnapshot.documentId,
-        buffer: recoverySnapshot.buffer,
-      });
-      setCurrentDraft({
-        name: recoverySnapshot.documentName,
-        documentId: recoverySnapshot.documentId,
-      });
-      void refreshVersions(recoverySnapshot.documentId).catch(() => undefined);
-    } else {
-      loadEditorSource({
-        kind: 'local-file',
-        name: recoverySnapshot.documentName,
-        buffer: recoverySnapshot.buffer,
-      });
-      setCurrentDraft({
-        name: recoverySnapshot.documentName,
-        documentId: null,
-      });
-    }
-
-    setPendingDeepLinkParaId(recoverySnapshot.activeParaId);
-    setIsDirty(true);
-    discardRecovery();
-    setStatusMessage(`Restored unsaved work for ${recoverySnapshot.documentName}.`);
-    pushToast('info', `Restored unsaved work for ${recoverySnapshot.documentName}.`);
-  }, [discardRecovery, loadEditorSource, pushToast, recoverySnapshot, refreshVersions, setCurrentDraft]);
+    restoreRecoverySnapshot(recoverySnapshot);
+  }, [confirmDiscardChanges, recoverySnapshot, restoreRecoverySnapshot]);
 
   const jumpToAnchor = useCallback(
     (paraId: string) => {
@@ -846,9 +948,9 @@ export default function App() {
     <div className="app-shell">
       <Header
         showSidebar={showSidebar}
-        onToggleSidebar={() => setShowSidebar(!showSidebar)}
+        onToggleSidebar={handleToggleSidebar}
         showInfo={showInfo}
-        onToggleInfo={() => setShowInfo(!showInfo)}
+        onToggleInfo={handleToggleInfo}
         documentName={documentName}
         onDocumentNameChange={handleDocumentNameChange}
         isDirty={isDirty}
@@ -861,8 +963,12 @@ export default function App() {
         onSaveAs={handleSaveAsDocument}
         onDownloadCurrent={handleDownloadCurrent}
         isSaving={isSaving}
-        onRefresh={() => scheduleAnchorRefresh()}
+        onRefresh={handleHeaderRefresh}
         sourceKind={source.kind}
+        onExportMarkdown={handleExportMarkdown}
+        onPrintPDF={handlePrintPDF}
+        editorMode={editorMode}
+        onEditorModeChange={setEditorMode}
       />
 
       <main
@@ -895,7 +1001,8 @@ export default function App() {
               ref={editorRef}
               document={source.kind === 'sample' ? source.document : undefined}
               documentBuffer={source.kind !== 'sample' ? source.buffer : undefined}
-              mode="editing"
+              mode={editorMode}
+              onModeChange={setEditorMode}
               className="docx-editor-frame"
               onChange={() => {
                 if (Date.now() < ignoreContentChangeUntilRef.current) {
@@ -904,19 +1011,22 @@ export default function App() {
 
                 setIsDirty(true);
                 setStatusMessage('Unsaved changes.');
+                scheduleAnchorRefresh();
               }}
               onSelectionChange={(selectionState) => {
                 lastSelectionStateRef.current = selectionState;
-                setActiveParaId(
-                  resolveActiveAnchorId({
-                    anchors,
-                    selectionInfo: editorRef.current?.getSelectionInfo() ?? null,
-                    selectionState,
-                    fallbackActiveParaId: activeParaIdRef.current,
-                  }),
-                );
-                setCurrentPage(editorRef.current?.getCurrentPage() ?? null);
-                scheduleAnchorRefresh();
+                const nextActiveParaId = resolveActiveAnchorId({
+                  anchors,
+                  selectionInfo: editorRef.current?.getSelectionInfo() ?? null,
+                  selectionState,
+                  fallbackActiveParaId: activeParaIdRef.current,
+                });
+                const nextCurrentPage = editorRef.current?.getCurrentPage() ?? null;
+
+                startTransition(() => {
+                  setActiveParaId(nextActiveParaId);
+                  setCurrentPage(nextCurrentPage);
+                });
               }}
             />
           </div>
@@ -943,6 +1053,7 @@ export default function App() {
             isLoadingDocuments={isLoadingDocuments}
             isLoadingVersions={isLoadingVersions}
             recoverySnapshot={recoverySnapshot}
+            mediaItems={mediaItems}
             onRestoreRecovery={handleRestoreRecovery}
             onDiscardRecovery={discardRecovery}
             onOpenDocument={handleOpenSavedDocument}
@@ -953,6 +1064,7 @@ export default function App() {
             onRefreshDocuments={handleRefreshDocuments}
             onRestoreVersion={handleRestoreVersion}
             onDownloadVersion={handleDownloadVersion}
+            onJumpToMedia={jumpToAnchor}
           />
         )}
       </main>

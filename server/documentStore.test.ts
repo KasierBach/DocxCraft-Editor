@@ -101,4 +101,17 @@ describe('createDocumentStore', () => {
     await expect(store.readDocument(created.id)).rejects.toThrow(/not found/i);
     await expect(store.listDocumentVersions(created.id)).rejects.toThrow(/not found/i);
   });
+  it('serializes concurrent writes without losing documents', async () => {
+    const store = createDocumentStore({ dataDir: await createTempDir() });
+
+    await Promise.all([
+      store.saveNewDocument({ name: 'First.docx', buffer: Buffer.from('first') }),
+      store.saveNewDocument({ name: 'Second.docx', buffer: Buffer.from('second') }),
+    ]);
+
+    expect((await store.listDocuments()).map((document) => document.name).sort()).toEqual([
+      'First.docx',
+      'Second.docx',
+    ]);
+  });
 });

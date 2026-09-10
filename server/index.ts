@@ -7,6 +7,15 @@ import { createServerLoggerOptions } from './logger.ts';
 
 export const DEFAULT_PORT = 4175;
 
+function readPort(value: string | undefined) {
+  if (!value) return DEFAULT_PORT;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be an integer between 1 and 65535.');
+  }
+  return port;
+}
+
 export async function startDocumentApiServer({
   port = DEFAULT_PORT,
   host = '127.0.0.1',
@@ -15,7 +24,7 @@ export async function startDocumentApiServer({
   host?: string;
 } = {}) {
   const store = createDocumentStore({
-    rootDirectory: path.join(process.cwd(), 'data', 'documents'),
+    rootDirectory: process.env.DATA_DIR ?? path.join(process.cwd(), 'data', 'documents'),
   });
   const app = buildDocumentApiApp({
     store,
@@ -26,11 +35,20 @@ export async function startDocumentApiServer({
   });
 
   await app.listen({ port, host });
+
+  const close = async () => {
+    await app.close();
+  };
+  process.once('SIGINT', () => void close());
+  process.once('SIGTERM', () => void close());
   return app;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  startDocumentApiServer().catch((error) => {
+  startDocumentApiServer({
+    port: readPort(process.env.PORT),
+    host: process.env.HOST ?? '127.0.0.1',
+  }).catch((error) => {
     console.error(error);
     process.exit(1);
   });
