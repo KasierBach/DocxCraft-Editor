@@ -90,6 +90,8 @@ Default ports:
 - Frontend: [http://localhost:5136](http://localhost:5136)
 - API: [http://127.0.0.1:4175/api/health](http://127.0.0.1:4175/api/health)
 
+The API binds to `127.0.0.1` by default. Configure `HOST`, `PORT`, `DATA_DIR`, and `LOG_LEVEL` using the variables in `.env.example`. `/api/health` is the liveness check; `/api/ready` verifies that document storage is readable.
+
 If port `4175` already has a compatible server running, the dev launcher reuses it.
 
 ## Available Scripts
@@ -100,6 +102,7 @@ If port `4175` already has a compatible server running, the dev launcher reuses 
 | `npm run dev:web` | Start Vite frontend only |
 | `npm run dev:api` | Start Fastify API only |
 | `npm run build` | Build production bundle |
+| `npm run typecheck` | Run TypeScript checks without emitting files |
 | `npm run preview` | Preview production build |
 | `npm test` | Run test suite |
 
@@ -123,6 +126,7 @@ Saved documents are stored in `data/documents/` (excluded from version control):
 
 ## Known Limits
 
-- File storage is not transactional (no atomic writes)
-- No auth, sharing, or collaboration
+- File storage is single-process and file-backed; use a database/object store before running multiple API instances
+- No authentication, authorization, sharing, or collaboration
+- DOCX uploads are signature-checked but not fully sanitized against every malformed ZIP/OOXML case
 - Production bundle is large due to the editor runtime
