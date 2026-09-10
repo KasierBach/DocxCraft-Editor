@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { DocumentConflictError } from './documentStore.ts';
 import type { DocumentStorePort } from './types.ts';
 
 export const API_VERSION = '2026-05-25-fastify-ts';
@@ -55,6 +56,15 @@ function readDocumentBuffer(body: unknown) {
   }
 
   return body;
+}
+
+function readExpectedRevision(headers: Record<string, unknown>) {
+  const value = headers['if-match'];
+  if (value === undefined) return undefined;
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const revision = Number(String(rawValue).replace(/^\"|\"$/g, ''));
+  if (!Number.isInteger(revision) || revision < 1) throw new RequestValidationError();
+  return revision;
 }
 
 function createAsciiFilenameFallback(name: string) {
@@ -141,6 +151,11 @@ export function buildDocumentApiApp({
       return;
     }
 
+    if (error instanceof DocumentConflictError) {
+      void reply.code(409).send({ message: error.message });
+      return;
+    }
+
     app.log.error(error);
     void reply.code(500).send({ message: 'Unexpected server error.' });
   });
@@ -180,6 +195,7 @@ export function buildDocumentApiApp({
     const document = await store.updateDocument(documentId, {
       name: readDocumentName(request.headers as Record<string, unknown>),
       buffer: readDocumentBuffer(request.body),
+      expectedRevision: readExpectedRevision(request.headers as Record<string, unknown>),
     });
 
     return reply.code(200).send(document);

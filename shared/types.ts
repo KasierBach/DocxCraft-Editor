@@ -11,6 +11,7 @@ export type SavedDocumentSummary = {
   sizeInBytes: number;
   lastOpenedAt: string | null;
   versionCount: number;
+  revision?: number;
 };
 
 export type SavedDocumentVersionSummary = {

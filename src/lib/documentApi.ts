@@ -9,6 +9,7 @@ type SaveDocumentInput = {
   id?: string;
   name: string;
   buffer: ArrayBuffer;
+  revision?: number;
 };
 
 type ReadDocumentOptions = {
@@ -80,12 +81,13 @@ export async function listDocumentVersions(documentId: string) {
   });
 }
 
-export async function saveDocument({ id, name, buffer }: SaveDocumentInput) {
+export async function saveDocument({ id, name, buffer, revision }: SaveDocumentInput) {
   const response = await fetch(id ? `${DOCUMENTS_API_PATH}/${id}` : DOCUMENTS_API_PATH, {
     method: id ? 'PUT' : 'POST',
     headers: {
       'content-type': 'application/octet-stream',
       'x-document-name': encodeDocumentNameHeader(name),
+      ...(id && revision ? { 'if-match': `"${revision}"` } : {}),
     },
     body: buffer,
   });

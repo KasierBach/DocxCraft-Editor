@@ -22,6 +22,7 @@ export type SaveDocumentInput = {
 export type UpdateDocumentInput = {
   name?: string;
   buffer: Uint8Array;
+  expectedRevision?: number;
 };
 
 export type RenameDocumentInput = {

@@ -18,9 +18,17 @@ import type {
 const INDEX_FILENAME = 'index.json';
 const FILE_EXTENSION = '.docx';
 
-type StoredDocumentSummary = SavedDocumentSummary & {
+type StoredDocumentSummary = Omit<SavedDocumentSummary, 'revision'> & {
   latestVersionId: string;
+  revision: number;
 };
+
+export class DocumentConflictError extends Error {
+  constructor() {
+    super('Document was changed by another client. Reload before saving again.');
+    this.name = 'DocumentConflictError';
+  }
+}
 
 type DocumentIndex = {
   documents: StoredDocumentSummary[];
@@ -117,6 +125,7 @@ export class FileDocumentStore implements DocumentStorePort {
       sizeInBytes: buffer.byteLength,
       lastOpenedAt: null,
       versionCount: 1,
+      revision: 1,
     });
 
     index.documents.push(document);
@@ -127,10 +136,13 @@ export class FileDocumentStore implements DocumentStorePort {
     });
   }
 
-  async updateDocument(id: string, { name, buffer }: UpdateDocumentInput) {
+  async updateDocument(id: string, { name, buffer, expectedRevision }: UpdateDocumentInput) {
     return this.runExclusive(async () => {
     const index = await this.readIndex();
     const existingDocument = this.getStoredDocumentOrThrow(index, id);
+    if (expectedRevision !== undefined && existingDocument.revision !== expectedRevision) {
+      throw new DocumentConflictError();
+    }
     const timestamp = createTimestamp();
     const versionId = randomUUID();
     const documentName = ensureDocxName(name ?? existingDocument.name);
@@ -148,6 +160,7 @@ export class FileDocumentStore implements DocumentStorePort {
       updatedAt: timestamp,
       sizeInBytes: buffer.byteLength,
       versionCount: existingDocument.versionCount + 1,
+      revision: existingDocument.revision + 1,
     };
 
     index.documents = index.documents.map((document) => (document.id === id ? updatedDocument : document));
@@ -217,6 +230,7 @@ export class FileDocumentStore implements DocumentStorePort {
       sizeInBytes: buffer.byteLength,
       lastOpenedAt: null,
       versionCount: 1,
+      revision: 1,
     });
 
     index.documents.push(document);
@@ -273,6 +287,7 @@ export class FileDocumentStore implements DocumentStorePort {
     sizeInBytes,
     lastOpenedAt,
     versionCount,
+    revision,
   }: {
     documentId: string;
     latestVersionId: string;
@@ -282,6 +297,7 @@ export class FileDocumentStore implements DocumentStorePort {
     sizeInBytes: number;
     lastOpenedAt: string | null;
     versionCount: number;
+    revision: number;
   }): StoredDocumentSummary {
     return {
       id: documentId,
@@ -292,6 +308,7 @@ export class FileDocumentStore implements DocumentStorePort {
       sizeInBytes,
       lastOpenedAt,
       versionCount,
+      revision,
     };
   }
 
@@ -326,6 +343,7 @@ export class FileDocumentStore implements DocumentStorePort {
       sizeInBytes: document.sizeInBytes,
       lastOpenedAt: document.lastOpenedAt,
       versionCount: document.versionCount,
+      revision: document.revision,
     };
   }
 
@@ -395,6 +413,7 @@ export class FileDocumentStore implements DocumentStorePort {
                 partialDocument.latestVersionId ?? documentVersions[0]?.id ?? '',
               lastOpenedAt: partialDocument.lastOpenedAt ?? null,
               versionCount: partialDocument.versionCount ?? documentVersions.length,
+              revision: partialDocument.revision ?? partialDocument.versionCount ?? documentVersions.length,
             } as StoredDocumentSummary;
           })
           : [],

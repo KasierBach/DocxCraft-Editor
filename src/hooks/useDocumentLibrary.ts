@@ -113,10 +113,14 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
 
       try {
         const name = options?.name ?? documentName;
+        const currentSavedDocument = currentDocumentId
+          ? savedDocuments.find((document) => document.id === currentDocumentId)
+          : undefined;
         const saveInput = {
           name,
           buffer,
           ...(options?.asNew || !currentDocumentId ? {} : { id: currentDocumentId }),
+          ...(currentSavedDocument ? { revision: currentSavedDocument.revision } : {}),
         };
         const savedDocument = await saveDocument(saveInput);
 
@@ -134,7 +138,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         setIsSaving(false);
       }
     },
-    [currentDocumentId, documentName, refreshDocuments, refreshVersions],
+    [currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
   );
 
   const openSavedDocument = useCallback(
@@ -221,6 +225,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         id: documentId,
         name: matchingDocument?.name ?? documentName,
         buffer,
+        revision: matchingDocument?.revision,
       });
 
       if (documentId === currentDocumentId) {

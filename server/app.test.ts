@@ -57,10 +57,12 @@ describe('buildDocumentApiApp', () => {
         sizeInBytes: number;
         versionCount: number;
         lastOpenedAt: string | null;
+        revision: number;
       }>();
       expect(created.name).toBe('Proposal.docx');
       expect(created.sizeInBytes).toBe(7);
       expect(created.versionCount).toBe(1);
+      expect(created.revision).toBe(1);
       expect(created.lastOpenedAt).toBeNull();
 
       const listResponse = await app.inject({
@@ -316,6 +318,45 @@ describe('buildDocumentApiApp', () => {
         payload: docxPayload([1]),
       });
       expect(longNameResponse.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects stale document updates with a conflict', async () => {
+    const app = await createApp();
+    try {
+      const createResponse = await app.inject({
+        method: 'POST',
+        url: '/api/documents',
+        headers: { 'content-type': 'application/octet-stream', 'x-document-name': 'Conflict.docx' },
+        payload: docxPayload([1]),
+      });
+      const created = createResponse.json<{ id: string }>();
+
+      const firstUpdate = await app.inject({
+        method: 'PUT',
+        url: `/api/documents/${created.id}`,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-document-name': 'Conflict.docx',
+          'if-match': '"1"',
+        },
+        payload: docxPayload([2]),
+      });
+      expect(firstUpdate.statusCode).toBe(200);
+
+      const staleUpdate = await app.inject({
+        method: 'PUT',
+        url: `/api/documents/${created.id}`,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-document-name': 'Conflict.docx',
+          'if-match': '"1"',
+        },
+        payload: docxPayload([3]),
+      });
+      expect(staleUpdate.statusCode).toBe(409);
     } finally {
       await app.close();
     }
