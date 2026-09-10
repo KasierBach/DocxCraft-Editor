@@ -17,6 +17,7 @@ import type {
 
 const INDEX_FILENAME = 'index.json';
 const FILE_EXTENSION = '.docx';
+const MAX_VERSIONS_PER_DOCUMENT = 100;
 
 type StoredDocumentSummary = Omit<SavedDocumentSummary, 'revision'> & {
   latestVersionId: string;
@@ -131,6 +132,7 @@ export class FileDocumentStore implements DocumentStorePort {
     index.documents.push(document);
     index.versions.push(version);
     await this.writeDocumentFile(documentId, versionId, buffer);
+    await this.pruneVersions(index, documentId);
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(document);
     });
@@ -166,6 +168,7 @@ export class FileDocumentStore implements DocumentStorePort {
     index.documents = index.documents.map((document) => (document.id === id ? updatedDocument : document));
     index.versions.push(version);
     await this.writeDocumentFile(id, versionId, buffer);
+    await this.pruneVersions(index, id);
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(updatedDocument);
     });
@@ -357,6 +360,27 @@ export class FileDocumentStore implements DocumentStorePort {
     );
     await this.writeIndex(index);
     return this.toPublicDocumentSummary(touchedDocument);
+  }
+
+  private async pruneVersions(index: DocumentIndex, documentId: string) {
+    const versions = index.versions
+      .filter((version) => version.documentId === documentId)
+      .sort(byCreatedAtDescending);
+    const retained = new Set(versions.slice(0, MAX_VERSIONS_PER_DOCUMENT).map((version) => version.id));
+    const removed = versions.filter((version) => !retained.has(version.id));
+    if (removed.length === 0) return;
+
+    index.versions = index.versions.filter(
+      (version) => version.documentId !== documentId || retained.has(version.id),
+    );
+    for (const version of removed) {
+      await rm(this.documentVersionPath(documentId, version.id), { force: true });
+    }
+    index.documents = index.documents.map((document) =>
+      document.id === documentId
+        ? { ...document, versionCount: retained.size }
+        : document,
+    );
   }
 
   private getStoredDocumentOrThrow(index: DocumentIndex, documentId: string) {

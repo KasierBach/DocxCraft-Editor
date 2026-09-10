@@ -114,4 +114,14 @@ describe('createDocumentStore', () => {
       'Second.docx',
     ]);
   });
+
+  it('retains a bounded version history', async () => {
+    const store = createDocumentStore({ dataDir: await createTempDir() });
+    const created = await store.saveNewDocument({ name: 'Retained.docx', buffer: Buffer.from([1, 2, 3, 4]) });
+    for (let index = 0; index < 101; index += 1) {
+      await store.updateDocument(created.id, { buffer: Buffer.from([index % 256, 2, 3, 4]) });
+    }
+    expect((await store.listDocumentVersions(created.id))).toHaveLength(100);
+    expect((await store.listDocuments())[0]?.versionCount).toBe(100);
+  });
 });
