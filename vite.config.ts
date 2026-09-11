@@ -19,5 +19,12 @@ export default defineConfig({
     testTimeout: 15000,
     maxWorkers: 2,
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: ['**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx'],
+      thresholds: { lines: 60, functions: 60, statements: 60, branches: 45 },
+    },
   },
 });

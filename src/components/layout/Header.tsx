@@ -151,6 +151,7 @@ function HeaderComponent({
               onChange={(event) => onDocumentNameChange(event.target.value)}
               placeholder="Untitled document"
               title="Click to rename"
+              aria-label="Document name"
             />
             {isDirty && (
               <span className="status-badge status-badge--dirty" title="Unsaved changes">
