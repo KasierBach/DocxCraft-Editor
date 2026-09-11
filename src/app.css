@@ -1,6 +1,7 @@
 /* ─── Base & Tokens ─── */
 @import './styles/base/tokens.css';
 @import './styles/base/reset.css';
+@import './styles/base/dark-mode.css';
 
 /* ─── Layout ─── */
 @import './styles/layout/main-layout.css';

@@ -1,3 +1,15 @@
+/*
+ * Neo-Brutalism design tokens.
+ *
+ * Naming convention (kept for backwards compatibility with the component CSS):
+ * - --nb-white  → the "paper" color: used as panel/button backgrounds.
+ * - --nb-black  → the "ink" color: used for text, borders, and shadows.
+ * - --nb-grey-* → supporting surfaces.
+ *
+ * In dark mode the roles are inverted via a semantic swap: the "paper"
+ * becomes a dark surface and the "ink" becomes a light contrast color, so
+ * every component that composes these tokens flips automatically.
+ */
 :root {
   --nb-black: #201F1E;
   --nb-white: #FFFFFF;
@@ -9,4 +21,56 @@
   --nb-shadow: 3px 3px 0px var(--nb-black);
   --nb-shadow-hover: 5px 5px 0px var(--nb-black);
   --nb-shadow-active: 1px 1px 0px var(--nb-black);
+
+  /* Semantic aliases (light) */
+  --nb-surface: var(--nb-white);
+  --nb-bg: var(--nb-grey-100);
+  --nb-text: var(--nb-black);
+  --nb-text-muted: #5f6b7a;
+  --nb-border-color: var(--nb-black);
+  --nb-accent: var(--nb-green);
+  --nb-accent-contrast: var(--nb-black);
+}
+
+:root[data-theme='dark'] {
+  /* Role swap: paper → dark surface, ink → light contrast. */
+  --nb-white: #232220;
+  --nb-black: #F0EFEC;
+  --nb-grey-100: #171614;
+  --nb-grey-200: #2E2C29;
+  --nb-green: #9BE15D;
+  --nb-blue: #5A9BD8;
+
+  --nb-surface: var(--nb-white);
+  --nb-bg: var(--nb-grey-100);
+  --nb-text: var(--nb-black);
+  --nb-text-muted: #A8A29E;
+  --nb-border-color: var(--nb-black);
+  --nb-shadow: 3px 3px 0px #000000;
+  --nb-shadow-hover: 5px 5px 0px #000000;
+  --nb-shadow-active: 1px 1px 0px #000000;
+  --nb-accent: #9BE15D;
+  --nb-accent-contrast: #171614;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --nb-white: #232220;
+    --nb-black: #F0EFEC;
+    --nb-grey-100: #171614;
+    --nb-grey-200: #2E2C29;
+    --nb-green: #9BE15D;
+    --nb-blue: #5A9BD8;
+
+    --nb-surface: var(--nb-white);
+    --nb-bg: var(--nb-grey-100);
+    --nb-text: var(--nb-black);
+    --nb-text-muted: #A8A29E;
+    --nb-border-color: var(--nb-black);
+    --nb-shadow: 3px 3px 0px #000000;
+    --nb-shadow-hover: 5px 5px 0px #000000;
+    --nb-shadow-active: 1px 1px 0px #000000;
+    --nb-accent: #9BE15D;
+    --nb-accent-contrast: #171614;
+  }
 }

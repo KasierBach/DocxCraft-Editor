@@ -8,6 +8,8 @@ type HeaderProps = {
   onToggleSidebar: () => void;
   showInfo: boolean;
   onToggleInfo: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
   documentName: string;
   onDocumentNameChange: (name: string) => void;
   isDirty: boolean;
@@ -30,6 +32,12 @@ type HeaderProps = {
 
 type OpenMenu = 'export' | 'utility' | null;
 
+const MODE_OPTIONS: Array<{ value: EditorMode; hint: string }> = [
+  { value: 'editing', hint: 'Edit document content directly' },
+  { value: 'suggesting', hint: 'Propose changes as suggestions without altering the text' },
+  { value: 'viewing', hint: 'Read-only preview of the document' },
+];
+
 function getApiStatusLabel(apiStatus: HeaderProps['apiStatus']) {
   switch (apiStatus) {
     case 'connected':
@@ -47,6 +55,8 @@ function HeaderComponent({
   onToggleSidebar,
   showInfo,
   onToggleInfo,
+  theme,
+  onToggleTheme,
   documentName,
   onDocumentNameChange,
   isDirty,
@@ -129,6 +139,16 @@ function HeaderComponent({
             >
               {showInfo ? '>' : '<'}
             </button>
+            <button
+              type="button"
+              className="action-button action-button--menu action-button--menu-secondary"
+              onClick={onToggleTheme}
+              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-pressed={theme === 'dark'}
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
           </div>
           <div className="brand__text">
             <div className="brand__title-row">
@@ -164,18 +184,29 @@ function HeaderComponent({
 
       <div className="toolbar">
         <div className="toolbar__actions">
-          <label className="mode-picker">
-            <span className="visually-hidden">Editing mode</span>
-            <select
-              value={editorMode}
-              onChange={(event) => onEditorModeChange(event.target.value as EditorMode)}
+          <div className="mode-picker-group">
+            <span className="mode-picker-group__title">Mode</span>
+            <div
+              className="mode-picker"
+              role="radiogroup"
               aria-label="Editing mode"
             >
-              <option value="editing">Editing</option>
-              <option value="suggesting">Suggesting</option>
-              <option value="viewing">Viewing</option>
-            </select>
-          </label>
+              <span className="mode-picker__icon" aria-hidden="true">✎</span>
+              {MODE_OPTIONS.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={editorMode === mode.value}
+                  title={mode.hint}
+                  className={`mode-picker__option${editorMode === mode.value ? ' mode-picker__option--active' : ''}`}
+                  onClick={() => onEditorModeChange(mode.value)}
+                >
+                  <span className="mode-picker__label">{mode.value}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <button
             type="button"
