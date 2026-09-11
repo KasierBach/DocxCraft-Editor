@@ -32,18 +32,24 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
     });
   };
 
-  useEffect(() => {
-    if (!activeParaId) return;
-    
-    const activeAnchor = anchors.find(a => a.id === activeParaId);
-    if (!activeAnchor) return;
-
+  // Auto-expand the page containing the active anchor. Adjusting state
+  // during render (the pattern documented by React) avoids a
+  // setState-in-effect round trip; the previous page is tracked in state.
+  const activeAnchor = activeParaId
+    ? anchors.find((anchor) => anchor.id === activeParaId)
+    : undefined;
+  const [lastActivePage, setLastActivePage] = useState<number | null>(null);
+  if (activeAnchor && lastActivePage !== activeAnchor.pageNumber) {
+    setLastActivePage(activeAnchor.pageNumber);
     if (collapsedPages.has(activeAnchor.pageNumber)) {
-      setCollapsedPages(prev => {
-        const next = new Set(prev);
-        next.delete(activeAnchor.pageNumber);
-        return next;
-      });
+      const next = new Set(collapsedPages);
+      next.delete(activeAnchor.pageNumber);
+      setCollapsedPages(next);
+    }
+  }
+
+  useEffect(() => {
+    if (!activeAnchor || collapsedPages.has(activeAnchor.pageNumber)) {
       return;
     }
 
@@ -52,7 +58,7 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
       inline: 'nearest',
       behavior: 'smooth',
     });
-  }, [activeParaId, anchors, collapsedPages]);
+  }, [activeAnchor, collapsedPages]);
 
   const collapseAll = () => {
     const allPageNums = groupedAnchors.map(([page]) => Number(page));
@@ -68,8 +74,8 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
   }
 
   return (
-    <div 
-      className="anchor-list" 
+    <div
+      className="anchor-list"
       aria-label="Paragraph anchors"
     >
       <div className="anchor-list__controls">
@@ -84,10 +90,10 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
       {groupedAnchors.map(([page, pageAnchors]) => {
         const pageNum = Number(page);
         const isCollapsed = collapsedPages.has(pageNum);
-        
+
         return (
           <div key={page} className="anchor-group" data-collapsed={isCollapsed}>
-            <button 
+            <button
               type="button"
               className="anchor-group__header"
               onClick={() => togglePage(pageNum)}

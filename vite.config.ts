@@ -17,8 +17,13 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.ts',
     testTimeout: 15000,
+    // The default pools (threads/forks) fail to inject the test context in
+    // this workspace because the directory name contains a space ("Docx
+    // Editor"); vmThreads keeps the runner functional.
+    pool: 'vmThreads',
     maxWorkers: 2,
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+    css: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],

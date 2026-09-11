@@ -2,7 +2,6 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState, typ
 import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
 import type { Document } from '@eigenpal/docx-editor-core';
 import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
-import '@eigenpal/docx-editor-react/styles.css';
 
 import { Header } from './components/layout/Header';
 import { RightSidebar } from './components/layout/RightSidebar';
@@ -14,6 +13,7 @@ import { ToastViewport } from './components/ToastViewport';
 import { createDemoDocument } from './demoDocument';
 import { useAnchors } from './hooks/useAnchors';
 import { useApiStatus } from './hooks/useApiStatus';
+import { useTheme } from './hooks/useTheme';
 import { useDocumentLibrary } from './hooks/useDocumentLibrary';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRecoveryDraft } from './hooks/useRecoveryDraft';
@@ -134,6 +134,8 @@ export default function App() {
 
   const { status: apiStatus } = useApiStatus();
 
+  const { theme, toggleTheme } = useTheme();
+
   const {
     anchors,
     setAnchors,
@@ -236,7 +238,7 @@ export default function App() {
     setPageCount(totalPages);
     setWordCount(
       editor.getAgent()?.getWordCount() ??
-        pages.reduce((count, page) => count + (page.text.match(/\S+/g)?.length ?? 0), 0),
+      pages.reduce((count, page) => count + (page.text.match(/\S+/g)?.length ?? 0), 0),
     );
     setMediaItems(scanForMedia(editor));
 
@@ -271,12 +273,16 @@ export default function App() {
         window.clearTimeout(refreshTimerRef.current);
       }
 
-      refreshTimerRef.current = window.setTimeout(() => {
-        const refreshWorked = refreshAnchors();
-        if (!refreshWorked && attempts > 1) {
-          scheduleAnchorRefresh(attempts - 1);
-        }
-      }, attempts === 10 ? 180 : 250);
+      const schedule = (remaining: number) => {
+        refreshTimerRef.current = window.setTimeout(() => {
+          const refreshWorked = refreshAnchors();
+          if (!refreshWorked && remaining > 1) {
+            schedule(remaining - 1);
+          }
+        }, remaining === 10 ? 180 : 250);
+      };
+
+      schedule(attempts);
     },
     [refreshAnchors],
   );
@@ -536,9 +542,9 @@ export default function App() {
       }
 
       const savedDocument = await saveCurrentDocument(buffer);
-      
+
       const isInitialSave = source.kind !== 'saved-document';
-      
+
       // If we just converted a sample/local to a saved-doc, we NEED to update source
       // to keep track of the ID. But if it's ALREADY a saved-doc, we just update local state.
       if (isInitialSave) {
@@ -547,9 +553,9 @@ export default function App() {
 
       discardRecovery();
       setIsDirty(false);
-      
+
       const msg = !isInitialSave ? `Changes saved to "${savedDocument.name}"` : `Document "${savedDocument.name}" saved to library`;
-      
+
       setStatusMessage(msg);
       pushToast('success', msg);
       setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -671,7 +677,7 @@ export default function App() {
       const markdown = convertToMarkdown(editorRef.current);
       downloadMarkdown(documentName || 'document', markdown);
       pushToast('success', 'Document exported as Markdown.');
-    } catch (error) {
+    } catch {
       pushToast('error', 'Failed to export Markdown.');
     }
   }, [documentName, pushToast]);
@@ -951,6 +957,8 @@ export default function App() {
         onToggleSidebar={handleToggleSidebar}
         showInfo={showInfo}
         onToggleInfo={handleToggleInfo}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         documentName={documentName}
         onDocumentNameChange={handleDocumentNameChange}
         isDirty={isDirty}
@@ -972,9 +980,8 @@ export default function App() {
       />
 
       <main
-        className={`workspace ${!showSidebar ? 'sidebar--hidden' : ''} ${
-          !showInfo ? 'info--hidden' : ''
-        }`}
+        className={`workspace ${!showSidebar ? 'sidebar--hidden' : ''} ${!showInfo ? 'info--hidden' : ''
+          }`}
       >
         {showSidebar && (
           <Sidebar
@@ -1031,7 +1038,7 @@ export default function App() {
             />
           </div>
 
-          <EditorStatusBar 
+          <EditorStatusBar
             wordCount={wordCount}
             pageCount={pageCount}
             currentPage={currentPage}
@@ -1071,7 +1078,7 @@ export default function App() {
 
       <ShortcutHelpModal isOpen={showShortcutHelp} onClose={() => setShowShortcutHelp(false)} />
 
-      <CommandPalette 
+      <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         documents={savedDocuments}

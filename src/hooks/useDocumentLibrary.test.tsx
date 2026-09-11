@@ -1,39 +1,25 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { waitFor } from '@testing-library/dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDocumentLibrary } from './useDocumentLibrary';
-import {
-  deleteDocument,
-  duplicateDocument,
-  listDocuments,
-  listDocumentVersions,
-  readDocumentContent,
-  readDocumentVersionContent,
-  renameDocument,
-  saveDocument,
-  type SavedDocumentSummary,
-  type SavedDocumentVersionSummary,
+import type {
+  SavedDocumentSummary,
+  SavedDocumentVersionSummary,
 } from '../lib/documentApi';
 
-vi.mock('../lib/documentApi', () => ({
-  listDocuments: vi.fn(),
-  listDocumentVersions: vi.fn(),
-  saveDocument: vi.fn(),
-  readDocumentContent: vi.fn(),
-  readDocumentVersionContent: vi.fn(),
-  renameDocument: vi.fn(),
-  deleteDocument: vi.fn(),
-  duplicateDocument: vi.fn(),
-}));
-
-const mockedListDocuments = vi.mocked(listDocuments);
-const mockedListDocumentVersions = vi.mocked(listDocumentVersions);
-const mockedSaveDocument = vi.mocked(saveDocument);
-const mockedReadDocumentContent = vi.mocked(readDocumentContent);
-const mockedReadDocumentVersionContent = vi.mocked(readDocumentVersionContent);
-const mockedRenameDocument = vi.mocked(renameDocument);
-const mockedDeleteDocument = vi.mocked(deleteDocument);
-const mockedDuplicateDocument = vi.mocked(duplicateDocument);
+function createApi() {
+  return {
+    listDocuments: vi.fn(),
+    listDocumentVersions: vi.fn(),
+    saveDocument: vi.fn(),
+    readDocumentContent: vi.fn(),
+    readDocumentVersionContent: vi.fn(),
+    renameDocument: vi.fn(),
+    deleteDocument: vi.fn(),
+    duplicateDocument: vi.fn(),
+  };
+}
 
 const EXISTING_DOCUMENT: SavedDocumentSummary = {
   id: 'doc-1',
@@ -56,17 +42,18 @@ const EXISTING_VERSIONS: SavedDocumentVersionSummary[] = [
 ];
 
 describe('useDocumentLibrary', () => {
-  beforeEach(() => {
-    mockedListDocuments.mockResolvedValue([EXISTING_DOCUMENT]);
-    mockedListDocumentVersions.mockResolvedValue(EXISTING_VERSIONS);
-  });
+  let api: ReturnType<typeof createApi>;
 
-  afterEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => {
+    api = createApi();
+    api.listDocuments.mockResolvedValue([EXISTING_DOCUMENT]);
+    api.listDocumentVersions.mockResolvedValue(EXISTING_VERSIONS);
   });
 
   it('loads saved documents on mount', async () => {
-    const { result } = renderHook(() => useDocumentLibrary({ initialDocumentName: 'Built-in sample' }));
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Built-in sample', api }),
+    );
 
     await waitFor(() => {
       expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
@@ -96,16 +83,18 @@ describe('useDocumentLibrary', () => {
       },
     ];
 
-    mockedSaveDocument.mockResolvedValue(createdDocument);
-    mockedListDocuments
+    api.saveDocument.mockResolvedValue(createdDocument);
+    api.listDocuments
       .mockResolvedValueOnce([EXISTING_DOCUMENT])
       .mockResolvedValueOnce([createdDocument, EXISTING_DOCUMENT]);
-    mockedListDocumentVersions.mockImplementation(async (documentId: string) =>
+    api.listDocumentVersions.mockImplementation(async (documentId: string) =>
       documentId === 'doc-2' ? createdVersions : EXISTING_VERSIONS,
     );
-    mockedReadDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
+    api.readDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
 
-    const { result } = renderHook(() => useDocumentLibrary({ initialDocumentName: 'Built-in sample' }));
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Built-in sample', api }),
+    );
 
     await waitFor(() => {
       expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
@@ -122,7 +111,7 @@ describe('useDocumentLibrary', () => {
     });
 
     expect(saved!).toEqual(createdDocument);
-    expect(mockedSaveDocument).toHaveBeenCalledWith({
+    expect(api.saveDocument).toHaveBeenCalledWith({
       name: 'Local Draft.docx',
       buffer: new Uint8Array([1, 2, 3, 4]).buffer,
     });
@@ -132,15 +121,15 @@ describe('useDocumentLibrary', () => {
       expect(result.current.currentDocumentVersions).toEqual(createdVersions);
     });
 
-    mockedListDocuments.mockResolvedValue([EXISTING_DOCUMENT]);
-    mockedListDocumentVersions.mockImplementation(async () => EXISTING_VERSIONS);
+    api.listDocuments.mockResolvedValue([EXISTING_DOCUMENT]);
+    api.listDocumentVersions.mockImplementation(async () => EXISTING_VERSIONS);
 
     let opened: Awaited<ReturnType<typeof result.current.openSavedDocument>>;
     await act(async () => {
       opened = await result.current.openSavedDocument('doc-1');
     });
 
-    expect(mockedReadDocumentContent).toHaveBeenCalledWith('doc-1', { markOpened: true });
+    expect(api.readDocumentContent).toHaveBeenCalledWith('doc-1', { markOpened: true });
     expect(opened!).toEqual({
       id: 'doc-1',
       name: 'Proposal.docx',
@@ -182,21 +171,23 @@ describe('useDocumentLibrary', () => {
       ...EXISTING_VERSIONS,
     ];
 
-    mockedRenameDocument.mockResolvedValue(renamedDocument);
-    mockedReadDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
-    mockedSaveDocument.mockResolvedValue(restoredDocument);
-    mockedReadDocumentVersionContent.mockResolvedValue(new Uint8Array([5, 5, 5]).buffer);
-    mockedDeleteDocument.mockResolvedValue(undefined);
-    mockedDuplicateDocument.mockResolvedValue(duplicatedDocument);
-    mockedListDocuments
+    api.renameDocument.mockResolvedValue(renamedDocument);
+    api.readDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
+    api.saveDocument.mockResolvedValue(restoredDocument);
+    api.readDocumentVersionContent.mockResolvedValue(new Uint8Array([5, 5, 5]).buffer);
+    api.deleteDocument.mockResolvedValue(undefined);
+    api.duplicateDocument.mockResolvedValue(duplicatedDocument);
+    api.listDocuments
       .mockResolvedValueOnce([EXISTING_DOCUMENT])
       .mockResolvedValueOnce([renamedDocument])
       .mockResolvedValueOnce([duplicatedDocument, renamedDocument])
       .mockResolvedValueOnce([restoredDocument, duplicatedDocument])
       .mockResolvedValueOnce([]);
-    mockedListDocumentVersions.mockImplementation(async () => EXISTING_VERSIONS);
+    api.listDocumentVersions.mockImplementation(async () => EXISTING_VERSIONS);
 
-    const { result } = renderHook(() => useDocumentLibrary({ initialDocumentName: 'Proposal.docx' }));
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Proposal.docx', api }),
+    );
 
     await waitFor(() => {
       expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
@@ -224,19 +215,19 @@ describe('useDocumentLibrary', () => {
     });
 
     expect(duplicated!).toEqual(duplicatedDocument);
-    expect(mockedDuplicateDocument).toHaveBeenCalledWith('doc-1');
+    expect(api.duplicateDocument).toHaveBeenCalledWith('doc-1');
 
     let restored: Awaited<ReturnType<typeof result.current.restoreDocumentVersion>>;
     await act(async () => {
       restored = await result.current.restoreDocumentVersion('doc-1', 'ver-1');
     });
 
-    expect(mockedReadDocumentVersionContent).toHaveBeenCalledWith('doc-1', 'ver-1');
+    expect(api.readDocumentVersionContent).toHaveBeenCalledWith('doc-1', 'ver-1');
     expect(restored!).toEqual({
       document: restoredDocument,
       buffer: new Uint8Array([5, 5, 5]).buffer,
     });
-    mockedListDocumentVersions.mockImplementation(async () => restoredVersions);
+    api.listDocumentVersions.mockImplementation(async () => restoredVersions);
     await act(async () => {
       await result.current.refreshVersions('doc-1');
     });
@@ -246,7 +237,7 @@ describe('useDocumentLibrary', () => {
       await result.current.deleteSavedDocument('doc-1');
     });
 
-    expect(mockedDeleteDocument).toHaveBeenCalledWith('doc-1');
+    expect(api.deleteDocument).toHaveBeenCalledWith('doc-1');
     expect(result.current.currentDocumentId).toBeNull();
   });
 });

@@ -76,9 +76,15 @@ export function CommandPalette({
     [actions, onClose, onJumpToAnchor, onOpenDocument],
   );
 
-  useEffect(() => {
+  // Reset the highlighted index whenever the result set changes (query,
+  // actions, documents, anchors). Adjusting state during render (the pattern
+  // documented by React) avoids a setState-in-effect round trip.
+  const queryKey = `${query}|${actions.length}|${documents.length}|${anchors.length}`;
+  const [lastQueryKey, setLastQueryKey] = useState(queryKey);
+  if (lastQueryKey !== queryKey) {
+    setLastQueryKey(queryKey);
     setSelectedIndex(0);
-  }, [query]);
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -193,4 +199,4 @@ export function CommandPalette({
       </section>
     </div>
   );
-}
+}

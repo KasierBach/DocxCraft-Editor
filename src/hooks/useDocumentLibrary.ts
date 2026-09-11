@@ -13,8 +13,31 @@ import {
   type SavedDocumentVersionSummary,
 } from '../lib/documentApi';
 
+type DocumentLibraryApi = {
+  listDocuments: typeof listDocuments;
+  listDocumentVersions: typeof listDocumentVersions;
+  saveDocument: typeof saveDocument;
+  readDocumentContent: typeof readDocumentContent;
+  readDocumentVersionContent: typeof readDocumentVersionContent;
+  renameDocument: typeof renameDocument;
+  deleteDocument: typeof deleteDocument;
+  duplicateDocument: typeof duplicateDocument;
+};
+
+const defaultApi: DocumentLibraryApi = {
+  listDocuments,
+  listDocumentVersions,
+  saveDocument,
+  readDocumentContent,
+  readDocumentVersionContent,
+  renameDocument,
+  deleteDocument,
+  duplicateDocument,
+};
+
 type UseDocumentLibraryOptions = {
   initialDocumentName: string;
+  api?: DocumentLibraryApi;
 };
 
 type DraftDescriptor = {
@@ -36,7 +59,7 @@ type SaveDocumentOptions = {
 const FALLBACK_DOCUMENT_NAME = 'Untitled.docx';
 
 
-export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOptions) {
+export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: UseDocumentLibraryOptions) {
   const [documentName, setDocumentName] = useState(initialDocumentName);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
   const [savedDocuments, setSavedDocuments] = useState<SavedDocumentSummary[]>([]);
@@ -53,7 +76,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
     setIsLoadingDocuments(true);
 
     try {
-      const documents = await listDocuments();
+      const documents = await api.listDocuments();
       setSavedDocuments(documents);
       setLibraryError(null);
       return documents;
@@ -64,7 +87,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, []);
+  }, [api]);
 
   const refreshVersions = useCallback(async (documentId = currentDocumentId) => {
     if (!documentId) {
@@ -76,7 +99,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
     setIsLoadingVersions(true);
 
     try {
-      const versions = await listDocumentVersions(documentId);
+      const versions = await api.listDocumentVersions(documentId);
       setCurrentDocumentVersions(versions);
       setVersionError(null);
       return versions;
@@ -87,7 +110,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
     } finally {
       setIsLoadingVersions(false);
     }
-  }, [currentDocumentId]);
+  }, [api, currentDocumentId]);
 
   useEffect(() => {
     void refreshDocuments().catch(() => undefined);
@@ -122,7 +145,7 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
           ...(options?.asNew || !currentDocumentId ? {} : { id: currentDocumentId }),
           ...(currentSavedDocument ? { revision: currentSavedDocument.revision } : {}),
         };
-        const savedDocument = await saveDocument(saveInput);
+        const savedDocument = await api.saveDocument(saveInput);
 
         setCurrentDocumentId(savedDocument.id);
         setDocumentName(savedDocument.name);
@@ -138,12 +161,12 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         setIsSaving(false);
       }
     },
-    [currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
+    [api, currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
   );
 
   const openSavedDocument = useCallback(
     async (documentId: string): Promise<OpenedDocument> => {
-      const buffer = await readDocumentContent(documentId, { markOpened: true });
+      const buffer = await api.readDocumentContent(documentId, { markOpened: true });
       const documents =
         savedDocuments.find((document) => document.id === documentId) === undefined
           ? await refreshDocuments()
@@ -163,13 +186,13 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         buffer,
       };
     },
-    [refreshDocuments, refreshVersions, savedDocuments],
+    [api, refreshDocuments, refreshVersions, savedDocuments],
   );
 
   const renameSavedDocument = useCallback(
     async (documentId: string, name: string) => {
       try {
-        const renamedDocument = await renameDocument(documentId, name);
+        const renamedDocument = await api.renameDocument(documentId, name);
         if (documentId === currentDocumentId) {
           setDocumentName(renamedDocument.name);
         }
@@ -182,13 +205,13 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         throw error;
       }
     },
-    [currentDocumentId, refreshDocuments],
+    [api, currentDocumentId, refreshDocuments],
   );
 
   const deleteSavedDocument = useCallback(
     async (documentId: string) => {
       try {
-        await deleteDocument(documentId);
+        await api.deleteDocument(documentId);
         if (documentId === currentDocumentId) {
           setCurrentDocumentId(null);
           setCurrentDocumentVersions([]);
@@ -201,27 +224,27 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         throw error;
       }
     },
-    [currentDocumentId, refreshDocuments],
+    [api, currentDocumentId, refreshDocuments],
   );
 
   const duplicateSavedDocument = useCallback(
     async (documentId: string) => {
-      const duplicatedDocument = await duplicateDocument(documentId);
+      const duplicatedDocument = await api.duplicateDocument(documentId);
       await refreshDocuments();
       return duplicatedDocument;
     },
-    [refreshDocuments],
+    [api, refreshDocuments],
   );
 
   const restoreDocumentVersion = useCallback(
     async (documentId: string, versionId: string) => {
-      const buffer = await readDocumentVersionContent(documentId, versionId);
+      const buffer = await api.readDocumentVersionContent(documentId, versionId);
       const matchingDocument =
         savedDocuments.find((document) => document.id === documentId) ??
         (await refreshDocuments()).find((document) => document.id === documentId) ??
         null;
 
-      const restoredDocument = await saveDocument({
+      const restoredDocument = await api.saveDocument({
         id: documentId,
         name: matchingDocument?.name ?? documentName,
         buffer,
@@ -239,16 +262,16 @@ export function useDocumentLibrary({ initialDocumentName }: UseDocumentLibraryOp
         buffer,
       };
     },
-    [currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
+    [api, currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
   );
 
   const readSavedDocumentBuffer = useCallback((documentId: string) => {
-    return readDocumentContent(documentId, { markOpened: false });
-  }, []);
+    return api.readDocumentContent(documentId, { markOpened: false });
+  }, [api]);
 
   const readVersionBuffer = useCallback((documentId: string, versionId: string) => {
-    return readDocumentVersionContent(documentId, versionId);
-  }, []);
+    return api.readDocumentVersionContent(documentId, versionId);
+  }, [api]);
 
   return {
     currentDocumentId,

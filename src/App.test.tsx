@@ -4,8 +4,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
 import type { RecoverySnapshot } from './lib/recoveryStore';
+import { mockState } from './test/editorMock';
 
-const docxEditorRenderLog: Array<{ document?: unknown; documentBuffer?: ArrayBuffer }> = [];
+vi.mock('@eigenpal/docx-editor-react', async () => {
+  const mock = await import('./test/editorMock');
+  return {
+    DocxEditor: mock.DocxEditor,
+    createEmptyDocument: mock.createEmptyDocument,
+  };
+});
+
+const {
+  docxEditorRenderLog,
+  editorSave,
+  triggerEditorContentChange,
+  triggerEditorSelectionChange,
+} = mockState;
+
 const openSavedDocument = vi.fn();
 const saveCurrentDocument = vi.fn();
 const renameSavedDocument = vi.fn();
@@ -17,86 +32,11 @@ const readVersionBuffer = vi.fn();
 const refreshDocuments = vi.fn();
 const refreshVersions = vi.fn();
 const discardRecovery = vi.fn();
-const editorSave = vi.fn();
-const triggerEditorContentChange = vi.fn();
-const triggerEditorSelectionChange = vi.fn();
 let mockedRecoverySnapshot: RecoverySnapshot | null = null;
-let nextSelectionInfo:
-  | {
-      paraId: string | null;
-      selectedText: string;
-      paragraphText: string;
-      before: string;
-      after: string;
-    }
-  | null = null;
 
 async function openUtilityMenu(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /more actions/i }));
 }
-
-vi.mock('@eigenpal/docx-editor-react', async () => {
-  const React = await import('react');
-
-  const DocxEditor = React.forwardRef(function MockDocxEditor(props: Record<string, unknown>, ref) {
-    docxEditorRenderLog.push({
-      document: props.document,
-      documentBuffer:
-        props.documentBuffer instanceof ArrayBuffer ? props.documentBuffer : undefined,
-    });
-
-    triggerEditorContentChange.mockImplementation(() => {
-      const onChange = props.onChange as ((document: unknown) => void) | undefined;
-      onChange?.({ type: 'changed-document' });
-    });
-
-    triggerEditorSelectionChange.mockImplementation((selectionState: unknown) => {
-      const onSelectionChange = props.onSelectionChange as ((selection: unknown) => void) | undefined;
-      onSelectionChange?.(selectionState);
-    });
-
-    React.useImperativeHandle(ref, () => ({
-      save: editorSave,
-      getTotalPages: () => 1,
-      getPageContent: () => ({ pageNumber: 1, text: '', paragraphs: [] }),
-      getAgent: () => ({ getWordCount: () => 0 }),
-      getEditorRef: () => null,
-      openPrintPreview: vi.fn(),
-      getSelectionInfo: () => nextSelectionInfo,
-      getCurrentPage: () => 1,
-      scrollToPage: vi.fn(),
-      scrollToParaId: () => true,
-    }));
-
-    return (
-      <div data-testid="docx-editor">
-        <button type="button" onClick={() => triggerEditorContentChange()}>
-          Simulate content change
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            triggerEditorSelectionChange({
-              hasSelection: false,
-              isMultiParagraph: false,
-              textFormatting: {},
-              paragraphFormatting: {},
-              styleId: 'Normal',
-              startParagraphIndex: 1,
-              endParagraphIndex: 1,
-            })
-          }
-        >
-          Simulate selection change
-        </button>
-      </div>
-    );
-  });
-
-  return {
-    DocxEditor,
-  };
-});
 
 vi.mock('./demoDocument', () => ({
   createDemoDocument: () => ({ type: 'demo-document' }),
@@ -264,7 +204,7 @@ describe('App', () => {
     discardRecovery.mockReset();
     triggerEditorSelectionChange.mockReset();
     mockedRecoverySnapshot = null;
-    nextSelectionInfo = null;
+    mockState.nextSelectionInfo = null;
   });
 
   it('reloads the current local docx source', async () => {
@@ -351,7 +291,7 @@ describe('App', () => {
 
     expect(screen.getByTestId('active-para')).toHaveTextContent('para-1');
 
-    nextSelectionInfo = {
+    mockState.nextSelectionInfo = {
       paraId: null,
       selectedText: '',
       paragraphText: 'Paragraph 2',
