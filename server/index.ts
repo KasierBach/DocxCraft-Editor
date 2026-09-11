@@ -16,6 +16,14 @@ function readPort(value: string | undefined) {
   return port;
 }
 
+function readCorsOrigin() {
+  const value = process.env.CORS_ORIGIN;
+  if (!value) return undefined;
+  if (value === '*') return true;
+  if (value === 'false') return false;
+  return value.split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
 export async function startDocumentApiServer({
   port = DEFAULT_PORT,
   host = '127.0.0.1',
@@ -28,6 +36,7 @@ export async function startDocumentApiServer({
   });
   const app = buildDocumentApiApp({
     store,
+    corsOrigin: readCorsOrigin(),
     logger: createServerLoggerOptions({
       env: process.env.NODE_ENV,
       level: process.env.LOG_LEVEL ?? 'info',
@@ -36,8 +45,15 @@ export async function startDocumentApiServer({
 
   await app.listen({ port, host });
 
+  let closing = false;
   const close = async () => {
-    await app.close();
+    if (closing) return;
+    closing = true;
+    try {
+      await app.close();
+    } finally {
+      process.exit(0);
+    }
   };
   process.once('SIGINT', () => void close());
   process.once('SIGTERM', () => void close());

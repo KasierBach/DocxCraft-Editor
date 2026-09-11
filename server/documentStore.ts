@@ -31,6 +31,13 @@ export class DocumentConflictError extends Error {
   }
 }
 
+export class DocumentNotFoundError extends Error {
+  constructor(message = 'Document not found.') {
+    super(message);
+    this.name = 'DocumentNotFoundError';
+  }
+}
+
 type DocumentIndex = {
   documents: StoredDocumentSummary[];
   versions: SavedDocumentVersionSummary[];
@@ -127,142 +134,142 @@ export class FileDocumentStore implements DocumentStorePort {
 
   async saveNewDocument({ name, buffer }: SaveDocumentInput) {
     return this.runExclusive(async () => {
-    const index = await this.readIndex();
-    const documentId = randomUUID();
-    const versionId = randomUUID();
-    const timestamp = createTimestamp();
-    const documentName = ensureDocxName(name);
-    const version = this.createVersionSummary({
-      documentId,
-      versionId,
-      name: documentName,
-      timestamp,
-      buffer,
-    });
-    const document = this.createStoredDocumentSummary({
-      documentId,
-      latestVersionId: versionId,
-      name: documentName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      sizeInBytes: buffer.byteLength,
-      lastOpenedAt: null,
-      versionCount: 1,
-      revision: 1,
-    });
+      const index = await this.readIndex();
+      const documentId = randomUUID();
+      const versionId = randomUUID();
+      const timestamp = createTimestamp();
+      const documentName = ensureDocxName(name);
+      const version = this.createVersionSummary({
+        documentId,
+        versionId,
+        name: documentName,
+        timestamp,
+        buffer,
+      });
+      const document = this.createStoredDocumentSummary({
+        documentId,
+        latestVersionId: versionId,
+        name: documentName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        sizeInBytes: buffer.byteLength,
+        lastOpenedAt: null,
+        versionCount: 1,
+        revision: 1,
+      });
 
-    index.documents.push(document);
-    index.versions.push(version);
-    await this.writeDocumentFile(documentId, versionId, buffer);
-    await this.pruneVersions(index, documentId);
-    await this.writeIndex(index);
-    return this.toPublicDocumentSummary(document);
+      index.documents.push(document);
+      index.versions.push(version);
+      await this.writeDocumentFile(documentId, versionId, buffer);
+      await this.pruneVersions(index, documentId);
+      await this.writeIndex(index);
+      return this.toPublicDocumentSummary(document);
     });
   }
 
   async updateDocument(id: string, { name, buffer, expectedRevision }: UpdateDocumentInput) {
     return this.runExclusive(async () => {
-    const index = await this.readIndex();
-    const existingDocument = this.getStoredDocumentOrThrow(index, id);
-    if (expectedRevision !== undefined && existingDocument.revision !== expectedRevision) {
-      throw new DocumentConflictError();
-    }
-    const timestamp = createTimestamp();
-    const versionId = randomUUID();
-    const documentName = ensureDocxName(name ?? existingDocument.name);
-    const version = this.createVersionSummary({
-      documentId: id,
-      versionId,
-      name: documentName,
-      timestamp,
-      buffer,
-    });
-    const updatedDocument: StoredDocumentSummary = {
-      ...existingDocument,
-      latestVersionId: versionId,
-      name: documentName,
-      updatedAt: timestamp,
-      sizeInBytes: buffer.byteLength,
-      versionCount: existingDocument.versionCount + 1,
-      revision: existingDocument.revision + 1,
-    };
+      const index = await this.readIndex();
+      const existingDocument = this.getStoredDocumentOrThrow(index, id);
+      if (expectedRevision !== undefined && existingDocument.revision !== expectedRevision) {
+        throw new DocumentConflictError();
+      }
+      const timestamp = createTimestamp();
+      const versionId = randomUUID();
+      const documentName = ensureDocxName(name ?? existingDocument.name);
+      const version = this.createVersionSummary({
+        documentId: id,
+        versionId,
+        name: documentName,
+        timestamp,
+        buffer,
+      });
+      const updatedDocument: StoredDocumentSummary = {
+        ...existingDocument,
+        latestVersionId: versionId,
+        name: documentName,
+        updatedAt: timestamp,
+        sizeInBytes: buffer.byteLength,
+        versionCount: existingDocument.versionCount + 1,
+        revision: existingDocument.revision + 1,
+      };
 
-    index.documents = index.documents.map((document) => (document.id === id ? updatedDocument : document));
-    index.versions.push(version);
-    await this.writeDocumentFile(id, versionId, buffer);
-    await this.pruneVersions(index, id);
-    await this.writeIndex(index);
-    return this.toPublicDocumentSummary(updatedDocument);
+      index.documents = index.documents.map((document) => (document.id === id ? updatedDocument : document));
+      index.versions.push(version);
+      await this.writeDocumentFile(id, versionId, buffer);
+      await this.pruneVersions(index, id);
+      await this.writeIndex(index);
+      return this.toPublicDocumentSummary(updatedDocument);
     });
   }
 
   async renameDocument(id: string, { name }: RenameDocumentInput) {
     return this.runExclusive(async () => {
-    const index = await this.readIndex();
-    const existingDocument = this.getStoredDocumentOrThrow(index, id);
-    const renamedDocument: StoredDocumentSummary = {
-      ...existingDocument,
-      name: ensureDocxName(name ?? existingDocument.name),
-      updatedAt: createTimestamp(),
-    };
+      const index = await this.readIndex();
+      const existingDocument = this.getStoredDocumentOrThrow(index, id);
+      const renamedDocument: StoredDocumentSummary = {
+        ...existingDocument,
+        name: ensureDocxName(name ?? existingDocument.name),
+        updatedAt: createTimestamp(),
+      };
 
-    index.documents = index.documents.map((document) =>
-      document.id === id ? renamedDocument : document,
-    );
-    await this.writeIndex(index);
-    return this.toPublicDocumentSummary(renamedDocument);
+      index.documents = index.documents.map((document) =>
+        document.id === id ? renamedDocument : document,
+      );
+      await this.writeIndex(index);
+      return this.toPublicDocumentSummary(renamedDocument);
     });
   }
 
   async deleteDocument(id: string) {
     return this.runExclusive(async () => {
-    const index = await this.readIndex();
-    this.getStoredDocumentOrThrow(index, id);
+      const index = await this.readIndex();
+      this.getStoredDocumentOrThrow(index, id);
 
-    index.documents = index.documents.filter((document) => document.id !== id);
-    index.versions = index.versions.filter((version) => version.documentId !== id);
-    await this.writeIndex(index);
-    await rm(this.documentDirectoryPath(id), { recursive: true, force: true });
+      index.documents = index.documents.filter((document) => document.id !== id);
+      index.versions = index.versions.filter((version) => version.documentId !== id);
+      await this.writeIndex(index);
+      await rm(this.documentDirectoryPath(id), { recursive: true, force: true });
     });
   }
 
   async duplicateDocument(id: string) {
     return this.runExclusive(async () => {
-    const index = await this.readIndex();
-    const existingDocument = this.getStoredDocumentOrThrow(index, id);
-    const latestVersion = this.getVersionOrThrow(index, id, existingDocument.latestVersionId);
-    const buffer = await this.readVersionBuffer(id, latestVersion.id);
+      const index = await this.readIndex();
+      const existingDocument = this.getStoredDocumentOrThrow(index, id);
+      const latestVersion = this.getVersionOrThrow(index, id, existingDocument.latestVersionId);
+      const buffer = await this.readVersionBuffer(id, latestVersion.id);
 
-    const documentId = randomUUID();
-    const versionId = randomUUID();
-    const timestamp = createTimestamp();
-    const documentName = createDuplicateName(existingDocument.name);
+      const documentId = randomUUID();
+      const versionId = randomUUID();
+      const timestamp = createTimestamp();
+      const documentName = createDuplicateName(existingDocument.name);
 
-    const version = this.createVersionSummary({
-      documentId,
-      versionId,
-      name: documentName,
-      timestamp,
-      buffer,
-    });
+      const version = this.createVersionSummary({
+        documentId,
+        versionId,
+        name: documentName,
+        timestamp,
+        buffer,
+      });
 
-    const document = this.createStoredDocumentSummary({
-      documentId,
-      latestVersionId: versionId,
-      name: documentName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      sizeInBytes: buffer.byteLength,
-      lastOpenedAt: null,
-      versionCount: 1,
-      revision: 1,
-    });
+      const document = this.createStoredDocumentSummary({
+        documentId,
+        latestVersionId: versionId,
+        name: documentName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        sizeInBytes: buffer.byteLength,
+        lastOpenedAt: null,
+        versionCount: 1,
+        revision: 1,
+      });
 
-    index.documents.push(document);
-    index.versions.push(version);
-    await this.writeDocumentFile(documentId, versionId, buffer);
-    await this.writeIndex(index);
-    return this.toPublicDocumentSummary(document);
+      index.documents.push(document);
+      index.versions.push(version);
+      await this.writeDocumentFile(documentId, versionId, buffer);
+      await this.writeIndex(index);
+      return this.toPublicDocumentSummary(document);
     });
   }
 
@@ -408,7 +415,7 @@ export class FileDocumentStore implements DocumentStorePort {
   private getStoredDocumentOrThrow(index: DocumentIndex, documentId: string) {
     const document = index.documents.find((entry) => entry.id === documentId);
     if (!document) {
-      throw new Error(`Document ${documentId} was not found.`);
+      throw new DocumentNotFoundError(`Document ${documentId} was not found.`);
     }
 
     return document;
@@ -419,7 +426,7 @@ export class FileDocumentStore implements DocumentStorePort {
       (entry) => entry.documentId === documentId && entry.id === versionId,
     );
     if (!version) {
-      throw new Error(`Version ${versionId} for document ${documentId} was not found.`);
+      throw new DocumentNotFoundError(`Version ${versionId} for document ${documentId} was not found.`);
     }
 
     return version;
@@ -430,7 +437,7 @@ export class FileDocumentStore implements DocumentStorePort {
       return await readFile(this.documentVersionPath(documentId, versionId));
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        throw new Error(`Version ${versionId} for document ${documentId} was not found.`);
+        throw new DocumentNotFoundError(`Version ${versionId} for document ${documentId} was not found.`);
       }
 
       throw error;

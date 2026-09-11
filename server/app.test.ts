@@ -366,4 +366,71 @@ describe('buildDocumentApiApp', () => {
       await app.close();
     }
   });
+
+  it('returns CORS headers for allowed origins', async () => {
+    const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-cors-'));
+    tempDirectories.push(storageDirectory);
+    const store = createDocumentStore({ rootDirectory: storageDirectory });
+    const app = buildDocumentApiApp({
+      store,
+      corsOrigin: 'https://editor.example.com',
+    });
+    await app.ready();
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/documents',
+        headers: { origin: 'https://editor.example.com' },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBe('https://editor.example.com');
+
+      const preflight = await app.inject({
+        method: 'OPTIONS',
+        url: '/api/documents',
+        headers: {
+          origin: 'https://editor.example.com',
+          'access-control-request-method': 'POST',
+        },
+      });
+      expect(preflight.statusCode).toBe(204);
+      expect(preflight.headers['access-control-allow-origin']).toBe('https://editor.example.com');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('enforces the configured rate limit', async () => {
+    const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-rate-'));
+    tempDirectories.push(storageDirectory);
+    const store = createDocumentStore({ rootDirectory: storageDirectory });
+    const app = buildDocumentApiApp({
+      store,
+      rateLimitMaxRequests: 3,
+      rateLimitTimeWindowMs: 60_000,
+    });
+    await app.ready();
+
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/api/documents',
+          remoteAddress: '127.0.0.1',
+        });
+        expect(response.statusCode).toBe(200);
+      }
+
+      const limited = await app.inject({
+        method: 'GET',
+        url: '/api/documents',
+        remoteAddress: '127.0.0.1',
+      });
+      expect(limited.statusCode).toBe(429);
+      expect(limited.headers['x-ratelimit-limit']).toBe('3');
+    } finally {
+      await app.close();
+    }
+  });
 });

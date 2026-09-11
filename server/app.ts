@@ -1,7 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 
-import { DocumentConflictError } from './documentStore.ts';
+import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
 import { validateDocx } from './docxValidation.ts';
 import type { DocumentStorePort } from './types.ts';
 
@@ -68,7 +70,7 @@ function readExpectedRevision(headers: Record<string, unknown>) {
   const value = headers['if-match'];
   if (value === undefined) return undefined;
   const rawValue = Array.isArray(value) ? value[0] : value;
-  const revision = Number(String(rawValue).replace(/^\"|\"$/g, ''));
+  const revision = Number(String(rawValue).replace(/^"|"$/g, ''));
   if (!Number.isInteger(revision) || revision < 1) throw new RequestValidationError();
   return revision;
 }
@@ -89,10 +91,6 @@ function createContentDisposition(name: string) {
   return `inline; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`;
 }
 
-function isMissingDocumentError(error: unknown): error is Error {
-  return error instanceof Error && /not found/i.test(error.message);
-}
-
 function parseWithSchema<T>(schema: z.ZodType<T>, input: unknown) {
   const result = schema.safeParse(input);
   if (!result.success) {
@@ -102,16 +100,45 @@ function parseWithSchema<T>(schema: z.ZodType<T>, input: unknown) {
   return result.data;
 }
 
+export const RATE_LIMIT_MAX_REQUESTS = 300;
+export const RATE_LIMIT_TIME_WINDOW_MS = 60_000;
+
 export function buildDocumentApiApp({
   store,
   logger = false,
+  corsOrigin,
+  rateLimitMaxRequests = RATE_LIMIT_MAX_REQUESTS,
+  rateLimitTimeWindowMs = RATE_LIMIT_TIME_WINDOW_MS,
 }: {
   store: DocumentStorePort;
   logger?: boolean | Record<string, unknown>;
+  corsOrigin?: string | string[] | boolean;
+  rateLimitMaxRequests?: number | false;
+  rateLimitTimeWindowMs?: number;
 }): FastifyInstance {
   const app = Fastify({
     bodyLimit: MAX_DOCUMENT_BYTES,
     logger,
+  });
+
+  // Register CORS and rate limiting inside a shared plugin scope together with
+  // the routes so their hooks apply to every document route. Fastify plugins
+  // are encapsulated: hooks registered in a sibling scope would not apply.
+  void app.register(async (scope) => {
+    if (corsOrigin !== undefined) {
+      await scope.register(cors, {
+        origin: corsOrigin,
+      });
+    }
+
+    if (rateLimitMaxRequests !== false) {
+      await scope.register(rateLimit, {
+        max: rateLimitMaxRequests,
+        timeWindow: rateLimitTimeWindowMs,
+      });
+    }
+
+    registerDocumentRoutes(scope, store);
   });
 
   app.addHook('onSend', async (request, reply) => {
@@ -138,16 +165,16 @@ export function buildDocumentApiApp({
       return;
     }
 
-    if (isMissingDocumentError(error)) {
+    if (error instanceof DocumentNotFoundError) {
       void reply.code(404).send({ message: 'Document not found.' });
       return;
     }
 
     const statusCode =
       typeof error === 'object' &&
-      error !== null &&
-      'statusCode' in error &&
-      typeof error.statusCode === 'number'
+        error !== null &&
+        'statusCode' in error &&
+        typeof error.statusCode === 'number'
         ? error.statusCode
         : 500;
     if (statusCode >= 400 && statusCode < 500) {
@@ -180,6 +207,10 @@ export function buildDocumentApiApp({
     }
   });
 
+  return app;
+}
+
+function registerDocumentRoutes(app: FastifyInstance, store: DocumentStorePort) {
   app.get('/api/documents', async () => store.listDocuments());
 
   app.get('/api/documents/:documentId/versions', async (request) => {
@@ -256,6 +287,4 @@ export function buildDocumentApiApp({
     reply.header('content-disposition', createContentDisposition(version.metadata.name));
     return reply.send(Buffer.from(version.buffer));
   });
-
-  return app;
 }
