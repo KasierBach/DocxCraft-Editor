@@ -3,6 +3,7 @@ node_modules
 
 # Local code graph cache
 .codegraph/
+test-results/
 
 # Build output
 dist

@@ -24,9 +24,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
       - run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm test -- --maxWorkers=2
+      - run: npm run test:e2e
       - run: npm run build
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

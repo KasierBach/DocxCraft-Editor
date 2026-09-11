@@ -18,5 +18,6 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     testTimeout: 15000,
     maxWorkers: 2,
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
   },
 });
