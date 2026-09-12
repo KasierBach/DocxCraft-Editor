@@ -1,37 +1,90 @@
-# DocxCraft-Editor
+# DocxCraft Editor
 
-![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![Status](https://img.shields.io/badge/status-active-brightgreen?style=flat-square)
+[![CI](https://github.com/KasierBach/DocxCraft-Editor/actions/workflows/ci.yml/badge.svg)](https://github.com/KasierBach/DocxCraft-Editor/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/KasierBach/DocxCraft-Editor/actions/workflows/codeql.yml/badge.svg)](https://github.com/KasierBach/DocxCraft-Editor/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.12-339933?logo=node.js&logoColor=white)](package.json)
+[![Docker](https://img.shields.io/badge/ghcr.io-docxcraft--editor-2496ED?logo=docker&logoColor=white)](https://github.com/KasierBach/DocxCraft-Editor/pkgs/container/docxcraft-editor)
 
-**DocxCraft-Editor** is an open-source, local-first `.docx` editor built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), featuring a document library, smart anchor navigation, and a Neo-Brutalism UI — crafted for a seamless, Word-like editing experience right in the browser.
+**A local-first `.docx` editor that runs in your browser — your documents never leave your machine.**
+
+![DocxCraft Editor](.github/assets/screenshot.png)
+
+Built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), with a Neo-Brutalism UI crafted for a seamless, Word-like editing experience.
+
+## Why DocxCraft?
+
+- **Truly local-first** — documents live on your own disk behind your own Fastify API. No account, no cloud, no telemetry.
+- **Self-host in one command** — a single `docker run` gets you the full editor with versioning, crash recovery, and a responsive UI on any device.
+- **Built like production software** — revision-based conflict detection, zip-bomb-hardened uploads, autosave recovery, a strict-TypedScript codebase with 150+ unit tests, 24 e2e tests, and a hardened CI/CD pipeline.
 
 ## Features
 
-- Open `.docx` files directly in the browser
-- Save, rename, delete, and duplicate documents via a local Fastify API
-- **Anchor Map** — collapsible sidebar that lists all headings/paragraphs by page, syncs with the cursor position in real time
-- **Smart Navigation** — clicking an anchor centers the editor on the target paragraph and flashes a highlight; collapsed pages auto-expand
+- Open and edit `.docx` files directly in the browser — with **editing, suggesting, and viewing modes**
+- **Document library** — save, rename, duplicate, and delete documents; **version history** with restore/download on every save
+- **Anchor Map** — a live outline of headings and paragraphs by page that follows your cursor and jumps with a flash highlight
+- **Crash recovery** — unsaved work is auto-backed-up to IndexedDB and offered for restore after a reload
+- **Command palette, keyboard shortcuts, deep links** — full keyboard-driven workflow (`Ctrl+/` for the cheat sheet)
+- **Responsive everywhere** — three-column desktop workspace; tablet and phone layouts collapse the sidebars into drawers
+
+<details>
+<summary><strong>Everything else</strong></summary>
+
 - **Save-in-place** — saving never re-mounts the editor or loses cursor position
 - **Optimistic concurrency** — saves carry an `If-Match` revision; the server rejects stale overwrites with `409`
-- **Recovery Draft** — unsaved work is auto-backed-up (IndexedDB, with a localStorage fallback) and can be restored after a reload
-- **Version History** — automatic snapshots on every save (up to 100 per document), restore or download any older version
 - **Media Manager** — jump-to navigation for images and tables in the document
-- **Editing Modes** — editing, suggesting, and viewing modes
 - **Dark Mode** — manual toggle plus OS preference detection, persisted across sessions
-- **Responsive Layout** — three-column desktop workspace; on tablet portrait and phones the sidebars become off-canvas drawers with a backdrop, and the header/status bars compact automatically
 - **Status Bar** — live word count, page count, and last-saved timestamp
-- **Command Palette** — quick-access panel for documents, outline targets, and actions
-- **Keyboard Shortcuts** — full list in the in-app help (`Ctrl+/`)
-- **Deep Linking** — the URL tracks the open document and selected paragraph; reopening the link restores both
 - Toast notifications for all document actions and errors
 - Error Boundary for graceful crash recovery
 
-## Project Structure
+</details>
+
+## Quick Start
+
+**Self-host (Docker):**
+
+```bash
+docker run -d -p 4175:4175 -v docxcraft-data:/app/data ghcr.io/kasierbach/docxcraft-editor
+# or: docker compose up -d
+```
+
+Open http://localhost:4175 — done. Documents persist in the `docxcraft-data` volume.
+
+**Develop locally:**
+
+```bash
+npm install
+npm run dev
+```
+
+- Frontend: [http://localhost:5136](http://localhost:5136)
+- API: [http://127.0.0.1:4175/api/health](http://127.0.0.1:4175/api/health)
+
+Requires Node.js ≥ 22.12 and npm. The API binds to `127.0.0.1` by default; configure `HOST`, `PORT`, `CORS_ORIGIN`, `DATA_DIR`, and `LOG_LEVEL` via the variables in `.env.example`. If port `4175` already has a compatible server running, the dev launcher reuses it.
+
+<details>
+<summary><strong>Production without Docker</strong></summary>
+
+```bash
+npm run build
+npm run server
+```
+
+The Fastify server serves the built bundle from `dist/` alongside the API on one port — no separate static host needed:
+
+- `/` and static assets come from `dist/`; hashed assets are served with `cache-control: public, max-age=30d, immutable`, `index.html` with `no-cache`
+- Unknown non-API paths fall back to `index.html` (SPA deep links keep working); `/api/*` 404s stay JSON, and missing bundles return a real 404
+- When `dist/` does not exist (API-only deployments), static serving is skipped automatically; set `staticDir: ''` in `buildDocumentApiApp` to disable it explicitly
+- Set `NODE_ENV=production` for structured JSON logs; `HOST`/`PORT` control binding (keep `127.0.0.1` unless you have read [SECURITY.md](SECURITY.md))
+- To run the frontend on a separate static host instead, deploy `dist/` and point it at the API with `CORS_ORIGIN` configured
+
+The Docker image is multi-stage (build → `node:22-slim` runtime running as a non-root user), binds to `0.0.0.0`, includes a container `HEALTHCHECK` against `/api/health`, and is published to GHCR on every `v*` tag with provenance and SBOM attestations.
+
+</details>
+
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```
 src/
@@ -86,60 +139,10 @@ scripts/
 e2e/                       — Playwright browser + API tests
 ```
 
-## Getting Started
+</details>
 
-### Requirements
-
-- Node.js 22+
-- npm
-
-### Install
-
-```bash
-npm install
-```
-
-### Run (development)
-
-```bash
-npm run dev
-```
-
-Default ports:
-- Frontend: [http://localhost:5136](http://localhost:5136)
-- API: [http://127.0.0.1:4175/api/health](http://127.0.0.1:4175/api/health)
-
-The API binds to `127.0.0.1` by default. Configure `HOST`, `PORT`, `CORS_ORIGIN`, `DATA_DIR`, and `LOG_LEVEL` using the variables in `.env.example`. `/api/health` is the liveness check; `/api/ready` verifies that document storage is readable.
-
-If port `4175` already has a compatible server running, the dev launcher reuses it.
-
-### Deploy (production)
-
-```bash
-npm run build
-npm run server
-```
-
-The Fastify server serves the built bundle from `dist/` alongside the API on one port — no separate static host needed. Behavior details:
-
-- `/` and static assets come from `dist/`; hashed assets are served with `cache-control: public, max-age=30d, immutable`, `index.html` with `no-cache`
-- Unknown non-API paths fall back to `index.html` (SPA deep links keep working); `/api/*` 404s stay JSON
-- When `dist/` does not exist (API-only deployments), static serving is skipped automatically; set `staticDir: ''` in `buildDocumentApiApp` to disable it explicitly
-- Set `NODE_ENV=production` for structured JSON logs; `HOST`/`PORT` control binding (keep `127.0.0.1` unless you have read [SECURITY.md](SECURITY.md))
-
-To run the frontend on a separate static host instead, build with `npm run build`, deploy `dist/`, and point it at the API with `CORS_ORIGIN` configured.
-
-### Deploy (Docker)
-
-```bash
-docker compose up -d          # builds locally, persists documents in a named volume
-# or use the published image:
-docker run -d -p 4175:4175 -v docxcraft-data:/app/data ghcr.io/kasierbach/docxcraft-editor
-```
-
-The image is multi-stage (build → `node:22-slim` runtime running as a non-root user), binds to `0.0.0.0`, includes a container `HEALTHCHECK` against `/api/health`, and is published to GHCR on every `v*` tag with provenance and SBOM attestations. Configure `PORT`, `CORS_ORIGIN`, `LOG_LEVEL`, and rate limiting through environment variables (see `.env.example`).
-
-## Available Scripts
+<details>
+<summary><strong>Available scripts</strong></summary>
 
 | Script | Description |
 |---|---|
@@ -154,7 +157,10 @@ The image is multi-stage (build → `node:22-slim` runtime running as a non-root
 | `npm run test:e2e` | Run Playwright browser tests (Chromium, Firefox, WebKit, mobile) |
 | `npm run preview` | Preview production build |
 
-## API Overview
+</details>
+
+<details>
+<summary><strong>API overview</strong></summary>
 
 All routes are versioned via an `apiVersion` field on `/api/health`. Uploads are limited to 50 MiB and rate-limited to 300 requests/minute.
 
@@ -164,7 +170,6 @@ All routes are versioned via an `apiVersion` field on `/api/health`. Uploads are
 | `GET` | `/api/ready` | Storage integrity check |
 | `GET` | `/api/documents` | List saved documents |
 | `POST` | `/api/documents` | Upload a new document (body: DOCX binary, `x-document-name` header) |
-| `GET` | `/api/documents/:id` | (via content route below) |
 | `PUT` | `/api/documents/:id` | Update a document; optional `If-Match: "<revision>"` for conflict detection |
 | `PATCH` | `/api/documents/:id` | Rename a document (JSON body `{ "name": "..." }`) |
 | `DELETE` | `/api/documents/:id` | Delete a document and its versions |
@@ -175,18 +180,19 @@ All routes are versioned via an `apiVersion` field on `/api/health`. Uploads are
 
 Document names travel URL-encoded in the `x-document-name` header; the `Content-Disposition` on downloads includes both an ASCII fallback and a UTF-8 encoded filename.
 
-## Local Document Storage
+</details>
 
-Saved documents are stored in `data/documents/` (excluded from version control):
+<details>
+<summary><strong>Storage &amp; upload hardening</strong></summary>
+
+**Local document storage** — saved documents live in `data/documents/` (excluded from version control):
 
 - `data/documents/<documentId>/<versionId>.docx` — one file per saved version
 - `data/documents/index.json` — metadata index (atomic writes via temp file + rename)
 
 Writes are serialized through an internal queue; version pruning (max 100 per document) commits the index before removing files so a crash mid-prune cannot leave dangling index entries. `/api/ready` verifies index/file consistency on demand.
 
-## DOCX Upload Validation
-
-Uploads are validated before decompression by parsing the ZIP central directory directly:
+**DOCX upload validation** — uploads are validated before decompression by parsing the ZIP central directory directly:
 
 - ZIP signature and structure checks
 - Entry count limit (10,000)
@@ -196,7 +202,10 @@ Uploads are validated before decompression by parsing the ZIP central directory 
 - ZIP64 archives are rejected
 - CRC32 verification via JSZip after the header checks pass
 
-## Keyboard Shortcuts
+</details>
+
+<details>
+<summary><strong>Keyboard shortcuts</strong></summary>
 
 The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by the in-app help (`Ctrl+/`).
 
@@ -210,12 +219,17 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 | `Ctrl+I` | Toggle details sidebar |
 | `Ctrl+P` | Command palette |
 
-## Testing
+</details>
+
+<details>
+<summary><strong>Testing &amp; CI</strong></summary>
 
 - **Unit** (`npm test`) — jsdom environment, `@testing-library/react`, per-module store/api mocks; see the run output for the current count
-- **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 70%, branches 60%)
+- **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 70%, branches 58%)
 - **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, responsive layout checks at 1920→320 px viewports, and accessibility (axe) checks. Playwright starts both servers automatically.
 - **CI** (`.github/workflows/ci.yml`) — lint, typecheck, coverage, e2e, and build on every push and PR (nightly on `main`); CodeQL analysis, Dependabot updates, and Docker/GHCR publishing run in their own workflows. Releasing a `v*` tag re-verifies the full suite and attaches the bundle, checksums, and SBOM.
+
+</details>
 
 ## Known Limits
 
@@ -223,3 +237,7 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 - No authentication, authorization, sharing, or collaboration — see [SECURITY.md](SECURITY.md) before exposing the API beyond localhost
 - ZIP validation covers the central directory and CRC32; deeply malformed OOXML content is only rejected by the editor runtime, not the API
 - Production bundle is large due to the editor runtime
+
+## License
+
+[MIT](LICENSE)
