@@ -22,7 +22,7 @@ export default defineConfig({
     // Editor"); vmThreads keeps the runner functional.
     pool: 'vmThreads',
     maxWorkers: 2,
-    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '.kilo/**'],
     css: false,
     coverage: {
       provider: 'v8',

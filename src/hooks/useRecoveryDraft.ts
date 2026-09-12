@@ -28,7 +28,6 @@ export function useRecoveryDraft({
   autosaveDelayMs = 10000,
 }: UseRecoveryDraftOptions) {
   const [recoverySnapshot, setRecoverySnapshot] = useState<RecoverySnapshot | null>(null);
-  const [isSavingRecovery, setIsSavingRecovery] = useState(false);
   const saveRecoveryTaskRef = useRef<Promise<RecoverySnapshot | null> | null>(null);
 
   const refreshRecovery = useCallback(async () => {
@@ -71,12 +70,10 @@ export function useRecoveryDraft({
   const saveRecoverySafely = useCallback(() => {
     if (saveRecoveryTaskRef.current) return saveRecoveryTaskRef.current;
 
-    setIsSavingRecovery(true);
     const task = saveRecovery()
       .catch(() => null)
       .finally(() => {
         saveRecoveryTaskRef.current = null;
-        setIsSavingRecovery(false);
       });
     saveRecoveryTaskRef.current = task;
     return task;
@@ -112,9 +109,6 @@ export function useRecoveryDraft({
 
   return {
     recoverySnapshot,
-    isSavingRecovery,
-    saveRecovery,
     discardRecovery,
-    refreshRecovery,
   };
-}
+}

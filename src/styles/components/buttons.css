@@ -72,3 +72,18 @@
   opacity: 0;
   cursor: pointer;
 }
+
+.error-boundary .btn {
+  padding: 10px 20px;
+  border: 2px solid var(--nb-black, #111);
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: var(--nb-surface, #fff);
+  color: var(--nb-black, #111);
+}
+
+.error-boundary .btn--primary {
+  background: var(--nb-accent, #ffe14d);
+}

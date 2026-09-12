@@ -290,3 +290,33 @@
   gap: 12px;
   justify-content: center;
 }
+
+.media-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.media-list .saved-document-card {
+  text-align: left;
+  padding: 8px 12px;
+}
+
+.media-list__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.media-list__icon {
+  font-size: 1.2rem;
+}
+
+.media-list__column {
+  display: flex;
+  flex-direction: column;
+}
+
+.media-list__label {
+  font-size: 0.75rem;
+}

@@ -4,14 +4,11 @@ type PanelProps = {
   title?: string;
   children: ReactNode;
   className?: string;
-  error?: boolean;
 };
 
-export function Panel({ title, children, className = '', error = false }: PanelProps) {
-  const baseClass = error ? 'panel panel--error' : 'panel';
-  
+export function Panel({ title, children, className = '' }: PanelProps) {
   return (
-    <section className={`${baseClass} ${className}`}>
+    <section className={`panel ${className}`}>
       {title && <h2>{title}</h2>}
       {children}
     </section>

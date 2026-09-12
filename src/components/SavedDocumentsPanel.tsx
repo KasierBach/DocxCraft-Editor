@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { SavedDocumentSummary } from '../lib/documentApi';
+import { formatBytes } from '../lib/format';
 import { Panel } from './ui/Panel';
 
 type SavedDocumentsPanelProps = {
@@ -23,19 +24,6 @@ type PendingDocumentAction =
   | { documentId: string; type: 'download' };
 
 type SortMode = 'updated-desc' | 'opened-desc' | 'name-asc';
-
-function formatBytes(sizeInBytes: number) {
-  if (sizeInBytes < 1024) {
-    return `${sizeInBytes} B`;
-  }
-
-  const sizeInKb = sizeInBytes / 1024;
-  if (sizeInKb < 1024) {
-    return `${sizeInKb.toFixed(1)} KB`;
-  }
-
-  return `${(sizeInKb / 1024).toFixed(1)} MB`;
-}
 
 function sortDocuments(documents: SavedDocumentSummary[], sortMode: SortMode) {
   const nextDocuments = [...documents];

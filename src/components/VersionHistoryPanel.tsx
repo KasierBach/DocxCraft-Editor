@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import type { SavedDocumentVersionSummary } from '../lib/documentApi';
+import { formatBytes } from '../lib/format';
 import { Panel } from './ui/Panel';
 
 type VersionHistoryPanelProps = {
@@ -11,19 +12,6 @@ type VersionHistoryPanelProps = {
   onRestore: (documentId: string, versionId: string) => void | Promise<void>;
   onDownload: (documentId: string, versionId: string) => void | Promise<void>;
 };
-
-function formatBytes(sizeInBytes: number) {
-  if (sizeInBytes < 1024) {
-    return `${sizeInBytes} B`;
-  }
-
-  const sizeInKb = sizeInBytes / 1024;
-  if (sizeInKb < 1024) {
-    return `${sizeInKb.toFixed(1)} KB`;
-  }
-
-  return `${(sizeInKb / 1024).toFixed(1)} MB`;
-}
 
 export function VersionHistoryPanel({
   documentName,

@@ -1,24 +1,11 @@
 import { Fragment, useEffect, useRef } from 'react';
 
-type ShortcutItem = {
-  keys: string[];
-  description: string;
-};
+import { APP_SHORTCUTS } from '../../lib/shortcuts';
 
 type ShortcutHelpModalProps = {
   isOpen: boolean;
   onClose: () => void;
 };
-
-const SHORTCUTS: ShortcutItem[] = [
-  { keys: ['Ctrl', 'S'], description: 'Save current document' },
-  { keys: ['Ctrl', 'Shift', 'S'], description: 'Save as new document' },
-  { keys: ['Ctrl', 'O'], description: 'Open .docx from computer' },
-  { keys: ['Ctrl', '/'], description: 'Show or hide this help' },
-  { keys: ['Ctrl', '\\'], description: 'Toggle document outline' },
-  { keys: ['Ctrl', 'I'], description: 'Toggle document details' },
-  { keys: ['Ctrl', 'P'], description: 'Open command palette' },
-];
 
 export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -88,7 +75,7 @@ export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
         </div>
         <div className="modal-body">
           <ul className="shortcut-list">
-            {SHORTCUTS.map((shortcut) => (
+            {APP_SHORTCUTS.map((shortcut) => (
               <li key={shortcut.description} className="shortcut-item">
                 <span className="shortcut-description">{shortcut.description}</span>
                 <span className="shortcut-keys">

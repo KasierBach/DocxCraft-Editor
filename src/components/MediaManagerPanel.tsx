@@ -17,21 +17,20 @@ export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelPr
 
   return (
     <Panel title={`Media Manager (${items.length})`}>
-      <div className="media-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div className="media-list">
         {items.map((item) => (
           <button
             key={item.id}
             type="button"
             className="saved-document-card"
-            style={{ textAlign: 'left', padding: '8px 12px' }}
             onClick={() => onJumpToParaId(item.paraId)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '1.2rem' }}>
+            <div className="media-list__row">
+              <span className="media-list__icon" aria-hidden="true">
                 {item.type === 'image' ? '🖼️' : '📊'}
               </span>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className="saved-document-card__name" style={{ fontSize: '0.75rem' }}>
+              <div className="media-list__column">
+                <span className="saved-document-card__name media-list__label">
                   {item.label}
                 </span>
                 <span className="saved-document-card__meta">
