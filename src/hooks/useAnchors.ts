@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { AnchorTarget } from '../lib/anchors';
+import { getHeadingLevel } from '../lib/headings';
 
 export function useAnchors() {
   const [anchors, setAnchors] = useState<AnchorTarget[]>([]);
@@ -9,7 +10,7 @@ export function useAnchors() {
 
   const filteredAnchors = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const headings = anchors.filter((anchor) => /^Heading\d+$/i.test(anchor.styleId ?? ''));
+    const headings = anchors.filter((anchor) => getHeadingLevel(anchor.styleId) !== null);
     const outline = headings.length > 0 ? headings : anchors;
 
     return (filterStyle === 'outline' ? outline : anchors).filter((anchor) => {

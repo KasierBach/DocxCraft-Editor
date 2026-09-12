@@ -30,6 +30,8 @@
 
 .command-palette__results {
   max-height: 400px;
+  /* Stay inside short viewports (e.g. landscape phones). */
+  max-height: min(400px, 55vh);
   overflow-y: auto;
   padding: 10px 0;
 }
@@ -85,4 +87,22 @@
   font-weight: 800;
   text-transform: uppercase;
   color: #666;
+}
+
+/* Short viewports: reduce the top gap and shrink the result list. */
+@media (max-height: 600px) {
+  .command-palette {
+    margin-top: 4vh;
+  }
+
+  .command-palette__results {
+    max-height: 40vh;
+  }
+}
+
+/* Phones: hide the keyboard-hint footer (no hardware keyboard expected). */
+@media (max-width: 640px) {
+  .command-palette__footer {
+    display: none;
+  }
 }

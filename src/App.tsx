@@ -23,6 +23,7 @@ import { collectAnchorTargets, type AnchorTarget, type PageContent } from './lib
 import { buildDeepLinkSearch, readDeepLink } from './lib/deepLink';
 import { downloadBufferAsDocx } from './lib/download';
 import { convertToMarkdown, downloadMarkdown } from './lib/exportUtils';
+import { COMPACT_LAYOUT_MEDIA_QUERY } from './lib/layoutConstants';
 import { flashParagraphHighlight } from './lib/flashHighlight';
 import { scanForMedia, type MediaItem } from './lib/mediaScanner';
 import type { RecoverySnapshot } from './lib/recoveryStore';
@@ -38,11 +39,45 @@ type EditorSource =
   | { kind: 'local-file'; name: string; buffer: ArrayBuffer }
   | { kind: 'saved-document'; name: string; documentId: string; buffer: ArrayBuffer };
 
+type ShortcutSpec = {
+  id: string;
+  key: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  description: string;
+};
+
+// Single source of truth for shortcut bindings and the help modal: handlers
+// are attached by id in the component, so the two can never drift apart.
+const SHORTCUT_SPECS = [
+  { id: 'save', key: 's', ctrlKey: true, description: 'Save current document' },
+  { id: 'open', key: 'o', ctrlKey: true, description: 'Open .docx from computer' },
+  { id: 'save-as', key: 's', ctrlKey: true, shiftKey: true, description: 'Save as new document' },
+  { id: 'help', key: '/', ctrlKey: true, description: 'Show or hide shortcut help' },
+  { id: 'outline', key: '\\', ctrlKey: true, description: 'Toggle document outline' },
+  { id: 'details', key: 'i', ctrlKey: true, description: 'Toggle document details' },
+  { id: 'palette', key: 'p', ctrlKey: true, description: 'Open command palette' },
+] as const satisfies ReadonlyArray<ShortcutSpec>;
+
+type ShortcutId = (typeof SHORTCUT_SPECS)[number]['id'];
+
 const SAMPLE_DOCUMENT_NAME = 'Built-in sample.docx';
 
 const ANCHOR_REFRESH_FIRST_DELAY_MS = 180;
 const ANCHOR_REFRESH_RETRY_DELAY_MS = 250;
 const ANCHOR_REFRESH_DEFAULT_ATTEMPTS = 10;
+
+function prefersCompactLayout(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+
+  try {
+    return window.matchMedia(COMPACT_LAYOUT_MEDIA_QUERY).matches;
+  } catch {
+    return false;
+  }
+}
 
 function createSampleSource(): EditorSource {
   return {
@@ -89,6 +124,7 @@ export default function App() {
   const anchorsRef = useRef<AnchorTarget[]>([]);
   const lastLibraryErrorRef = useRef<string | null>(null);
   const lastVersionErrorRef = useRef<string | null>(null);
+  const flashHighlightCancelRef = useRef<(() => void) | null>(null);
 
   const initialDeepLink = useMemo(() => readDeepLink(window.location.search), []);
   const [source, setSource] = useState<EditorSource>(() => createSampleSource());
@@ -99,8 +135,8 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<number | null>(1);
   const [statusMessage, setStatusMessage] = useState('Ready.');
   const [isDirty, setIsDirty] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(() => !prefersCompactLayout());
+  const [showInfo, setShowInfo] = useState(() => !prefersCompactLayout());
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>('editing');
@@ -394,16 +430,17 @@ export default function App() {
 
   useEffect(() => {
     let isCancelled = false;
+    const deepLinkDocumentId = initialDeepLink.documentId;
 
     if (
       !hasHandledInitialDeepLink.current &&
       initialDeepLink.source === 'saved' &&
-      initialDeepLink.documentId
+      deepLinkDocumentId
     ) {
       hasHandledInitialDeepLink.current = true;
       void (async () => {
         try {
-          const openedDocument = await openSavedDocument(initialDeepLink.documentId!);
+          const openedDocument = await openSavedDocument(deepLinkDocumentId);
           if (isCancelled) {
             return;
           }
@@ -495,13 +532,63 @@ export default function App() {
     [documentName, setDocumentName],
   );
 
+  // On compact (drawer) layouts, only one drawer is shown at a time; on
+  // desktop both sidebars toggle independently.
   const handleToggleSidebar = useCallback(() => {
-    setShowSidebar((show) => !show);
-  }, []);
+    const opening = !showSidebar;
+    setShowSidebar(opening);
+    if (opening && prefersCompactLayout()) {
+      setShowInfo(false);
+    }
+  }, [showSidebar]);
 
   const handleToggleInfo = useCallback(() => {
-    setShowInfo((show) => !show);
+    const opening = !showInfo;
+    setShowInfo(opening);
+    if (opening && prefersCompactLayout()) {
+      setShowSidebar(false);
+    }
+  }, [showInfo]);
+
+  const closeDrawers = useCallback(() => {
+    setShowSidebar(false);
+    setShowInfo(false);
   }, []);
+
+  const closeSidebar = useCallback(() => {
+    setShowSidebar(false);
+  }, []);
+
+  const closeInfo = useCallback(() => {
+    setShowInfo(false);
+  }, []);
+
+  // Escape closes open drawers on compact (drawer) layouts without touching
+  // dialogs such as the command palette or the shortcut help modal.
+  useEffect(() => {
+    if (!showSidebar && !showInfo) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return;
+      }
+
+      if (showCommandPalette || showShortcutHelp) {
+        return;
+      }
+
+      if (!prefersCompactLayout()) {
+        return;
+      }
+
+      closeDrawers();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeDrawers, showCommandPalette, showShortcutHelp, showInfo, showSidebar]);
 
   const handleHeaderRefresh = useCallback(() => {
     scheduleAnchorRefresh();
@@ -546,6 +633,8 @@ export default function App() {
   );
 
   const handleSaveDocument = useCallback(async () => {
+    if (isSaving) return;
+
     const buffer = await getEditorBuffer();
     if (!buffer) {
       setStatusMessage('Save failed.');
@@ -573,6 +662,7 @@ export default function App() {
   }, [
     discardRecovery,
     getEditorBuffer,
+    isSaving,
     pushToast,
     rememberSavedSource,
     runCommand,
@@ -581,6 +671,8 @@ export default function App() {
   ]);
 
   const handleSaveAsDocument = useCallback(async () => {
+    if (isSaving) return;
+
     const buffer = await getEditorBuffer();
     if (!buffer) {
       setStatusMessage('Save as failed.');
@@ -609,6 +701,7 @@ export default function App() {
     discardRecovery,
     documentName,
     getEditorBuffer,
+    isSaving,
     loadEditorSource,
     pushToast,
     runCommand,
@@ -749,7 +842,7 @@ export default function App() {
       const deletesCurrentDocument = isSavedSource(source) && source.documentId === documentId;
       if (deletesCurrentDocument && !confirmDiscardChanges()) return;
 
-      await runCommand(
+      const deleted = await runCommand(
         'Delete',
         () => deleteSavedDocument(documentId),
         {
@@ -760,7 +853,7 @@ export default function App() {
         },
       );
 
-      if (deletesCurrentDocument) {
+      if (deletesCurrentDocument && deleted) {
         loadBuiltInSample(true);
       }
     },
@@ -880,7 +973,8 @@ export default function App() {
 
       const root = editorHostRef.current;
       if (root) {
-        flashParagraphHighlight(root, window.getSelection());
+        flashHighlightCancelRef.current?.();
+        flashHighlightCancelRef.current = flashParagraphHighlight(root, window.getSelection());
       }
     },
     [anchors, setActiveParaId],
@@ -891,63 +985,56 @@ export default function App() {
     { id: 'save-as', label: 'Save As Copy', section: 'Actions', handler: handleSaveAsDocument },
     { id: 'export', label: 'Export to .docx', section: 'Actions', handler: handleDownloadCurrent },
     { id: 'sample', label: 'Load Sample Document', section: 'Actions', handler: loadBuiltInSample },
-    { id: 'toggle-sidebar', label: 'Toggle Left Sidebar', section: 'Actions', handler: () => setShowSidebar(s => !s) },
-    { id: 'toggle-info', label: 'Toggle Right Sidebar', section: 'Actions', handler: () => setShowInfo(s => !s) },
-    { id: 'help', label: 'Show Keyboard Shortcuts', section: 'Actions', handler: () => setShowShortcutHelp(true) },
-  ], [handleSaveDocument, handleSaveAsDocument, handleDownloadCurrent, loadBuiltInSample]);
+    { id: 'toggle-sidebar', label: 'Toggle Left Sidebar', section: 'Actions', handler: handleToggleSidebar },
+    { id: 'toggle-info', label: 'Toggle Right Sidebar', section: 'Actions', handler: handleToggleInfo },
+    {
+      id: 'help',
+      label: 'Show Keyboard Shortcuts',
+      section: 'Actions',
+      handler: () => {
+        setShowShortcutHelp(true);
+        setShowCommandPalette(false);
+      },
+    },
+  ], [handleDownloadCurrent, handleSaveAsDocument, handleSaveDocument, handleToggleInfo, handleToggleSidebar, loadBuiltInSample]);
 
-  // Keyboard shortcuts
-  useKeyboardShortcuts({
-    shortcuts: [
-      {
-        key: 's',
-        ctrlKey: true,
-        handler: handleSaveDocument,
-        description: 'Save document',
-      },
-      {
-        key: 'o',
-        ctrlKey: true,
-        handler: () => {
-          const fileInput = document.querySelector<HTMLInputElement>('input[type="file"][accept*=".docx"]');
-          fileInput?.click();
-        },
-        description: 'Open document',
-      },
-      {
-        key: 's',
-        ctrlKey: true,
-        shiftKey: true,
-        handler: handleSaveAsDocument,
-        description: 'Save as new document',
-      },
-      {
-        key: '/',
-        ctrlKey: true,
-        handler: () => setShowShortcutHelp((show) => !show),
-        description: 'Show shortcuts',
-      },
-      {
-        key: '\\',
-        ctrlKey: true,
-        handler: () => setShowSidebar((show) => !show),
-        description: 'Toggle sidebar',
-      },
-      {
-        key: 'i',
-        ctrlKey: true,
-        handler: () => setShowInfo((show) => !show),
-        description: 'Toggle info',
-      },
-      {
-        key: 'p',
-        ctrlKey: true,
-        handler: () => setShowCommandPalette((show) => !show),
-        description: 'Command palette',
-      },
-    ],
-    enabled: true,
-  });
+  const shortcutHandlers: Record<ShortcutId, () => void> = {
+    save: handleSaveDocument,
+    open: () => {
+      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"][accept*=".docx"]');
+      fileInput?.click();
+    },
+    'save-as': handleSaveAsDocument,
+    help: () => {
+      setShowShortcutHelp((show) => !show);
+      setShowCommandPalette(false);
+    },
+    outline: handleToggleSidebar,
+    details: handleToggleInfo,
+    palette: () => {
+      setShowCommandPalette((show) => !show);
+      setShowShortcutHelp(false);
+    },
+  };
+
+  const keyboardShortcuts = SHORTCUT_SPECS.map((spec) => ({
+    ...spec,
+    handler: shortcutHandlers[spec.id],
+  }));
+
+  useKeyboardShortcuts({ shortcuts: keyboardShortcuts, enabled: true });
+
+  // The shortcut matcher accepts Ctrl or Meta (Cmd) interchangeably, so the
+  // help modal shows the modifier the visitor's platform actually uses.
+  const modifierLabel = useMemo(() => {
+    if (typeof navigator === 'undefined') return 'Ctrl';
+    return /Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? 'Cmd' : 'Ctrl';
+  }, []);
+
+  const shortcutHelpEntries = SHORTCUT_SPECS.map((spec: ShortcutSpec) => ({
+    keys: [modifierLabel, ...(spec.shiftKey ? ['Shift'] : []), spec.key.toUpperCase()],
+    description: spec.description,
+  }));
 
   return (
     <div className="app-shell">
@@ -978,6 +1065,14 @@ export default function App() {
         onEditorModeChange={setEditorMode}
       />
 
+      {(showSidebar || showInfo) && (
+        <div
+          className="drawer-backdrop"
+          aria-hidden="true"
+          onClick={closeDrawers}
+        />
+      )}
+
       <main
         className={`workspace ${!showSidebar ? 'sidebar--hidden' : ''} ${!showInfo ? 'info--hidden' : ''
           }`}
@@ -994,6 +1089,7 @@ export default function App() {
             onStyleChange={setFilterStyle}
             uniqueStyles={uniqueStyles}
             onResetFilters={resetFilters}
+            onClose={closeSidebar}
           />
         )}
 
@@ -1071,11 +1167,16 @@ export default function App() {
             onRestoreVersion={handleRestoreVersion}
             onDownloadVersion={handleDownloadVersion}
             onJumpToMedia={jumpToAnchor}
+            onClose={closeInfo}
           />
         )}
       </main>
 
-      <ShortcutHelpModal isOpen={showShortcutHelp} onClose={() => setShowShortcutHelp(false)} />
+      <ShortcutHelpModal
+        isOpen={showShortcutHelp}
+        onClose={() => setShowShortcutHelp(false)}
+        shortcuts={shortcutHelpEntries}
+      />
 
       <CommandPalette
         isOpen={showCommandPalette}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedDocumentSummary } from '../../lib/documentApi';
+import { useModalDialog } from '../../hooks/useModalDialog';
 
 type CommandAction = {
   id: string;
@@ -37,8 +38,13 @@ export function CommandPalette({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
+
+  useModalDialog({
+    isOpen,
+    onClose,
+    initialFocusRef: inputRef,
+    onClosed: () => setQuery(''),
+  });
 
   const filteredResults = useMemo<CommandResult[]>(() => {
     const normalizedQuery = query.toLowerCase().trim();
@@ -87,17 +93,6 @@ export function CommandPalette({
   }
 
   useEffect(() => {
-    if (isOpen) {
-      previousFocusRef.current = document.activeElement as HTMLElement | null;
-      window.requestAnimationFrame(() => inputRef.current?.focus());
-    } else if (wasOpenRef.current) {
-      previousFocusRef.current?.focus();
-      setQuery('');
-    }
-    wasOpenRef.current = isOpen;
-  }, [isOpen]);
-
-  useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -113,15 +108,12 @@ export function CommandPalette({
         event.preventDefault();
         const selected = filteredResults[selectedIndex];
         if (selected) handleSelect(selected);
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredResults, handleSelect, isOpen, onClose, selectedIndex]);
+  }, [filteredResults, handleSelect, isOpen, selectedIndex]);
 
   if (!isOpen) return null;
 
@@ -141,6 +133,14 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-labelledby="command-palette-title"
+        onKeyDown={(event) => {
+          // The input is the only tab stop: keep Tab inside the dialog so
+          // focus never escapes into the inert background.
+          if (event.key === 'Tab') {
+            event.preventDefault();
+            inputRef.current?.focus();
+          }
+        }}
       >
         <h2 id="command-palette-title" className="visually-hidden">
           Command palette
@@ -177,6 +177,7 @@ export function CommandPalette({
                     key={optionId}
                     type="button"
                     role="option"
+                    tabIndex={-1}
                     aria-selected={index === selectedIndex}
                     className={`command-palette__item ${index === selectedIndex ? 'command-palette__item--selected' : ''}`}
                     onMouseMove={() => setSelectedIndex(index)}

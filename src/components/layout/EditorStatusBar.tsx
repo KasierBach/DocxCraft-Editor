@@ -44,20 +44,23 @@ export function EditorStatusBar({
       </div>
       
       <div className="editor-status-bar__center">
-        <span className={`save-status ${isDirty ? 'save-status--dirty' : ''}`}>
+        <span
+          className={`save-status ${isDirty ? 'save-status--dirty' : ''}`}
+          aria-live="polite"
+        >
           {formattedLastSaved}
         </span>
       </div>
       
       <div className="editor-status-bar__right">
-        <button 
-          type="button" 
+        <button
+          type="button"
           className="status-button"
           onClick={onShowShortcuts}
           title="See keyboard shortcuts"
         >
-          <span className="status-icon">⌨️</span>
-          Shortcuts
+          <span className="status-icon" aria-hidden="true">⌨️</span>
+          <span className="status-button__label">Shortcuts</span>
         </button>
       </div>
     </footer>

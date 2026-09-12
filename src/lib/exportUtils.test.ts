@@ -92,7 +92,7 @@ describe('downloadMarkdown', () => {
         return { click, anchors, revokeObjectURL, createElementSpy };
     }
 
-    it('triggers a download with a .md filename', () => {
+    it('triggers a download with a .md filename', async () => {
         const { click, anchors, revokeObjectURL, createElementSpy } = stubAnchorCreation();
 
         downloadMarkdown('Report.docx', '# Report');
@@ -101,6 +101,9 @@ describe('downloadMarkdown', () => {
         expect(anchors[0]!.download).toBe('Report.md');
         expect(anchors[0]!.href).toContain('blob:mock');
         expect(click).toHaveBeenCalledTimes(1);
+
+        // The object URL is revoked asynchronously, so flush the timer.
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock');
 
         createElementSpy.mockRestore();

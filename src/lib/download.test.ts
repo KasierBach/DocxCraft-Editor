@@ -8,7 +8,7 @@ describe('downloadBufferAsDocx', () => {
         vi.unstubAllGlobals();
     });
 
-    it('downloads the buffer with the given name and docx mime type', () => {
+    it('downloads the buffer with the given name and docx mime type', async () => {
         const click = vi.fn();
 
         const originalCreateElement = document.createElement.bind(document);
@@ -49,6 +49,10 @@ describe('downloadBufferAsDocx', () => {
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         );
         expect(createObjectURL).toHaveBeenCalledTimes(1);
+
+        // The object URL is revoked asynchronously to work around WebKit
+        // download aborts, so flush the pending timer before asserting.
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
         expect(revokeObjectURL).toHaveBeenCalledWith('blob:docx-mock');
 
         const createdAnchor = createElementSpy.mock.results.find(

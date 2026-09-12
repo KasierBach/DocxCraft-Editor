@@ -23,6 +23,7 @@
 - **Media Manager** — jump-to navigation for images and tables in the document
 - **Editing Modes** — editing, suggesting, and viewing modes
 - **Dark Mode** — manual toggle plus OS preference detection, persisted across sessions
+- **Responsive Layout** — three-column desktop workspace; on tablet portrait and phones the sidebars become off-canvas drawers with a backdrop, and the header/status bars compact automatically
 - **Status Bar** — live word count, page count, and last-saved timestamp
 - **Command Palette** — quick-access panel for documents, outline targets, and actions
 - **Keyboard Shortcuts** — full list in the in-app help (`Ctrl+/`)
@@ -59,20 +60,19 @@ src/
     anchors.ts             — collect anchor targets from page content
     resolveActiveAnchor.ts — resolve current active anchor from selection
     deepLink.ts            — URL-based document deep linking
-    documentApi.ts         — HTTP client for backend routes
-    docxValidation (server)— see server/ below
-    flashHighlight.ts      — anchor jump flash-highlight with retry
-    format.ts              — shared byte formatting
+    documentApi.ts         — HTTP client for backend routes (timeouts + dedupe)
+    flashHighlight.ts      — anchor jump flash-highlight with retry + cancel
+    format.ts              — shared byte and date formatting
+    headings.ts            — shared Word heading-style parser
     mediaScanner.ts        — scan ProseMirror doc for images/tables
-    recoveryStore.ts       — IndexedDB recovery snapshot storage
-    shortcuts.ts           — single source of truth for shortcut list
+    recoveryStore.ts       — IndexedDB recovery snapshot storage (localStorage fallback)
   styles/
     base/                  — reset, tokens, dark mode
     layout/                — main layout, status bar, breadcrumbs
     components/            — header, sidebar, navigation, editor, toasts
 
 server/
-  app.ts                   — Fastify app, routes, Zod validation, CORS, rate limit
+  app.ts                   — Fastify app, routes, Zod validation, CORS, rate limit, static serving
   docxValidation.ts        — pre-decompression ZIP central-directory validation
   documentStore.ts         — file-backed .docx storage + metadata index
   logger.ts                — pino logger setup
@@ -99,7 +99,7 @@ e2e/                       — Playwright browser + API tests
 npm install
 ```
 
-### Run
+### Run (development)
 
 ```bash
 npm run dev
@@ -112,6 +112,22 @@ Default ports:
 The API binds to `127.0.0.1` by default. Configure `HOST`, `PORT`, `CORS_ORIGIN`, `DATA_DIR`, and `LOG_LEVEL` using the variables in `.env.example`. `/api/health` is the liveness check; `/api/ready` verifies that document storage is readable.
 
 If port `4175` already has a compatible server running, the dev launcher reuses it.
+
+### Deploy (production)
+
+```bash
+npm run build
+npm run server
+```
+
+The Fastify server serves the built bundle from `dist/` alongside the API on one port — no separate static host needed. Behavior details:
+
+- `/` and static assets come from `dist/`; hashed assets are served with `cache-control: public, max-age=30d, immutable`, `index.html` with `no-cache`
+- Unknown non-API paths fall back to `index.html` (SPA deep links keep working); `/api/*` 404s stay JSON
+- When `dist/` does not exist (API-only deployments), static serving is skipped automatically; set `staticDir: ''` in `buildDocumentApiApp` to disable it explicitly
+- Set `NODE_ENV=production` for structured JSON logs; `HOST`/`PORT` control binding (keep `127.0.0.1` unless you have read [SECURITY.md](SECURITY.md))
+
+To run the frontend on a separate static host instead, build with `npm run build`, deploy `dist/`, and point it at the API with `CORS_ORIGIN` configured.
 
 ## Available Scripts
 
@@ -172,7 +188,7 @@ Uploads are validated before decompression by parsing the ZIP central directory 
 
 ## Keyboard Shortcuts
 
-The shortcut list lives in `src/lib/shortcuts.ts` and is rendered by the in-app help (`Ctrl+/`).
+The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by the in-app help (`Ctrl+/`).
 
 | Shortcut | Action |
 |---|---|
@@ -186,9 +202,9 @@ The shortcut list lives in `src/lib/shortcuts.ts` and is rendered by the in-app 
 
 ## Testing
 
-- **Unit** (`npm test`) — 138 tests across 27 files; jsdom environment, `@testing-library/react`, per-module store/api mocks
-- **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 60%, branches 45%)
-- **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, and accessibility (axe) checks. Playwright starts both servers automatically.
+- **Unit** (`npm test`) — jsdom environment, `@testing-library/react`, per-module store/api mocks; see the run output for the current count
+- **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 70%, branches 60%)
+- **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, responsive layout checks at 1920→320 px viewports, and accessibility (axe) checks. Playwright starts both servers automatically.
 - **CI** (`.github/workflows/ci.yml`) — lint, typecheck, coverage, e2e, and build on every push; release workflow packages `dist/` for `v*` tags
 
 ## Known Limits

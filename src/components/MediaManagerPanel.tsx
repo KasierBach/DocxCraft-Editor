@@ -25,19 +25,19 @@ export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelPr
             className="saved-document-card"
             onClick={() => onJumpToParaId(item.paraId)}
           >
-            <div className="media-list__row">
+            <span className="media-list__row">
               <span className="media-list__icon" aria-hidden="true">
                 {item.type === 'image' ? '🖼️' : '📊'}
               </span>
-              <div className="media-list__column">
+              <span className="media-list__column">
                 <span className="saved-document-card__name media-list__label">
                   {item.label}
                 </span>
                 <span className="saved-document-card__meta">
                   Paragraph {item.paragraphIndex}
                 </span>
-              </div>
-            </div>
+              </span>
+            </span>
           </button>
         ))}
       </div>

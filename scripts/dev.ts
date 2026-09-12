@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
+import { API_VERSION } from '../server/app.ts';
 import { createSpawnSpec, getApiStatus } from './devLauncher.ts';
 
 const childProcesses: ChildProcess[] = [];
-const EXPECTED_API_VERSION = '2026-05-25-fastify-ts';
+const EXPECTED_API_VERSION = API_VERSION;
 
 function startProcess(name: string, scriptName: string) {
   const spec = createSpawnSpec(process.platform, scriptName);

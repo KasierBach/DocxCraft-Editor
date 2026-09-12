@@ -1,36 +1,29 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useRef } from 'react';
 
-import { APP_SHORTCUTS } from '../../lib/shortcuts';
+import { useModalDialog } from '../../hooks/useModalDialog';
+
+export type ShortcutDisplayEntry = {
+  keys: string[];
+  description: string;
+};
+
+const FOCUSABLE_SELECTOR =
+  'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 type ShortcutHelpModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  shortcuts: ShortcutDisplayEntry[];
 };
 
-export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
+export function ShortcutHelpModal({ isOpen, onClose, shortcuts }: ShortcutHelpModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      previousFocusRef.current = document.activeElement as HTMLElement | null;
-      window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-    } else if (wasOpenRef.current) {
-      previousFocusRef.current?.focus();
-    }
-    wasOpenRef.current = isOpen;
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isOpen, onClose]);
+  useModalDialog({
+    isOpen,
+    onClose,
+    initialFocusRef: closeButtonRef,
+  });
 
   if (!isOpen) return null;
 
@@ -48,10 +41,12 @@ export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
         aria-labelledby="shortcut-help-title"
         onKeyDown={(event) => {
           if (event.key !== 'Tab') return;
-          const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
-          if (buttons.length < 2) return;
-          const first = buttons[0];
-          const last = buttons[buttons.length - 1];
+          const focusable = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+          ).filter((element) => !element.hasAttribute('disabled'));
+          if (focusable.length < 2) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
           if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last.focus();
@@ -75,7 +70,7 @@ export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
         </div>
         <div className="modal-body">
           <ul className="shortcut-list">
-            {APP_SHORTCUTS.map((shortcut) => (
+            {shortcuts.map((shortcut) => (
               <li key={shortcut.description} className="shortcut-item">
                 <span className="shortcut-description">{shortcut.description}</span>
                 <span className="shortcut-keys">
@@ -98,4 +93,4 @@ export function ShortcutHelpModal({ isOpen, onClose }: ShortcutHelpModalProps) {
       </section>
     </div>
   );
-}
+}

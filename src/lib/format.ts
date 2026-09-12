@@ -10,3 +10,12 @@ export function formatBytes(sizeInBytes: number) {
 
   return `${(sizeInKb / 1024).toFixed(1)} MB`;
 }
+
+export function formatDateTime(isoDate: string) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown date';
+  }
+
+  return date.toLocaleString();
+}

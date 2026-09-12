@@ -91,13 +91,6 @@ describe('scanForMedia', () => {
                 paraId: 'para-2',
                 paragraphIndex: 1,
             },
-            {
-                id: expect.stringMatching(/^table-/),
-                type: 'table',
-                label: 'Table 2',
-                paraId: '',
-                paragraphIndex: 1,
-            },
         ]);
     });
 

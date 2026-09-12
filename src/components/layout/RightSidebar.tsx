@@ -1,10 +1,12 @@
 import type { SavedDocumentSummary, SavedDocumentVersionSummary } from '../../lib/documentApi';
 import type { RecoverySnapshot } from '../../lib/recoveryStore';
 import type { MediaItem } from '../../lib/mediaScanner';
+import { formatDateTime } from '../../lib/format';
 import { MediaManagerPanel } from '../MediaManagerPanel';
 import { SavedDocumentsPanel } from '../SavedDocumentsPanel';
 import { VersionHistoryPanel } from '../VersionHistoryPanel';
 import { Panel } from '../ui/Panel';
+import { DrawerCloseButton } from '../ui/DrawerCloseButton';
 
 type RightSidebarProps = {
   activeParaId: string | null;
@@ -29,6 +31,7 @@ type RightSidebarProps = {
   onRestoreVersion: (documentId: string, versionId: string) => void | Promise<void>;
   onDownloadVersion: (documentId: string, versionId: string) => void | Promise<void>;
   onJumpToMedia: (paraId: string) => void;
+  onClose?: () => void;
 };
 
 export function RightSidebar({
@@ -54,9 +57,11 @@ export function RightSidebar({
   onRestoreVersion,
   onDownloadVersion,
   onJumpToMedia,
+  onClose,
 }: RightSidebarProps) {
   return (
-    <aside className="right-sidebar">
+    <aside className="right-sidebar" aria-label="Document details">
+      {onClose && <DrawerCloseButton ariaLabel="Close document details" onClick={onClose} />}
       <Panel title="Current target">
         <dl className="meta-grid">
           <div>
@@ -83,7 +88,7 @@ export function RightSidebar({
       {recoverySnapshot && (
         <Panel title="Recovery draft">
           <p className="panel-copy">
-            Unsaved work from {new Date(recoverySnapshot.savedAt).toLocaleString()} is available.
+            Unsaved work from {formatDateTime(recoverySnapshot.savedAt)} is available.
           </p>
           <div className="saved-document-card__actions">
             <button type="button" className="action-button" onClick={onRestoreRecovery}>

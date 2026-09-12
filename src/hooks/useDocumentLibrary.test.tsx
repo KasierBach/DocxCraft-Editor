@@ -63,6 +63,109 @@ describe('useDocumentLibrary', () => {
     expect(result.current.currentDocumentId).toBeNull();
   });
 
+  it('rejects a save that starts while another save is in flight', async () => {
+    const createdDocument: SavedDocumentSummary = {
+      id: 'doc-2',
+      name: 'Draft.docx',
+      createdAt: '2026-05-25T05:23:00.000Z',
+      updatedAt: '2026-05-25T05:23:00.000Z',
+      sizeInBytes: 4,
+      lastOpenedAt: null,
+      versionCount: 1,
+    };
+
+    let resolveSave!: (document: SavedDocumentSummary) => void;
+    api.saveDocument.mockImplementation(
+      () =>
+        new Promise<SavedDocumentSummary>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    api.listDocuments.mockResolvedValue([createdDocument]);
+    api.listDocumentVersions.mockResolvedValue(EXISTING_VERSIONS);
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Draft.docx', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([createdDocument]);
+    });
+
+    const buffer = new Uint8Array([1, 2, 3, 4]).buffer;
+    let firstSave!: Promise<SavedDocumentSummary>;
+    act(() => {
+      firstSave = result.current.saveCurrentDocument(buffer);
+    });
+
+    let secondSaveError: unknown;
+    await act(async () => {
+      try {
+        await result.current.saveCurrentDocument(buffer);
+      } catch (error) {
+        secondSaveError = error;
+      }
+    });
+
+    expect(secondSaveError).toBeInstanceOf(Error);
+    expect((secondSaveError as Error).message).toBe('A save is already in progress.');
+    expect(api.saveDocument).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave(createdDocument);
+      await firstSave;
+    });
+  });
+
+  it('confirms deletion with true and resets the current document state', async () => {
+    api.deleteDocument.mockResolvedValue(undefined);
+    api.listDocuments.mockResolvedValue([]);
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Proposal.docx', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([]);
+    });
+
+    act(() => {
+      result.current.setCurrentDraft({ name: 'Proposal.docx', documentId: 'doc-1' });
+    });
+
+    let deleted: boolean | undefined;
+    await act(async () => {
+      deleted = await result.current.deleteSavedDocument('doc-1');
+    });
+
+    expect(deleted).toBe(true);
+    await waitFor(() => {
+      expect(result.current.currentDocumentId).toBeNull();
+      expect(result.current.currentDocumentVersions).toEqual([]);
+    });
+  });
+
+  it('rethrows deletion failures so callers can react to them', async () => {
+    api.deleteDocument.mockRejectedValue(new Error('Document not found.'));
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Built-in sample', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
+    });
+
+    let deleteError: unknown;
+    await act(async () => {
+      try {
+        await result.current.deleteSavedDocument('doc-1');
+      } catch (error) {
+        deleteError = error;
+      }
+    });
+
+    expect(deleteError).toBeInstanceOf(Error);
+    expect((deleteError as Error).message).toBe('Document not found.');
+  });
+
   it('saves the current draft and reopens an existing document with versions', async () => {
     const createdDocument: SavedDocumentSummary = {
       id: 'doc-2',
@@ -138,6 +241,47 @@ describe('useDocumentLibrary', () => {
     expect(result.current.currentDocumentId).toBe('doc-1');
     expect(result.current.documentName).toBe('Proposal.docx');
     expect(result.current.currentDocumentVersions).toEqual(EXISTING_VERSIONS);
+  });
+
+  it('refreshes versions when the already-open document is reopened', async () => {
+    const refreshedVersions: SavedDocumentVersionSummary[] = [
+      {
+        id: 'ver-2',
+        documentId: 'doc-1',
+        name: 'Proposal.docx',
+        createdAt: '2026-05-25T05:40:00.000Z',
+        sizeInBytes: 2048,
+      },
+      ...EXISTING_VERSIONS,
+    ];
+
+    api.readDocumentContent.mockResolvedValue(new Uint8Array([9, 8, 7]).buffer);
+    api.listDocumentVersions
+      .mockResolvedValueOnce(EXISTING_VERSIONS)
+      .mockResolvedValueOnce(refreshedVersions);
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Built-in sample', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
+    });
+
+    await act(async () => {
+      await result.current.openSavedDocument('doc-1');
+    });
+    await waitFor(() => {
+      expect(result.current.currentDocumentVersions).toEqual(EXISTING_VERSIONS);
+    });
+
+    // Reopening the same document must not skip the version refresh even
+    // though currentDocumentId does not change (React state bail-out).
+    await act(async () => {
+      await result.current.openSavedDocument('doc-1');
+    });
+
+    expect(api.listDocumentVersions).toHaveBeenCalledTimes(2);
+    expect(result.current.currentDocumentVersions).toEqual(refreshedVersions);
   });
 
   it('renames, duplicates, restores versions, and deletes saved documents', async () => {

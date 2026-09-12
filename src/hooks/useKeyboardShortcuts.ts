@@ -68,26 +68,3 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions): void
     };
   }, [enabled]);
 }
-
-/**
- * Returns a list of available keyboard shortcuts for display purposes.
- */
-export function getShortcutDescription(shortcut: ShortcutConfig): string {
-  const parts: string[] = [];
-
-  if (shortcut.ctrlKey) {
-    parts.push('Ctrl');
-  }
-  if (shortcut.metaKey) {
-    parts.push('Cmd');
-  }
-  if (shortcut.shiftKey) {
-    parts.push('Shift');
-  }
-  if (shortcut.altKey) {
-    parts.push('Alt');
-  }
-  parts.push(shortcut.key.toUpperCase());
-
-  return parts.join('+');
-}

@@ -1,6 +1,11 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
 
 import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
@@ -9,6 +14,23 @@ import type { DocumentStorePort } from './types.ts';
 
 export const API_VERSION = '2026-05-25-fastify-ts';
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
+
+// The app renders OOXML-derived DOM client-side, so the CSP is the backstop
+// for any rendering-layer flaw. Styles must stay inline-allowed because React
+// and the editor runtime apply inline styles; images arrive as data/blob URLs.
+const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 const documentIdParamsSchema = z.object({
   documentId: z.string().min(1),
@@ -103,27 +125,80 @@ function parseWithSchema<T>(schema: z.ZodType<T>, input: unknown) {
 export const RATE_LIMIT_MAX_REQUESTS = 300;
 export const RATE_LIMIT_TIME_WINDOW_MS = 60_000;
 
+const DEFAULT_STATIC_DIR = path.join(
+  path.dirname(path.dirname(fileURLToPath(import.meta.url))),
+  'dist',
+);
+
 export function buildDocumentApiApp({
   store,
   logger = false,
   corsOrigin,
   rateLimitMaxRequests = RATE_LIMIT_MAX_REQUESTS,
   rateLimitTimeWindowMs = RATE_LIMIT_TIME_WINDOW_MS,
+  staticDir,
 }: {
   store: DocumentStorePort;
   logger?: boolean | Record<string, unknown>;
   corsOrigin?: string | string[] | boolean;
   rateLimitMaxRequests?: number | false;
   rateLimitTimeWindowMs?: number;
+  staticDir?: string;
 }): FastifyInstance {
   const app = Fastify({
     bodyLimit: MAX_DOCUMENT_BYTES,
     logger,
   });
 
-  // Register CORS and rate limiting inside a shared plugin scope together with
-  // the routes so their hooks apply to every document route. Fastify plugins
-  // are encapsulated: hooks registered in a sibling scope would not apply.
+  const resolvedStaticDir =
+    staticDir === ''
+      ? undefined
+      : staticDir ?? (existsSync(DEFAULT_STATIC_DIR) ? DEFAULT_STATIC_DIR : undefined);
+
+  if (resolvedStaticDir) {
+    const hashedAssetsDirectory = path.join(resolvedStaticDir, 'assets');
+
+    app.register(fastifyStatic, {
+      root: resolvedStaticDir,
+      prefix: '/',
+      wildcard: false,
+      maxAge: '30d',
+      immutable: true,
+      setHeaders: (res, pathName) => {
+        if (pathName.endsWith('index.html')) {
+          res.header('cache-control', 'no-cache');
+          return;
+        }
+
+        // Only content-hashed bundles may cache immutably; unhashed files
+        // from public/ must stay revalidatable so changes reach visitors.
+        if (!pathName.startsWith(hashedAssetsDirectory)) {
+          res.header('cache-control', 'public, max-age=300');
+        }
+      },
+    });
+
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/')) {
+        void reply.code(404).send({ message: 'Route not found.' });
+        return;
+      }
+
+      // Missing bundles must fail loudly: serving index.html here turns a
+      // stale deploy into a blank page with a 200 status.
+      if (request.url.startsWith('/assets/')) {
+        void reply.code(404).send({ message: 'Asset not found.' });
+        return;
+      }
+
+      void reply.sendFile('index.html');
+    });
+  } else {
+    app.setNotFoundHandler((_request, reply) => {
+      void reply.code(404).send({ message: 'Route not found.' });
+    });
+  }
+
   void app.register(async (scope) => {
     if (corsOrigin !== undefined) {
       await scope.register(cors, {
@@ -144,7 +219,11 @@ export function buildDocumentApiApp({
   app.addHook('onSend', async (request, reply) => {
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'no-referrer');
+    reply.header('x-frame-options', 'DENY');
     reply.header('x-request-id', request.id);
+    if (!reply.hasHeader('content-security-policy')) {
+      reply.header('content-security-policy', CSP_DIRECTIVES);
+    }
   });
 
   app.addContentTypeParser(
@@ -154,10 +233,6 @@ export function buildDocumentApiApp({
       done(null, payload);
     },
   );
-
-  app.setNotFoundHandler((_request, reply) => {
-    void reply.code(404).send({ message: 'Route not found.' });
-  });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof RequestValidationError) {

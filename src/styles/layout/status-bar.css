@@ -83,3 +83,41 @@
 .status-icon {
   font-size: 0.9rem;
 }
+
+.status-button__label {
+  white-space: nowrap;
+}
+
+/* Phones: let the status bar wrap instead of clipping its content. */
+@media (max-width: 640px) {
+  .editor-status-bar {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    height: auto;
+    min-height: 36px;
+    padding: 4px 12px;
+    line-height: 1.4;
+  }
+
+  .editor-status-bar__left,
+  .editor-status-bar__right {
+    flex: 0 1 auto;
+    gap: 12px;
+  }
+
+  .editor-status-bar__center {
+    flex: 1 1 100%;
+    order: 3;
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .status-button__label {
+    display: none;
+  }
+
+  .status-button {
+    padding: 4px 6px;
+  }
+}

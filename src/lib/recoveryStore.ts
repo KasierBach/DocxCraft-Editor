@@ -21,6 +21,7 @@ const DATABASE_NAME = 'docx-editor';
 const STORE_NAME = 'recovery-snapshots';
 const DATABASE_VERSION = 1;
 const FALLBACK_STORAGE_KEY = 'docx-editor/recovery-snapshots';
+const MAX_FALLBACK_SNAPSHOTS = 5;
 
 function snapshotKey(snapshot: Pick<RecoverySnapshot, 'sourceKind' | 'documentId' | 'documentName'>) {
   return snapshot.documentId
@@ -62,7 +63,23 @@ function readFallbackSnapshots(): FallbackSnapshot[] {
 }
 
 function writeFallbackSnapshots(snapshots: FallbackSnapshot[]) {
-  window.localStorage.setItem(FALLBACK_STORAGE_KEY, JSON.stringify(snapshots));
+  const ordered = [...snapshots].sort((left, right) => left.savedAt.localeCompare(right.savedAt));
+
+  // Serialize each entry exactly once; retries then only re-join shorter
+  // slices instead of re-serializing the full multi-megabyte payload.
+  const serializedEntries = ordered.map((snapshot) => JSON.stringify(snapshot));
+
+  // Storage can be full or unavailable (private mode). Drop the oldest
+  // entries until the payload fits, and skip silently when it never does —
+  // the IndexedDB path is the primary recovery mechanism.
+  for (let count = Math.min(serializedEntries.length, MAX_FALLBACK_SNAPSHOTS); count > 0; count -= 1) {
+    try {
+      window.localStorage.setItem(FALLBACK_STORAGE_KEY, `[${serializedEntries.slice(-count).join(',')}]`);
+      return;
+    } catch {
+      // Try again with fewer entries.
+    }
+  }
 }
 
 function canUseIndexedDb() {
@@ -94,6 +111,8 @@ function openRecoveryDatabase() {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Recovery database failed to open.'));
+    request.onblocked = () =>
+      reject(new Error('Recovery database is blocked by another tab.'));
   });
 }
 
@@ -101,12 +120,17 @@ export async function readRecoverySnapshot(): Promise<RecoverySnapshot | null> {
   if (typeof window === 'undefined') return null;
 
   if (!canUseIndexedDb()) {
-    return latestSnapshot(
-      readFallbackSnapshots().map(({ bufferBase64, key: _key, ...snapshot }) => ({
-        ...snapshot,
-        buffer: decodeArrayBuffer(bufferBase64),
-      })),
-    );
+    const snapshots = readFallbackSnapshots()
+      .map(({ bufferBase64, key: _key, ...snapshot }) => {
+        try {
+          return { ...snapshot, buffer: decodeArrayBuffer(bufferBase64) };
+        } catch {
+          // Skip corrupt or legacy entries instead of failing the whole read.
+          return null;
+        }
+      })
+      .filter((snapshot): snapshot is RecoverySnapshot => snapshot !== null);
+    return latestSnapshot(snapshots);
   }
 
   const database = await openRecoveryDatabase();

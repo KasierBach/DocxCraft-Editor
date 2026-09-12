@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getShortcutDescription, useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 
 function fireKey(key: string, modifiers: Partial<KeyboardEventInit> = {}) {
     const event = new KeyboardEvent('keydown', {
@@ -189,23 +189,5 @@ describe('useKeyboardShortcuts', () => {
         unmount();
         fireKey('k');
         expect(handler).not.toHaveBeenCalled();
-    });
-});
-
-describe('getShortcutDescription', () => {
-    it('formats a plain key', () => {
-        expect(getShortcutDescription({ key: 's', handler: () => undefined })).toBe('S');
-    });
-
-    it('formats ctrl and shift combinations', () => {
-        expect(
-            getShortcutDescription({ key: 'p', ctrlKey: true, shiftKey: true, handler: () => undefined }),
-        ).toBe('Ctrl+Shift+P');
-    });
-
-    it('formats meta and alt combinations', () => {
-        expect(
-            getShortcutDescription({ key: 'k', metaKey: true, altKey: true, handler: () => undefined }),
-        ).toBe('Cmd+Alt+K');
     });
 });

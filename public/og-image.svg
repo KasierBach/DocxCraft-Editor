@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#111"/>
+  <rect x="40" y="40" width="1120" height="550" rx="20" fill="#ffe14d" stroke="#111" stroke-width="8"/>
+  <rect x="120" y="120" width="640" height="390" rx="12" fill="#fff" stroke="#111" stroke-width="6"/>
+  <line x1="170" y1="200" x2="710" y2="200" stroke="#111" stroke-width="8" stroke-linecap="round"/>
+  <line x1="170" y1="260" x2="710" y2="260" stroke="#111" stroke-width="8" stroke-linecap="round"/>
+  <line x1="170" y1="320" x2="600" y2="320" stroke="#111" stroke-width="8" stroke-linecap="round"/>
+  <line x1="170" y1="380" x2="500" y2="380" stroke="#111" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="930" cy="420" r="90" fill="#4dabff" stroke="#111" stroke-width="8"/>
+  <path d="M890 420 l30 30 l50 -60" stroke="#111" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="120" y="590" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#111">DocxCraft Editor — local-first .docx editor</text>
+</svg>

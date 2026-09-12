@@ -1,4 +1,5 @@
 import { Panel } from '../ui/Panel';
+import { DrawerCloseButton } from '../ui/DrawerCloseButton';
 import { AnchorNavigator } from '../AnchorNavigator';
 import type { AnchorTarget } from '../../lib/anchors';
 
@@ -13,6 +14,7 @@ type SidebarProps = {
   onStyleChange: (style: string) => void;
   uniqueStyles: string[];
   onResetFilters: () => void;
+  onClose?: () => void;
 };
 
 export function Sidebar({
@@ -26,11 +28,13 @@ export function Sidebar({
   onStyleChange,
   uniqueStyles,
   onResetFilters,
+  onClose,
 }: SidebarProps) {
   const isFiltered = searchQuery !== '' || filterStyle !== 'outline';
 
   return (
     <aside className="sidebar" aria-label="Document outline">
+      {onClose && <DrawerCloseButton ariaLabel="Close document outline" onClick={onClose} />}
       <Panel title="Document outline">
         <div className="filter-group">
           <input

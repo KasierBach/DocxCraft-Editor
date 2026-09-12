@@ -4,9 +4,21 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ShortcutHelpModal } from './ShortcutHelpModal';
 
+const TEST_SHORTCUTS = [
+    { keys: ['Ctrl', 'S'], description: 'Save current document' },
+    { keys: ['Ctrl', 'Shift', 'S'], description: 'Save as new document' },
+    { keys: ['Ctrl', '/'], description: 'Show or hide this help' },
+];
+
 function renderModal(overrides?: Partial<{ isOpen: boolean; onClose: () => void }>) {
     const onClose = vi.fn();
-    render(<ShortcutHelpModal isOpen={overrides?.isOpen ?? true} onClose={overrides?.onClose ?? onClose} />);
+    render(
+        <ShortcutHelpModal
+            isOpen={overrides?.isOpen ?? true}
+            onClose={overrides?.onClose ?? onClose}
+            shortcuts={TEST_SHORTCUTS}
+        />,
+    );
     return { onClose };
 }
 
@@ -16,16 +28,12 @@ describe('ShortcutHelpModal', () => {
         expect(screen.queryByRole('dialog', { name: /keyboard shortcuts/i })).not.toBeInTheDocument();
     });
 
-    it('lists all documented shortcuts', () => {
+    it('lists the provided shortcuts', () => {
         renderModal();
 
         expect(screen.getByText('Save current document')).toBeInTheDocument();
         expect(screen.getByText('Save as new document')).toBeInTheDocument();
-        expect(screen.getByText('Open .docx from computer')).toBeInTheDocument();
         expect(screen.getByText('Show or hide this help')).toBeInTheDocument();
-        expect(screen.getByText('Toggle document outline')).toBeInTheDocument();
-        expect(screen.getByText('Toggle document details')).toBeInTheDocument();
-        expect(screen.getByText('Open command palette')).toBeInTheDocument();
     });
 
     it('renders key caps with plus separators', () => {

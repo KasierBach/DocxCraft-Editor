@@ -85,5 +85,31 @@
 }
 
 .error-boundary .btn--primary {
-  background: var(--nb-accent, #ffe14d);
+    background: var(--nb-accent, #ffe14d);
+}
+
+/* Touch devices: enlarge interactive controls to comfortable 44px targets
+   (Apple HIG / Material guidance). */
+@media (hover: none) and (pointer: coarse) {
+    .action-button,
+    .file-button,
+    .mode-picker__option,
+    .control-button,
+    .status-button,
+    .filter-reset,
+    .saved-document-card__actions .action-button {
+        min-height: 44px;
+    }
+
+    .action-button--menu,
+    .action-button--icon,
+    .filter-reset,
+    .drawer-close {
+        width: 44px;
+        min-width: 44px;
+    }
+
+    .drawer-close {
+        height: 44px;
+    }
 }

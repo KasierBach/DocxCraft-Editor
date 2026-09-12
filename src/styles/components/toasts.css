@@ -64,6 +64,19 @@
   color: var(--nb-white);
 }
 
+/* Phones: anchor toasts to the bottom so they never cover the (taller,
+   wrapping) mobile header. */
+@media (max-width: 640px) {
+  .app-toast-viewport {
+    top: auto;
+    right: 15px;
+    bottom: 15px;
+    left: 15px;
+    width: auto;
+    max-height: 40vh;
+  }
+}
+
 @keyframes toast-slide-in {
   from {
     transform: translateX(100%) scale(0.9);

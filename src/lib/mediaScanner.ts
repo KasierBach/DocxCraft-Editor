@@ -26,19 +26,27 @@ export function scanForMedia(editor: DocxEditorRef): MediaItem[] {
   doc.descendants((node, position, parent) => {
     if (node.type.name === 'paragraph') paragraphIndex += 1;
 
+    if (node.type.name !== 'image' && node.type.name !== 'table') {
+      return true;
+    }
+
+    // Media without a paraId cannot be jumped to, so it stays out of the list.
     const paraId = String(
       node.attrs?.paraId ?? node.attrs?.id ?? parent?.attrs?.paraId ?? parent?.attrs?.id ?? '',
     );
+    if (!paraId) {
+      return true;
+    }
 
     if (node.type.name === 'image') {
       media.push({
         id: `image-${position}`,
         type: 'image',
-        label: String(node.attrs?.alt ?? `Image ${media.length + 1}`),
+        label: String(node.attrs?.alt || `Image ${media.length + 1}`),
         paraId,
         paragraphIndex,
       });
-    } else if (node.type.name === 'table') {
+    } else {
       media.push({
         id: `table-${position}`,
         type: 'table',

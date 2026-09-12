@@ -271,13 +271,14 @@ describe('buildDocumentApiApp', () => {
       await app.close();
     }
   });
-
   it('adds basic response hardening headers and a request id', async () => {
     const app = await createApp();
+
     try {
       const response = await app.inject({ method: 'GET', url: '/api/health' });
       expect(response.headers['x-content-type-options']).toBe('nosniff');
       expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['x-frame-options']).toBe('DENY');
       expect(response.headers['x-request-id']).toBeTruthy();
     } finally {
       await app.close();
@@ -432,5 +433,115 @@ describe('buildDocumentApiApp', () => {
     } finally {
       await app.close();
     }
+  });
+
+  describe('static serving', () => {
+    async function createStaticApp() {
+      const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-static-'));
+      tempDirectories.push(storageDirectory);
+
+      const staticDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-dist-'));
+      tempDirectories.push(staticDirectory);
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      await writeFile(path.join(staticDirectory, 'index.html'), '<!doctype html><title>DocxCraft</title>');
+      await writeFile(path.join(staticDirectory, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+      await mkdir(path.join(staticDirectory, 'assets'));
+      await writeFile(path.join(staticDirectory, 'assets', 'index-abc123.js'), 'console.log("app");');
+
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      const app = buildDocumentApiApp({ store, staticDir: staticDirectory });
+      await app.ready();
+      return app;
+    }
+
+    it('serves index.html at the root with no-cache', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/' });
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toContain('text/html');
+        expect(response.body).toContain('DocxCraft');
+        expect(response.headers['cache-control']).toBe('no-cache');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('serves hashed bundles with an immutable long cache and public files briefly', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const bundle = await app.inject({ method: 'GET', url: '/assets/index-abc123.js' });
+        expect(bundle.statusCode).toBe(200);
+        expect(String(bundle.headers['cache-control'])).toContain('max-age=2592000');
+        expect(String(bundle.headers['cache-control'])).toContain('immutable');
+
+        const publicFile = await app.inject({ method: 'GET', url: '/favicon.svg' });
+        expect(publicFile.statusCode).toBe(200);
+        expect(publicFile.headers['content-type']).toContain('image/svg+xml');
+        expect(publicFile.headers['cache-control']).toBe('public, max-age=300');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('returns a real 404 for missing bundles instead of the SPA fallback', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/assets/missing-deadbeef.js' });
+        expect(response.statusCode).toBe(404);
+        expect(response.headers['content-type']).toContain('application/json');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('falls back to index.html for unknown non-API paths but keeps API 404s', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const deepLink = await app.inject({ method: 'GET', url: '/some/client/route' });
+        expect(deepLink.statusCode).toBe(200);
+        expect(deepLink.body).toContain('DocxCraft');
+
+        const apiNotFound = await app.inject({ method: 'GET', url: '/api/unknown' });
+        expect(apiNotFound.statusCode).toBe(404);
+        expect(apiNotFound.json<{ message: string }>().message).toBe('Route not found.');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('attaches a content security policy to responses', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/' });
+        const policy = String(response.headers['content-security-policy']);
+        expect(policy).toContain("default-src 'self'");
+        expect(policy).toContain("script-src 'self'");
+        expect(policy).toContain("frame-ancestors 'none'");
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('keeps JSON 404s when static serving is disabled', async () => {
+      const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-nostatic-'));
+      tempDirectories.push(storageDirectory);
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      const app = buildDocumentApiApp({ store, staticDir: '' });
+      await app.ready();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/anything' });
+        expect(response.statusCode).toBe(404);
+        expect(response.headers['content-type']).toContain('application/json');
+      } finally {
+        await app.close();
+      }
+    });
   });
 });

@@ -44,6 +44,18 @@
 
 .status-bar__message {
   opacity: 0.9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact spacing on drawer layouts. */
+@media (max-width: 900px) {
+  .editor-panel {
+    margin-right: 0;
+    margin-bottom: 12px;
+  }
 }
 
 /* Override editor selection style */

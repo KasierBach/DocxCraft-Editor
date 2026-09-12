@@ -11,6 +11,14 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
   const activeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [collapsedPages, setCollapsedPages] = useState<Set<number>>(new Set());
 
+  const prefersReducedMotion = useMemo(
+    () =>
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        : false,
+    [],
+  );
+
   const groupedAnchors = useMemo(() => {
     const groups: Record<number, AnchorTarget[]> = {};
     anchors.forEach((anchor) => {
@@ -56,9 +64,9 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
     activeButtonRef.current?.scrollIntoView({
       block: 'nearest',
       inline: 'nearest',
-      behavior: 'smooth',
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
     });
-  }, [activeAnchor, collapsedPages]);
+  }, [activeAnchor, collapsedPages, prefersReducedMotion]);
 
   const collapseAll = () => {
     const allPageNums = groupedAnchors.map(([page]) => Number(page));
@@ -97,28 +105,31 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
               type="button"
               className="anchor-group__header"
               onClick={() => togglePage(pageNum)}
+              aria-expanded={!isCollapsed}
+              aria-controls={`anchor-page-${pageNum}-content`}
             >
               <span className="anchor-group__title">Page {page}</span>
-              <span className="anchor-group__toggle-icon">
+              <span className="anchor-group__toggle-icon" aria-hidden="true">
                 {isCollapsed ? '+' : '−'}
               </span>
             </button>
             {!isCollapsed && (
-              <div className="anchor-group__content">
+              <div className="anchor-group__content" id={`anchor-page-${pageNum}-content`}>
                 {pageAnchors.map((anchor) => (
                   <button
                     key={anchor.id}
                     type="button"
                     className="anchor-button"
                     data-active={anchor.id === activeParaId ? 'true' : 'false'}
+                    aria-current={anchor.id === activeParaId ? 'true' : undefined}
                     ref={anchor.id === activeParaId ? activeButtonRef : null}
                     onClick={() => onJump(anchor.id)}
                   >
                     <span className="anchor-button__label">{anchor.label}</span>
-                    <div className="anchor-button__meta">
+                    <span className="anchor-button__meta">
                       <span className="anchor-tag">{anchor.styleId || 'Normal'}</span>
                       <span className="anchor-id">{anchor.id}</span>
-                    </div>
+                    </span>
                   </button>
                 ))}
               </div>

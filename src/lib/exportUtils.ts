@@ -1,5 +1,10 @@
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 
+import { getHeadingLevel } from './headings';
+import { triggerBlobDownload } from './download';
+
+const MAX_MARKDOWN_HEADING_LEVEL = 6;
+
 export function convertToMarkdown(editor: DocxEditorRef): string {
   const blocks: string[] = [];
 
@@ -10,8 +15,12 @@ export function convertToMarkdown(editor: DocxEditorRef): string {
       const text = paragraph.text.trim();
       if (!text) continue;
 
-      const headingLevel = Number(paragraph.styleId?.match(/^Heading(\d)$/i)?.[1]);
-      blocks.push(headingLevel ? `${'#'.repeat(headingLevel)} ${text}` : text);
+      const headingLevel = getHeadingLevel(paragraph.styleId);
+      blocks.push(
+        headingLevel
+          ? `${'#'.repeat(Math.min(headingLevel, MAX_MARKDOWN_HEADING_LEVEL))} ${text}`
+          : text,
+      );
     }
   }
 
@@ -19,14 +28,9 @@ export function convertToMarkdown(editor: DocxEditorRef): string {
 }
 
 export function downloadMarkdown(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-
-  link.href = url;
-  link.download = filename.replace(/\.docx$/i, '').replace(/\.md$/i, '') + '.md';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
+  const baseName = filename.replace(/\.docx$/i, '').replace(/\.md$/i, '');
+  triggerBlobDownload(
+    `${baseName}.md`,
+    new Blob([content], { type: 'text/markdown;charset=utf-8' }),
+  );
+}

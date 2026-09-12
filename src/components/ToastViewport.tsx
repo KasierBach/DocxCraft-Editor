@@ -16,12 +16,8 @@ function getToastRole(tone: ToastTone) {
 }
 
 export function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
-  if (toasts.length === 0) {
-    return null;
-  }
-
   return (
-    <div className="app-toast-viewport" aria-label="Notifications">
+    <div className="app-toast-viewport">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -35,7 +31,7 @@ export function ToastViewport({ toasts, onDismiss }: ToastViewportProps) {
             onClick={() => onDismiss(toast.id)}
             aria-label={`Dismiss notification: ${toast.message}`}
           >
-            x
+            &times;
           </button>
         </div>
       ))}

@@ -2,12 +2,75 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Docx Editor Anchor Scroll Demo</title>
+    <title>DocxCraft Editor — Local-first .docx Editor in Your Browser</title>
+    <meta
+      name="description"
+      content="Open, edit, and save .docx files directly in your browser. DocxCraft Editor is a local-first Word document editor with anchor navigation, version history, recovery drafts, and a built-in document library."
+    />
+    <meta
+      name="keywords"
+      content="docx editor, word editor, browser document editor, local-first editor, open docx online, word processing"
+    />
+    <meta name="author" content="DocxCraft Editor contributors" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#ffe14d" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)" />
+    <link rel="canonical" href="https://github.com/KasierBach/DocxCraft-Editor" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="DocxCraft Editor" />
+    <meta property="og:title" content="DocxCraft Editor — Local-first .docx Editor" />
+    <meta
+      property="og:description"
+      content="Open, edit, and save .docx files directly in your browser — with anchor navigation, version history, and recovery drafts. No account, no upload to the cloud."
+    />
+    <meta property="og:url" content="https://github.com/KasierBach/DocxCraft-Editor" />
+    <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DocxCraft Editor document editing interface" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DocxCraft Editor — Local-first .docx Editor" />
+    <meta
+      name="twitter:description"
+      content="Open, edit, and save .docx files directly in your browser — with anchor navigation, version history, and recovery drafts."
+    />
+    <meta name="twitter:image" content="/og-image.svg" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DocxCraft Editor",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "Local-first .docx editor with document library, anchor navigation, version history, and recovery drafts, running entirely in your browser.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Open and edit .docx files in the browser",
+          "Document library with rename, duplicate, and delete",
+          "Anchor map navigation synced to the cursor",
+          "Version history with restore",
+          "Automatic recovery drafts",
+          "Command palette and keyboard shortcuts",
+          "Dark mode"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
+    <noscript>
+      DocxCraft Editor is a browser-based .docx editor and requires JavaScript to run.
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

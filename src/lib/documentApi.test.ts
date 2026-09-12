@@ -10,6 +10,13 @@ import {
   saveDocument,
 } from './documentApi';
 
+// Pins the timeout signal wiring whenever the test environment supports
+// AbortSignal.timeout, so a dropped withRequestTimeout() call fails tests.
+const expectedFetchInit =
+  typeof AbortSignal.timeout === 'function'
+    ? expect.objectContaining({ signal: expect.anything() })
+    : expect.objectContaining({});
+
 describe('documentApi', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -38,7 +45,7 @@ describe('documentApi', () => {
 
     const documents = await listDocuments();
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/documents');
+    expect(fetchSpy).toHaveBeenCalledWith('/api/documents', expectedFetchInit);
     expect(documents).toHaveLength(1);
     expect(documents[0]?.name).toBe('Proposal.docx');
   });
@@ -64,7 +71,7 @@ describe('documentApi', () => {
 
     const versions = await listDocumentVersions('doc-1');
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/documents/doc-1/versions');
+    expect(fetchSpy).toHaveBeenCalledWith('/api/documents/doc-1/versions', expectedFetchInit);
     expect(versions[0]?.id).toBe('ver-2');
   });
 
@@ -157,8 +164,8 @@ describe('documentApi', () => {
     const latestBuffer = await readDocumentContent('doc-1', { markOpened: true });
     const versionBuffer = await readDocumentVersionContent('doc-1', 'ver-1');
 
-    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/doc-1/content?markOpened=true');
-    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/documents/doc-1/versions/ver-1/content');
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/doc-1/content?markOpened=true', expectedFetchInit);
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/documents/doc-1/versions/ver-1/content', expectedFetchInit);
     expect(Array.from(new Uint8Array(latestBuffer))).toEqual([9, 8, 7]);
     expect(Array.from(new Uint8Array(versionBuffer))).toEqual([1, 2, 3]);
   });
@@ -178,8 +185,8 @@ describe('documentApi', () => {
 
     await Promise.all([opened, plain]);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/doc-1/content?markOpened=true');
-    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/documents/doc-1/content?markOpened=false');
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/doc-1/content?markOpened=true', expectedFetchInit);
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/documents/doc-1/content?markOpened=false', expectedFetchInit);
   });
 
   it('encodes non-ASCII document names before sending request headers', async () => {
@@ -262,5 +269,38 @@ describe('documentApi', () => {
         method: 'DELETE',
       }),
     );
+  });
+
+  it('surfaces the server message from JSON error responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Document not found.' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(deleteDocument('doc-1')).rejects.toThrow('Document not found.');
+  });
+
+  it('falls back to the status text for non-JSON error responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>Gateway error</html>', {
+        status: 502,
+        headers: { 'content-type': 'text/html' },
+      }),
+    );
+
+    await expect(deleteDocument('doc-1')).rejects.toThrow('<html>Gateway error</html>');
+  });
+
+  it('reports a clear error when a success response is not JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>index</html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      }),
+    );
+
+    await expect(listDocuments()).rejects.toThrow('The server returned an unexpected response.');
   });
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearRecoverySnapshot,
@@ -21,6 +21,8 @@ function snapshot(overrides: Partial<RecoverySnapshot> = {}): RecoverySnapshot {
 
 describe('recoveryStore', () => {
   afterEach(async () => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.localStorage.clear();
     await clearRecoverySnapshot();
   });
@@ -130,5 +132,45 @@ describe('recoveryStore', () => {
     const stored = await readRecoverySnapshot();
     expect(stored?.activeParaId).toBe('para-42');
     expect(stored?.savedAt).toBe('2026-05-25T09:30:00.000Z');
+  });
+
+  it('skips corrupt localStorage fallback entries instead of failing the read', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    const validBuffer = btoa('docx-bytes');
+    window.localStorage.setItem(
+      'docx-editor/recovery-snapshots',
+      JSON.stringify([
+        {
+          sourceKind: 'sample',
+          documentId: null,
+          documentName: 'Broken.docx',
+          activeParaId: null,
+          savedAt: '2026-05-25T12:00:00.000Z',
+          key: 'sample:Broken.docx',
+          bufferBase64: 'not-valid-base64!!!',
+        },
+        {
+          sourceKind: 'sample',
+          documentId: null,
+          documentName: 'Valid.docx',
+          activeParaId: null,
+          savedAt: '2026-05-25T11:00:00.000Z',
+          key: 'sample:Valid.docx',
+          bufferBase64: validBuffer,
+        },
+      ]),
+    );
+
+    const stored = await readRecoverySnapshot();
+    expect(stored?.documentName).toBe('Valid.docx');
+  });
+
+  it('never rejects when the localStorage fallback is unavailable', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+
+    await expect(saveRecoverySnapshot(snapshot())).resolves.toBeUndefined();
   });
 });

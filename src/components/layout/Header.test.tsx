@@ -76,16 +76,16 @@ describe('Header action menus', () => {
     expect(screen.queryByText(/^export$/i, { selector: 'h4' })).not.toBeInTheDocument();
 
     await user.click(exportButton);
-    await user.click(screen.getByRole('button', { name: /export \.docx/i }));
+    await user.click(screen.getByRole('menuitem', { name: /export \.docx/i }));
     expect(onDownloadCurrent).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/^export$/i, { selector: 'h4' })).not.toBeInTheDocument();
 
     await user.click(exportButton);
-    await user.click(screen.getByRole('button', { name: /save as markdown/i }));
+    await user.click(screen.getByRole('menuitem', { name: /save as markdown/i }));
     expect(onExportMarkdown).toHaveBeenCalledTimes(1);
 
     await user.click(exportButton);
-    await user.click(screen.getByRole('button', { name: /print as pdf/i }));
+    await user.click(screen.getByRole('menuitem', { name: /print as pdf/i }));
     expect(onPrintPDF).toHaveBeenCalledTimes(1);
   });
 
@@ -98,15 +98,15 @@ describe('Header action menus', () => {
     await user.click(moreButton);
     expect(screen.getByText(/more actions/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /save as copy/i }));
+    await user.click(screen.getByRole('menuitem', { name: /save as copy/i }));
     expect(onSaveAs).toHaveBeenCalledTimes(1);
 
     await user.click(moreButton);
-    await user.click(screen.getByRole('button', { name: /load sample/i }));
+    await user.click(screen.getByRole('menuitem', { name: /load sample/i }));
     expect(onLoadSample).toHaveBeenCalledTimes(1);
 
     await user.click(moreButton);
-    await user.click(screen.getByRole('button', { name: /reload current document/i }));
+    await user.click(screen.getByRole('menuitem', { name: /reload current document/i }));
     expect(onReload).toHaveBeenCalledTimes(1);
   });
 
@@ -114,7 +114,7 @@ describe('Header action menus', () => {
     const { user } = renderHeader({ canReload: false });
 
     await user.click(screen.getByRole('button', { name: /more actions/i }));
-    expect(screen.getByRole('button', { name: /reload current document/i })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /reload current document/i })).toBeDisabled();
   });
 
   it('renders the theme toggle and invokes the handler', async () => {

@@ -6,7 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  /* Above the mobile drawers (z-index 1050) and their backdrop (1045). */
+  z-index: 1100;
   animation: modal-fade-in 200ms ease-out;
 }
 
@@ -112,6 +113,34 @@
   display: flex;
   justify-content: flex-end;
   background: var(--nb-grey-100);
+}
+
+/* Phones: tighter modal chrome and wrapping shortcut rows. */
+@media (max-width: 480px) {
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-header h2 {
+    font-size: 1.15rem;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 14px 16px;
+  }
+
+  .shortcut-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .shortcut-list {
+    gap: 12px;
+  }
 }
 
 @keyframes modal-fade-in {

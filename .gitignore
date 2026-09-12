@@ -8,6 +8,7 @@ test-results/
 # Build output
 dist
 dist-ssr
+coverage
 
 # Local env
 *.local

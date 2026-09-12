@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   deleteDocument,
@@ -72,6 +72,9 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
   const [isSaving, setIsSaving] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [versionError, setVersionError] = useState<string | null>(null);
+  // Ref mirror of isSaving so rapid re-entry is rejected before the next
+  // render commits the state update.
+  const isSavingRef = useRef(false);
 
   const refreshDocuments = useCallback(async () => {
     setIsLoadingDocuments(true);
@@ -133,7 +136,12 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
   }, []);
 
   const saveCurrentDocument = useCallback(
-    async (buffer: ArrayBuffer, options?: SaveDocumentOptions) => {
+    async (buffer: ArrayBuffer, options?: SaveDocumentOptions): Promise<SavedDocumentSummary> => {
+      if (isSavingRef.current) {
+        throw new Error('A save is already in progress.');
+      }
+
+      isSavingRef.current = true;
       setIsSaving(true);
 
       try {
@@ -177,6 +185,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         setLibraryError(message);
         throw error;
       } finally {
+        isSavingRef.current = false;
         setIsSaving(false);
       }
     },
@@ -201,11 +210,17 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
       const matchingDocument = documents.find((document) => document.id === documentId) ?? null;
 
       const name = matchingDocument?.name ?? FALLBACK_DOCUMENT_NAME;
+      const isSameDocument = documentId === currentDocumentId;
       setCurrentDocumentId(documentId);
       setCurrentDocumentRevision(matchingDocument?.revision ?? null);
       setDocumentName(name);
       setLibraryError(null);
-      await refreshVersions(documentId);
+
+      // Reopening the current document does not change currentDocumentId, so
+      // the version effect will not re-run; refresh explicitly in that case.
+      if (isSameDocument) {
+        await refreshVersions(documentId);
+      }
 
       return {
         id: documentId,
@@ -213,7 +228,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         buffer,
       };
     },
-    [api, refreshDocuments, refreshVersions, savedDocuments],
+    [api, currentDocumentId, refreshDocuments, refreshVersions, savedDocuments],
   );
 
   const renameSavedDocument = useCallback(
@@ -237,7 +252,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
   );
 
   const deleteSavedDocument = useCallback(
-    async (documentId: string) => {
+    async (documentId: string): Promise<boolean> => {
       try {
         await api.deleteDocument(documentId);
         if (documentId === currentDocumentId) {
@@ -247,6 +262,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         }
         setLibraryError(null);
         await refreshDocuments();
+        return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to delete document.';
         setLibraryError(message);

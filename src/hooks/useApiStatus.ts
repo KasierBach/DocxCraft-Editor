@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { withRequestTimeout } from '../lib/documentApi';
+
 type ApiStatus = 'checking' | 'connected' | 'offline';
 
 type UseApiStatusOptions = {
   healthUrl?: string;
   pollIntervalMs?: number;
 };
+
+const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 
 export function useApiStatus({
   healthUrl = '/api/health',
@@ -16,7 +20,10 @@ export function useApiStatus({
 
   const refreshStatus = useCallback(async () => {
     try {
-      const response = await fetch(healthUrl);
+      const response = await fetch(
+        healthUrl,
+        withRequestTimeout({ cache: 'no-store' }, HEALTH_CHECK_TIMEOUT_MS),
+      );
       if (!response.ok) {
         throw new Error(`API health check failed with status ${response.status}.`);
       }

@@ -213,7 +213,7 @@ describe('App', () => {
     render(<App />);
 
     await openUtilityMenu(user);
-    expect(screen.getByRole('button', { name: /reload current document/i })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /reload current document/i })).toBeDisabled();
 
     const localBuffer = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 9, 8, 7, 6]);
     const file = new File([localBuffer], 'External Draft.docx', {
@@ -222,8 +222,8 @@ describe('App', () => {
 
     await user.upload(screen.getByLabelText(/^open$/i), file);
     await openUtilityMenu(user);
-    expect(screen.getByRole('button', { name: /reload current document/i })).toBeEnabled();
-    await user.click(screen.getByRole('button', { name: /reload current document/i }));
+    expect(screen.getByRole('menuitem', { name: /reload current document/i })).toBeEnabled();
+    await user.click(screen.getByRole('menuitem', { name: /reload current document/i }));
 
     const reloadToast = await screen.findByRole('status');
     expect(reloadToast).toHaveTextContent(/reloaded external draft\.docx\./i);
@@ -276,12 +276,12 @@ describe('App', () => {
     render(<App />);
 
     await openUtilityMenu(user);
-    await user.click(screen.getByRole('button', { name: /load sample/i }));
+    await user.click(screen.getByRole('menuitem', { name: /load sample/i }));
     const firstToast = await screen.findByRole('status');
     expect(firstToast).toHaveTextContent(/sample reloaded\./i);
     expect(screen.getAllByRole('status')).toHaveLength(1);
     await openUtilityMenu(user);
-    expect(screen.getByRole('button', { name: /reload current document/i })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: /reload current document/i })).toBeDisabled();
   });
 
   it('keeps the active anchor in sync when selection info has no paraId', async () => {

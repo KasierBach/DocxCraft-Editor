@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import type { SavedDocumentVersionSummary } from '../lib/documentApi';
-import { formatBytes } from '../lib/format';
+import { formatBytes, formatDateTime } from '../lib/format';
 import { Panel } from './ui/Panel';
 
 type VersionHistoryPanelProps = {
@@ -69,7 +69,7 @@ export function VersionHistoryPanel({
                   {index === 0 ? 'Latest version' : `Version ${versions.length - index}`}
                 </span>
                 <span className="saved-document-card__meta">
-                  {new Date(version.createdAt).toLocaleString()} | {formatBytes(version.sizeInBytes)}
+                  {formatDateTime(version.createdAt)} | {formatBytes(version.sizeInBytes)}
                 </span>
                 <div className="saved-document-card__actions">
                   <button
@@ -79,7 +79,7 @@ export function VersionHistoryPanel({
                       void handleAction(version.id, 'download', onDownload);
                     }}
                     disabled={isPending}
-                    aria-label={`Download version from ${new Date(version.createdAt).toLocaleString()}`}
+                    aria-label={`Download version from ${formatDateTime(version.createdAt)}`}
                   >
                     {pendingAction?.versionId === version.id && pendingAction.type === 'download'
                       ? 'Downloading...'
@@ -92,7 +92,7 @@ export function VersionHistoryPanel({
                       void handleAction(version.id, 'restore', onRestore);
                     }}
                     disabled={isPending}
-                    aria-label={`Restore version from ${new Date(version.createdAt).toLocaleString()}`}
+                    aria-label={`Restore version from ${formatDateTime(version.createdAt)}`}
                   >
                     {pendingAction?.versionId === version.id && pendingAction.type === 'restore'
                       ? 'Restoring...'

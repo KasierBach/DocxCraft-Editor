@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { SavedDocumentSummary } from '../lib/documentApi';
-import { formatBytes } from '../lib/format';
+import { formatBytes, formatDateTime } from '../lib/format';
 import { Panel } from './ui/Panel';
 
 type SavedDocumentsPanelProps = {
@@ -206,6 +206,14 @@ export function SavedDocumentsPanel({
               className="saved-document-card__input"
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void saveRename(document.id);
+                } else if (event.key === 'Escape') {
+                  cancelRename();
+                }
+              }}
               aria-label={`Edit name for ${document.name}`}
               disabled={pendingType === 'rename'}
             />
@@ -234,7 +242,9 @@ export function SavedDocumentsPanel({
           </>
         ) : isConfirmingDelete ? (
           <>
-            <p className="saved-document-card__warning">Delete this saved document?</p>
+            <p className="saved-document-card__warning" role="status">
+              Delete this saved document?
+            </p>
             <div className="saved-document-card__actions">
               <button
                 type="button"
@@ -272,12 +282,12 @@ export function SavedDocumentsPanel({
             >
               <span className="saved-document-card__name">{document.name}</span>
               <span className="saved-document-card__meta">
-                {formatBytes(document.sizeInBytes)} | Updated {new Date(document.updatedAt).toLocaleString()}
+                {formatBytes(document.sizeInBytes)} | Updated {formatDateTime(document.updatedAt)}
               </span>
               <span className="saved-document-card__meta">
                 Versions {document.versionCount}
                 {document.lastOpenedAt
-                  ? ` | Opened ${new Date(document.lastOpenedAt).toLocaleString()}`
+                  ? ` | Opened ${formatDateTime(document.lastOpenedAt)}`
                   : ''}
               </span>
               {pendingType === 'open' && (
