@@ -13,6 +13,7 @@ import { ToastViewport } from './components/ToastViewport';
 import { createDemoDocument } from './demoDocument';
 import { useAnchors } from './hooks/useAnchors';
 import { useApiStatus } from './hooks/useApiStatus';
+import { useDocumentCommands } from './hooks/useDocumentCommands';
 import { useTheme } from './hooks/useTheme';
 import { useDocumentLibrary } from './hooks/useDocumentLibrary';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -22,7 +23,7 @@ import { collectAnchorTargets, type AnchorTarget, type PageContent } from './lib
 import { buildDeepLinkSearch, readDeepLink } from './lib/deepLink';
 import { downloadBufferAsDocx } from './lib/download';
 import { convertToMarkdown, downloadMarkdown } from './lib/exportUtils';
-import { findFlashHighlightTarget } from './lib/highlightTarget';
+import { flashParagraphHighlight } from './lib/flashHighlight';
 import { scanForMedia, type MediaItem } from './lib/mediaScanner';
 import type { RecoverySnapshot } from './lib/recoveryStore';
 import { resolveActiveAnchorId } from './lib/resolveActiveAnchor';
@@ -38,6 +39,10 @@ type EditorSource =
   | { kind: 'saved-document'; name: string; documentId: string; buffer: ArrayBuffer };
 
 const SAMPLE_DOCUMENT_NAME = 'Built-in sample.docx';
+
+const ANCHOR_REFRESH_FIRST_DELAY_MS = 180;
+const ANCHOR_REFRESH_RETRY_DELAY_MS = 250;
+const ANCHOR_REFRESH_DEFAULT_ATTEMPTS = 10;
 
 function createSampleSource(): EditorSource {
   return {
@@ -106,6 +111,8 @@ export default function App() {
   // Use toast manager hook
   const { toasts, pushToast, dismissToast } = useToastManager();
 
+  const { runCommand } = useDocumentCommands({ pushToast, setStatusMessage });
+
   const {
     currentDocumentId,
     currentDocumentVersions,
@@ -154,7 +161,11 @@ export default function App() {
   const [pageCount, setPageCount] = useState(1);
 
   const getEditorBuffer = useCallback(async () => {
-    return (await editorRef.current?.save()) ?? null;
+    try {
+      return (await editorRef.current?.save()) ?? null;
+    } catch {
+      return null;
+    }
   }, []);
 
   const recoveryAutosaveDelayMs = source.kind === 'saved-document' ? 5000 : 2500;
@@ -268,21 +279,21 @@ export default function App() {
   }, [setActiveParaId, setAnchors]);
 
   const scheduleAnchorRefresh = useCallback(
-    (attempts = 10) => {
+    (attempts = ANCHOR_REFRESH_DEFAULT_ATTEMPTS) => {
       if (refreshTimerRef.current) {
         window.clearTimeout(refreshTimerRef.current);
       }
 
-      const schedule = (remaining: number) => {
+      const schedule = (remaining: number, isFirstAttempt: boolean) => {
         refreshTimerRef.current = window.setTimeout(() => {
           const refreshWorked = refreshAnchors();
           if (!refreshWorked && remaining > 1) {
-            schedule(remaining - 1);
+            schedule(remaining - 1, false);
           }
-        }, remaining === 10 ? 180 : 250);
+        }, isFirstAttempt ? ANCHOR_REFRESH_FIRST_DELAY_MS : ANCHOR_REFRESH_RETRY_DELAY_MS);
       };
 
-      schedule(attempts);
+      schedule(attempts, true);
     },
     [refreshAnchors],
   );
@@ -535,141 +546,162 @@ export default function App() {
   );
 
   const handleSaveDocument = useCallback(async () => {
-    try {
-      const buffer = await getEditorBuffer();
-      if (!buffer) {
-        throw new Error('The editor did not return a document buffer.');
-      }
-
-      const savedDocument = await saveCurrentDocument(buffer);
-
-      const isInitialSave = source.kind !== 'saved-document';
-
-      // If we just converted a sample/local to a saved-doc, we NEED to update source
-      // to keep track of the ID. But if it's ALREADY a saved-doc, we just update local state.
-      if (isInitialSave) {
-        rememberSavedSource(savedDocument.id, savedDocument.name, buffer);
-      }
-
-      discardRecovery();
-      setIsDirty(false);
-
-      const msg = !isInitialSave ? `Changes saved to "${savedDocument.name}"` : `Document "${savedDocument.name}" saved to library`;
-
-      setStatusMessage(msg);
-      pushToast('success', msg);
-      setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Save failed.';
+    const buffer = await getEditorBuffer();
+    if (!buffer) {
       setStatusMessage('Save failed.');
-      pushToast('error', message);
+      pushToast('error', 'The editor did not return a document buffer.');
+      return;
     }
-  }, [discardRecovery, getEditorBuffer, pushToast, rememberSavedSource, saveCurrentDocument, source.kind]);
+
+    const savedDocument = await runCommand('Save', () => saveCurrentDocument(buffer), {
+      successMessage: (result) =>
+        source.kind === 'saved-document'
+          ? `Changes saved to "${result.name}"`
+          : `Document "${result.name}" saved to library`,
+    });
+    if (!savedDocument) {
+      return;
+    }
+
+    if (source.kind !== 'saved-document') {
+      rememberSavedSource(savedDocument.id, savedDocument.name, buffer);
+    }
+
+    discardRecovery();
+    setIsDirty(false);
+    setLastSavedAt(new Date().toISOString());
+  }, [
+    discardRecovery,
+    getEditorBuffer,
+    pushToast,
+    rememberSavedSource,
+    runCommand,
+    saveCurrentDocument,
+    source.kind,
+  ]);
 
   const handleSaveAsDocument = useCallback(async () => {
-    try {
-      const buffer = await getEditorBuffer();
-      if (!buffer) {
-        throw new Error('The editor did not return a document buffer.');
-      }
-
-      const savedDocument = await saveCurrentDocument(buffer, {
-        asNew: true,
-        name: documentName,
-      });
-      loadEditorSource({
-        kind: 'saved-document',
-        name: savedDocument.name,
-        documentId: savedDocument.id,
-        buffer,
-      });
-      discardRecovery();
-      setStatusMessage(`Saved ${savedDocument.name} as a new document.`);
-      pushToast('success', `Saved ${savedDocument.name} as a new document.`);
-      setLastSavedAt(new Date().toISOString());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Save as failed.';
+    const buffer = await getEditorBuffer();
+    if (!buffer) {
       setStatusMessage('Save as failed.');
-      pushToast('error', message);
+      pushToast('error', 'The editor did not return a document buffer.');
+      return;
     }
-  }, [discardRecovery, documentName, getEditorBuffer, loadEditorSource, pushToast, saveCurrentDocument]);
+
+    const savedDocument = await runCommand(
+      'Save as',
+      () => saveCurrentDocument(buffer, { asNew: true, name: documentName }),
+      { successMessage: (result) => `Saved ${result.name} as a new document.` },
+    );
+    if (!savedDocument) {
+      return;
+    }
+
+    loadEditorSource({
+      kind: 'saved-document',
+      name: savedDocument.name,
+      documentId: savedDocument.id,
+      buffer,
+    });
+    discardRecovery();
+    setLastSavedAt(new Date().toISOString());
+  }, [
+    discardRecovery,
+    documentName,
+    getEditorBuffer,
+    loadEditorSource,
+    pushToast,
+    runCommand,
+    saveCurrentDocument,
+  ]);
 
   const handleDownloadCurrent = useCallback(async () => {
-    try {
-      const buffer = await getEditorBuffer();
-      if (!buffer) {
-        throw new Error('The editor did not return a document buffer.');
-      }
-
-      downloadBufferAsDocx(documentName, buffer);
-      setStatusMessage(`Downloaded ${documentName}.`);
-      pushToast('success', `Downloaded ${documentName}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Download failed.';
+    const buffer = await getEditorBuffer();
+    if (!buffer) {
       setStatusMessage('Download failed.');
-      pushToast('error', message);
+      pushToast('error', 'The editor did not return a document buffer.');
+      return;
     }
+
+    downloadBufferAsDocx(documentName, buffer);
+    setStatusMessage(`Downloaded ${documentName}.`);
+    pushToast('success', `Downloaded ${documentName}.`);
   }, [documentName, getEditorBuffer, pushToast]);
 
   const handleOpenSavedDocument = useCallback(
     async (documentId: string) => {
       if (!confirmDiscardChanges()) return;
 
-      try {
-        const openedDocument = await openSavedDocument(documentId);
-        loadEditorSource({
-          kind: 'saved-document',
-          name: openedDocument.name,
-          documentId: openedDocument.id,
-          buffer: openedDocument.buffer,
-        });
-        setStatusMessage(`Opened ${openedDocument.name} from the local library.`);
-        pushToast('success', `Opened ${openedDocument.name} from the local library.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Open failed.';
-        setStatusMessage('Open failed.');
-        pushToast('error', message);
+      const openedDocument = await runCommand(
+        'Open',
+        () => openSavedDocument(documentId),
+        {
+          successMessage: (result) => `Opened ${result.name} from the local library.`,
+        },
+      );
+      if (!openedDocument) {
+        return;
       }
+
+      loadEditorSource({
+        kind: 'saved-document',
+        name: openedDocument.name,
+        documentId: openedDocument.id,
+        buffer: openedDocument.buffer,
+      });
     },
-    [confirmDiscardChanges, loadEditorSource, openSavedDocument, pushToast],
+    [confirmDiscardChanges, loadEditorSource, openSavedDocument, runCommand],
   );
 
   const handleReloadDocument = useCallback(async () => {
     if (!confirmDiscardChanges()) return;
 
-    try {
-      if (source.kind === 'sample') {
-        loadBuiltInSample(true);
-        return;
-      }
+    if (source.kind === 'sample') {
+      loadBuiltInSample(true);
+      return;
+    }
 
-      if (source.kind === 'saved-document' && currentDocumentId === source.documentId) {
-        const reopenedDocument = await openSavedDocument(source.documentId);
-        loadEditorSource({
-          kind: 'saved-document',
-          name: reopenedDocument.name,
-          documentId: reopenedDocument.id,
-          buffer: reopenedDocument.buffer,
-        });
-        discardRecovery();
-        setStatusMessage(`Reloaded ${reopenedDocument.name} from the local library.`);
-        pushToast('info', `Reloaded ${reopenedDocument.name} from the local library.`);
+    if (source.kind === 'saved-document' && currentDocumentId === source.documentId) {
+      const reopenedDocument = await runCommand(
+        'Reload',
+        () => openSavedDocument(source.documentId),
+        {
+          successMessage: (result) => `Reloaded ${result.name} from the local library.`,
+          successTone: 'info',
+        },
+      );
+      if (!reopenedDocument) {
         return;
       }
 
       loadEditorSource({
-        ...source,
-        buffer: source.buffer.slice(0),
+        kind: 'saved-document',
+        name: reopenedDocument.name,
+        documentId: reopenedDocument.id,
+        buffer: reopenedDocument.buffer,
       });
       discardRecovery();
-      setStatusMessage(`Reloaded ${source.name}.`);
-      pushToast('info', `Reloaded ${source.name}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Reload failed.';
-      setStatusMessage('Reload failed.');
-      pushToast('error', message);
+      return;
     }
-  }, [confirmDiscardChanges, currentDocumentId, discardRecovery, loadBuiltInSample, loadEditorSource, openSavedDocument, pushToast, source]);
+
+    loadEditorSource({
+      ...source,
+      buffer: source.buffer.slice(0),
+    });
+    discardRecovery();
+    setStatusMessage(`Reloaded ${source.name}.`);
+    pushToast('info', `Reloaded ${source.name}.`);
+  }, [
+    confirmDiscardChanges,
+    currentDocumentId,
+    discardRecovery,
+    loadBuiltInSample,
+    loadEditorSource,
+    openSavedDocument,
+    pushToast,
+    runCommand,
+    source,
+  ]);
 
   const handleExportMarkdown = useCallback(() => {
     if (!editorRef.current) return;
@@ -687,32 +719,27 @@ export default function App() {
   }, []);
 
   const handleRefreshDocuments = useCallback(async () => {
-    try {
-      await refreshDocuments();
-      setStatusMessage('Saved documents refreshed.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Refresh failed.';
-      setStatusMessage('Refresh failed.');
-      pushToast('error', message);
-    }
-  }, [pushToast, refreshDocuments]);
+    await runCommand('Refresh', () => refreshDocuments(), {
+      successMessage: () => 'Saved documents refreshed.',
+    });
+  }, [refreshDocuments, runCommand]);
 
   const handleRenameSavedDocument = useCallback(
     async (documentId: string, name: string) => {
-      try {
-        const renamedDocument = await renameSavedDocument(documentId, name);
-        if (isSavedSource(source) && source.documentId === documentId) {
-          rememberSavedSource(documentId, renamedDocument.name, source.buffer);
-        }
-        setStatusMessage(`Renamed saved document to ${renamedDocument.name}.`);
-        pushToast('success', `Renamed saved document to ${renamedDocument.name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Rename failed.';
-        setStatusMessage('Rename failed.');
-        pushToast('error', message);
+      const renamedDocument = await runCommand(
+        'Rename',
+        () => renameSavedDocument(documentId, name),
+        { successMessage: (result) => `Renamed saved document to ${result.name}.` },
+      );
+      if (!renamedDocument) {
+        return;
+      }
+
+      if (isSavedSource(source) && source.documentId === documentId) {
+        rememberSavedSource(documentId, renamedDocument.name, source.buffer);
       }
     },
-    [pushToast, rememberSavedSource, renameSavedDocument, source],
+    [rememberSavedSource, renameSavedDocument, runCommand, source],
   );
 
   const handleDeleteSavedDocument = useCallback(
@@ -722,107 +749,108 @@ export default function App() {
       const deletesCurrentDocument = isSavedSource(source) && source.documentId === documentId;
       if (deletesCurrentDocument && !confirmDiscardChanges()) return;
 
-      try {
-        await deleteSavedDocument(documentId);
-        if (deletesCurrentDocument) {
-          loadBuiltInSample(true);
-        }
-        setStatusMessage(
-          deletedDocument
-            ? `Deleted ${deletedDocument.name} from the local library.`
-            : 'Deleted saved document from the local library.',
-        );
-        pushToast(
-          'success',
-          deletedDocument
-            ? `Deleted ${deletedDocument.name} from the local library.`
-            : 'Deleted saved document from the local library.',
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Delete failed.';
-        setStatusMessage('Delete failed.');
-        pushToast('error', message);
+      await runCommand(
+        'Delete',
+        () => deleteSavedDocument(documentId),
+        {
+          successMessage: () =>
+            deletedDocument
+              ? `Deleted ${deletedDocument.name} from the local library.`
+              : 'Deleted saved document from the local library.',
+        },
+      );
+
+      if (deletesCurrentDocument) {
+        loadBuiltInSample(true);
       }
     },
-    [confirmDiscardChanges, deleteSavedDocument, loadBuiltInSample, pushToast, savedDocuments, source],
+    [
+      confirmDiscardChanges,
+      deleteSavedDocument,
+      loadBuiltInSample,
+      runCommand,
+      savedDocuments,
+      source,
+    ],
   );
 
   const handleDuplicateSavedDocument = useCallback(
     async (documentId: string) => {
-      try {
-        const duplicatedDocument = await duplicateSavedDocument(documentId);
-        setStatusMessage(`Duplicated ${duplicatedDocument.name}.`);
-        pushToast('success', `Duplicated ${duplicatedDocument.name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Duplicate failed.';
-        setStatusMessage('Duplicate failed.');
-        pushToast('error', message);
-      }
+      await runCommand('Duplicate', () => duplicateSavedDocument(documentId), {
+        successMessage: (result) => `Duplicated ${result.name}.`,
+      });
     },
-    [duplicateSavedDocument, pushToast],
+    [duplicateSavedDocument, runCommand],
   );
 
   const handleDownloadSavedDocument = useCallback(
     async (documentId: string) => {
-      try {
-        const buffer = await readSavedDocumentBuffer(documentId);
-        const savedDocument =
-          savedDocuments.find((document) => document.id === documentId) ?? null;
-        const name = savedDocument?.name ?? documentName;
+      const savedDocument =
+        savedDocuments.find((document) => document.id === documentId) ?? null;
+      const name = savedDocument?.name ?? documentName;
 
-        downloadBufferAsDocx(name, buffer);
-        setStatusMessage(`Downloaded ${name}.`);
-        pushToast('success', `Downloaded ${name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Download failed.';
-        setStatusMessage('Download failed.');
-        pushToast('error', message);
+      const buffer = await runCommand('Download', () => readSavedDocumentBuffer(documentId), {
+        successMessage: () => `Downloaded ${name}.`,
+      });
+      if (!buffer) {
+        return;
       }
+
+      downloadBufferAsDocx(name, buffer);
     },
-    [documentName, pushToast, readSavedDocumentBuffer, savedDocuments],
+    [documentName, readSavedDocumentBuffer, runCommand, savedDocuments],
   );
 
   const handleRestoreVersion = useCallback(
     async (documentId: string, versionId: string) => {
       if (!confirmDiscardChanges()) return;
 
-      try {
-        const restored = await restoreDocumentVersion(documentId, versionId);
-        loadEditorSource({
-          kind: 'saved-document',
-          name: restored.document.name,
-          documentId,
-          buffer: restored.buffer,
-        });
-        discardRecovery();
-        setStatusMessage(`Restored a saved version of ${restored.document.name}.`);
-        pushToast('success', `Restored a saved version of ${restored.document.name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Restore failed.';
-        setStatusMessage('Restore failed.');
-        pushToast('error', message);
+      const restored = await runCommand(
+        'Restore version',
+        () => restoreDocumentVersion(documentId, versionId),
+        {
+          successMessage: (result) => `Restored a saved version of ${result.document.name}.`,
+        },
+      );
+      if (!restored) {
+        return;
       }
+
+      loadEditorSource({
+        kind: 'saved-document',
+        name: restored.document.name,
+        documentId,
+        buffer: restored.buffer,
+      });
+      discardRecovery();
     },
-    [confirmDiscardChanges, discardRecovery, loadEditorSource, pushToast, restoreDocumentVersion],
+    [
+      confirmDiscardChanges,
+      discardRecovery,
+      loadEditorSource,
+      restoreDocumentVersion,
+      runCommand,
+    ],
   );
 
   const handleDownloadVersion = useCallback(
     async (documentId: string, versionId: string) => {
-      try {
-        const buffer = await readVersionBuffer(documentId, versionId);
-        const version =
-          currentDocumentVersions.find((entry) => entry.id === versionId) ?? null;
-        const name = version?.name ?? documentName;
-        downloadBufferAsDocx(name, buffer);
-        setStatusMessage(`Downloaded ${name}.`);
-        pushToast('success', `Downloaded ${name}.`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Version download failed.';
-        setStatusMessage('Version download failed.');
-        pushToast('error', message);
+      const version =
+        currentDocumentVersions.find((entry) => entry.id === versionId) ?? null;
+      const name = version?.name ?? documentName;
+
+      const buffer = await runCommand(
+        'Download version',
+        () => readVersionBuffer(documentId, versionId),
+        { successMessage: () => `Downloaded ${name}.` },
+      );
+      if (!buffer) {
+        return;
       }
+
+      downloadBufferAsDocx(name, buffer);
     },
-    [currentDocumentVersions, documentName, pushToast, readVersionBuffer],
+    [currentDocumentVersions, documentName, readVersionBuffer, runCommand],
   );
 
   const handleRestoreRecovery = useCallback(() => {
@@ -850,39 +878,10 @@ export default function App() {
       setActiveParaId(paraId);
       setCurrentPage(anchor?.pageNumber ?? editor?.getCurrentPage() ?? null);
 
-      const startTime = Date.now();
-      const maxSearchTime = 2000;
-
-      const attemptHighlight = () => {
-        const root = editorHostRef.current;
-        if (!root) {
-          return;
-        }
-        const targetElement = findFlashHighlightTarget(root, window.getSelection());
-        if (targetElement) {
-          targetElement.classList.remove('flash-highlight');
-          void targetElement.offsetWidth;
-          targetElement.classList.add('flash-highlight');
-
-          if (root.parentElement) {
-            root.parentElement.scrollLeft = 0;
-          }
-          root.scrollLeft = 0;
-
-          window.scrollTo(0, 0);
-
-          window.setTimeout(() => {
-            targetElement.classList.remove('flash-highlight');
-          }, 1500);
-          return;
-        }
-
-        if (Date.now() - startTime < maxSearchTime) {
-          window.setTimeout(attemptHighlight, 100);
-        }
-      };
-
-      attemptHighlight();
+      const root = editorHostRef.current;
+      if (root) {
+        flashParagraphHighlight(root, window.getSelection());
+      }
     },
     [anchors, setActiveParaId],
   );

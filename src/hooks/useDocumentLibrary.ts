@@ -62,6 +62,7 @@ const FALLBACK_DOCUMENT_NAME = 'Untitled.docx';
 export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: UseDocumentLibraryOptions) {
   const [documentName, setDocumentName] = useState(initialDocumentName);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
+  const [currentDocumentRevision, setCurrentDocumentRevision] = useState<number | null>(null);
   const [savedDocuments, setSavedDocuments] = useState<SavedDocumentSummary[]>([]);
   const [currentDocumentVersions, setCurrentDocumentVersions] = useState<
     SavedDocumentVersionSummary[]
@@ -123,6 +124,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
   const setCurrentDraft = useCallback(({ name, documentId }: DraftDescriptor) => {
     setDocumentName(name);
     setCurrentDocumentId(documentId);
+    setCurrentDocumentRevision(null);
     setLibraryError(null);
     if (documentId === null) {
       setCurrentDocumentVersions([]);
@@ -136,18 +138,35 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
 
       try {
         const name = options?.name ?? documentName;
-        const currentSavedDocument = currentDocumentId
-          ? savedDocuments.find((document) => document.id === currentDocumentId)
+        const documentIdForUpdate =
+          !options?.asNew && currentDocumentId ? currentDocumentId : null;
+        const isUpdate = documentIdForUpdate !== null;
+        let currentSavedDocument = isUpdate
+          ? savedDocuments.find((document) => document.id === documentIdForUpdate)
           : undefined;
+
+        // A stale local list can be missing the current document; refetch it so
+        // updates always carry an If-Match revision instead of overwriting
+        // unconditionally.
+        if (isUpdate && !currentSavedDocument) {
+          const documents = await api.listDocuments();
+          setSavedDocuments(documents);
+          currentSavedDocument = documents.find(
+            (document) => document.id === documentIdForUpdate,
+          );
+        }
+
+        const revision = currentSavedDocument?.revision ?? currentDocumentRevision;
         const saveInput = {
           name,
           buffer,
-          ...(options?.asNew || !currentDocumentId ? {} : { id: currentDocumentId }),
-          ...(currentSavedDocument ? { revision: currentSavedDocument.revision } : {}),
+          ...(isUpdate ? { id: documentIdForUpdate } : {}),
+          ...(isUpdate && revision ? { revision } : {}),
         };
         const savedDocument = await api.saveDocument(saveInput);
 
         setCurrentDocumentId(savedDocument.id);
+        setCurrentDocumentRevision(savedDocument.revision ?? null);
         setDocumentName(savedDocument.name);
         setLibraryError(null);
         await refreshDocuments();
@@ -161,7 +180,15 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         setIsSaving(false);
       }
     },
-    [api, currentDocumentId, documentName, refreshDocuments, refreshVersions, savedDocuments],
+    [
+      api,
+      currentDocumentId,
+      currentDocumentRevision,
+      documentName,
+      refreshDocuments,
+      refreshVersions,
+      savedDocuments,
+    ],
   );
 
   const openSavedDocument = useCallback(
@@ -175,9 +202,9 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
 
       const name = matchingDocument?.name ?? FALLBACK_DOCUMENT_NAME;
       setCurrentDocumentId(documentId);
+      setCurrentDocumentRevision(matchingDocument?.revision ?? null);
       setDocumentName(name);
       setLibraryError(null);
-      await refreshDocuments();
       await refreshVersions(documentId);
 
       return {
@@ -195,6 +222,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         const renamedDocument = await api.renameDocument(documentId, name);
         if (documentId === currentDocumentId) {
           setDocumentName(renamedDocument.name);
+          setCurrentDocumentRevision(renamedDocument.revision ?? null);
         }
         setLibraryError(null);
         await refreshDocuments();
@@ -214,6 +242,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         await api.deleteDocument(documentId);
         if (documentId === currentDocumentId) {
           setCurrentDocumentId(null);
+          setCurrentDocumentRevision(null);
           setCurrentDocumentVersions([]);
         }
         setLibraryError(null);
@@ -253,6 +282,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
 
       if (documentId === currentDocumentId) {
         setDocumentName(restoredDocument.name);
+        setCurrentDocumentRevision(restoredDocument.revision ?? null);
       }
 
       await refreshDocuments();

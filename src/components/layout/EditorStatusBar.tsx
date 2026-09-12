@@ -20,7 +20,13 @@ export function EditorStatusBar({
   const formattedLastSaved = useMemo(() => {
     if (isDirty) return 'Unsaved changes';
     if (!lastSavedAt) return 'Not saved yet';
-    return `Saved at ${lastSavedAt}`;
+
+    const savedAt = new Date(lastSavedAt);
+    if (Number.isNaN(savedAt.getTime())) {
+      return `Saved at ${lastSavedAt}`;
+    }
+
+    return `Saved at ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }, [isDirty, lastSavedAt]);
 
   return (

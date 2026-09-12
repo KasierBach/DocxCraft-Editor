@@ -32,9 +32,16 @@ function latestSnapshot(snapshots: RecoverySnapshot[]) {
   return snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt))[0] ?? null;
 }
 
+const BASE64_CHUNK_SIZE = 0x8000;
+
 function encodeArrayBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
   let binary = '';
-  for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
+
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_SIZE));
+  }
+
   return window.btoa(binary);
 }
 

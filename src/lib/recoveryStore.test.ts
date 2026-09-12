@@ -108,6 +108,20 @@ describe('recoveryStore', () => {
     expect(stored?.buffer.byteLength).toBe(0);
   });
 
+  it('round-trips a buffer larger than one base64 chunk with arbitrary bytes', async () => {
+    const bytes = new Uint8Array(50_000);
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = (index * 31 + 7) % 256;
+    }
+
+    await saveRecoverySnapshot(snapshot({ buffer: bytes.buffer }));
+
+    const stored = await readRecoverySnapshot();
+    expect(Array.from(new Uint8Array(stored?.buffer ?? new ArrayBuffer(0)))).toEqual(
+      Array.from(bytes),
+    );
+  });
+
   it('preserves the active paragraph id and save timestamp', async () => {
     await saveRecoverySnapshot(
       snapshot({ activeParaId: 'para-42', savedAt: '2026-05-25T09:30:00.000Z' }),
