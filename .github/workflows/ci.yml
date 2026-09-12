@@ -3,8 +3,16 @@ name: CI
 on:
   push:
     branches: ["**"]
+    # Docs-only commits do not affect the build.
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Nightly run on main to catch dependency drift and flaky tests.
+    - cron: "30 3 * * *"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -13,18 +21,28 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PLAYWRIGHT_BROWSERS_PATH: /home/runner/.cache/ms-playwright
+
 jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - run: npm ci
-      - name: Install Playwright browser
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
       - run: npm audit --audit-level=high
       - run: npm run lint
@@ -32,10 +50,22 @@ jobs:
       - run: npm run test:coverage
       - run: npm run test:e2e
       - run: npm run build
+
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: docx-editor-dist-${{ github.sha }}
           path: dist
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-artifacts-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -129,6 +129,16 @@ The Fastify server serves the built bundle from `dist/` alongside the API on one
 
 To run the frontend on a separate static host instead, build with `npm run build`, deploy `dist/`, and point it at the API with `CORS_ORIGIN` configured.
 
+### Deploy (Docker)
+
+```bash
+docker compose up -d          # builds locally, persists documents in a named volume
+# or use the published image:
+docker run -d -p 4175:4175 -v docxcraft-data:/app/data ghcr.io/kasierbach/docxcraft-editor
+```
+
+The image is multi-stage (build → `node:22-slim` runtime running as a non-root user), binds to `0.0.0.0`, includes a container `HEALTHCHECK` against `/api/health`, and is published to GHCR on every `v*` tag with provenance and SBOM attestations. Configure `PORT`, `CORS_ORIGIN`, `LOG_LEVEL`, and rate limiting through environment variables (see `.env.example`).
+
 ## Available Scripts
 
 | Script | Description |
@@ -205,7 +215,7 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 - **Unit** (`npm test`) — jsdom environment, `@testing-library/react`, per-module store/api mocks; see the run output for the current count
 - **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 70%, branches 60%)
 - **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, responsive layout checks at 1920→320 px viewports, and accessibility (axe) checks. Playwright starts both servers automatically.
-- **CI** (`.github/workflows/ci.yml`) — lint, typecheck, coverage, e2e, and build on every push; release workflow packages `dist/` for `v*` tags
+- **CI** (`.github/workflows/ci.yml`) — lint, typecheck, coverage, e2e, and build on every push and PR (nightly on `main`); CodeQL analysis, Dependabot updates, and Docker/GHCR publishing run in their own workflows. Releasing a `v*` tag re-verifies the full suite and attaches the bundle, checksums, and SBOM.
 
 ## Known Limits
 

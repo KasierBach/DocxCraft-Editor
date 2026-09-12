@@ -1,3 +1,5 @@
+import { useCallback, useState } from 'react';
+
 import type { SavedDocumentSummary, SavedDocumentVersionSummary } from '../../lib/documentApi';
 import type { RecoverySnapshot } from '../../lib/recoveryStore';
 import type { MediaItem } from '../../lib/mediaScanner';
@@ -20,7 +22,7 @@ type RightSidebarProps = {
   isLoadingVersions: boolean;
   recoverySnapshot: RecoverySnapshot | null;
   mediaItems: MediaItem[];
-  onRestoreRecovery: () => void;
+  onRestoreRecovery: () => void | Promise<void>;
   onDiscardRecovery: () => void;
   onOpenDocument: (documentId: string) => void | Promise<void>;
   onRenameDocument: (documentId: string, name: string) => void | Promise<void>;
@@ -59,6 +61,17 @@ export function RightSidebar({
   onJumpToMedia,
   onClose,
 }: RightSidebarProps) {
+  const [isRestoringRecovery, setIsRestoringRecovery] = useState(false);
+
+  const handleRestoreRecovery = useCallback(async () => {
+    setIsRestoringRecovery(true);
+    try {
+      await onRestoreRecovery();
+    } finally {
+      setIsRestoringRecovery(false);
+    }
+  }, [onRestoreRecovery]);
+
   return (
     <aside className="right-sidebar" aria-label="Document details">
       {onClose && <DrawerCloseButton ariaLabel="Close document details" onClick={onClose} />}
@@ -91,10 +104,22 @@ export function RightSidebar({
             Unsaved work from {formatDateTime(recoverySnapshot.savedAt)} is available.
           </p>
           <div className="saved-document-card__actions">
-            <button type="button" className="action-button" onClick={onRestoreRecovery}>
-              Restore
+            <button
+              type="button"
+              className="action-button"
+              onClick={() => {
+                void handleRestoreRecovery();
+              }}
+              disabled={isRestoringRecovery}
+            >
+              {isRestoringRecovery ? 'Restoring...' : 'Restore'}
             </button>
-            <button type="button" className="action-button" onClick={onDiscardRecovery}>
+            <button
+              type="button"
+              className="action-button"
+              onClick={onDiscardRecovery}
+              disabled={isRestoringRecovery}
+            >
               Dismiss
             </button>
           </div>

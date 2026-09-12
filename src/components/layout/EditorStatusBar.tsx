@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 
+import { formatTime } from '../../lib/format';
+
 type EditorStatusBarProps = {
   wordCount: number;
   pageCount: number;
@@ -20,13 +22,7 @@ export function EditorStatusBar({
   const formattedLastSaved = useMemo(() => {
     if (isDirty) return 'Unsaved changes';
     if (!lastSavedAt) return 'Not saved yet';
-
-    const savedAt = new Date(lastSavedAt);
-    if (Number.isNaN(savedAt.getTime())) {
-      return `Saved at ${lastSavedAt}`;
-    }
-
-    return `Saved at ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `Saved at ${formatTime(lastSavedAt)}`;
   }, [isDirty, lastSavedAt]);
 
   return (

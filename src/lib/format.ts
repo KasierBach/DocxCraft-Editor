@@ -19,3 +19,12 @@ export function formatDateTime(isoDate: string) {
 
   return date.toLocaleString();
 }
+
+export function formatTime(isoDate: string) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown time';
+  }
+
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}

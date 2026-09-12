@@ -1,0 +1,16 @@
+services:
+  docxcraft-editor:
+    build: .
+    image: ghcr.io/kasierbach/docxcraft-editor
+    ports:
+      - "4175:4175"
+    volumes:
+      - docxcraft-data:/app/data
+    environment:
+      LOG_LEVEL: info
+      # CORS_ORIGIN: "*"        # allow browser clients from other origins
+      # RATE_LIMIT_MAX: "500"   # set to "false" to disable rate limiting
+    restart: unless-stopped
+
+volumes:
+  docxcraft-data:

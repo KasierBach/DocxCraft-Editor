@@ -946,13 +946,13 @@ export default function App() {
     [currentDocumentVersions, documentName, readVersionBuffer, runCommand],
   );
 
-  const handleRestoreRecovery = useCallback(() => {
-    if (!confirmDiscardChanges()) return;
+  const handleRestoreRecovery = useCallback(async () => {
     if (!recoverySnapshot) {
       return;
     }
+    if (!confirmDiscardChanges()) return;
 
-    restoreRecoverySnapshot(recoverySnapshot);
+    await restoreRecoverySnapshot(recoverySnapshot);
   }, [confirmDiscardChanges, recoverySnapshot, restoreRecoverySnapshot]);
 
   const jumpToAnchor = useCallback(
