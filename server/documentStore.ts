@@ -391,6 +391,12 @@ export class FileDocumentStore implements DocumentStorePort {
     return this.toPublicDocumentSummary(touchedDocument);
   }
 
+  /**
+   * Prunes stale versions after `writeIndex` has already committed the
+   * retained set. Removing files only once the index no longer references
+   * them keeps a crash mid-prune from leaving dangling index entries; the
+   * leftover files become harmless orphans instead.
+   */
   private async pruneVersions(index: DocumentIndex, documentId: string) {
     const versions = index.versions
       .filter((version) => version.documentId === documentId)
@@ -402,14 +408,16 @@ export class FileDocumentStore implements DocumentStorePort {
     index.versions = index.versions.filter(
       (version) => version.documentId !== documentId || retained.has(version.id),
     );
-    for (const version of removed) {
-      await rm(this.documentVersionPath(documentId, version.id), { force: true });
-    }
     index.documents = index.documents.map((document) =>
       document.id === documentId
         ? { ...document, versionCount: retained.size }
         : document,
     );
+
+    await this.writeIndex(index);
+    for (const version of removed) {
+      await rm(this.documentVersionPath(documentId, version.id), { force: true });
+    }
   }
 
   private getStoredDocumentOrThrow(index: DocumentIndex, documentId: string) {
