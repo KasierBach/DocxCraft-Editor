@@ -1,3 +1,8 @@
+/* ─── Self-hosted display font (CSP-safe, offline-first) ─── */
+@import '@fontsource/fraunces/600.css';
+@import '@fontsource/fraunces/700.css';
+@import '@fontsource/fraunces/900.css';
+
 /* ─── Base & Tokens ─── */
 @import './styles/base/tokens.css';
 @import './styles/base/reset.css';
@@ -12,6 +17,8 @@
 @import './styles/components/inputs.css';
 @import './styles/components/panels.css';
 @import './styles/components/navigation.css';
+@import './styles/components/login.css';
+@import './styles/components/landing.css';
 @import './styles/components/editor.css';
 @import './styles/components/animations.css';
 @import './styles/components/toasts.css';
