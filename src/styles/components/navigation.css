@@ -111,7 +111,7 @@
 .anchor-button:hover {
   transform: translate(-1px, -1px);
   box-shadow: 3px 3px 0px var(--nb-black);
-  background: var(--nb-grey-50);
+  background: var(--nb-grey-100);
 }
 
 .anchor-button[data-active='true'] {

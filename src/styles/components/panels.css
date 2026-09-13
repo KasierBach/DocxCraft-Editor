@@ -7,7 +7,7 @@
   gap: 12px;
   min-height: 0;
   box-shadow: var(--nb-shadow);
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
 
 .panel h2 {

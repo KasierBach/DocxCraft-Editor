@@ -3,6 +3,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { API_VERSION } from '../server/app.ts';
 import { createSpawnSpec, getApiStatus } from './devLauncher.ts';
 
+// Dev defaults to the full gated experience (landing page + first-run setup).
+// Use `npm run dev:plain` or AUTH_MODE=off for an authless editor.
+if (!process.env.AUTH_MODE) {
+  process.env.AUTH_MODE = 'claim';
+  console.log('[dev] AUTH_MODE=claim (landing page enabled). Override with AUTH_MODE=off.');
+}
+
 const childProcesses: ChildProcess[] = [];
 const EXPECTED_API_VERSION = API_VERSION;
 

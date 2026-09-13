@@ -194,6 +194,14 @@
   background: currentColor;
 }
 
+.toolbar-dropdown__button--signout {
+  color: #b91c1c;
+}
+
+.toolbar-dropdown__button--signout:hover {
+  background: #fee2e2;
+}
+
 .toolbar-dropdown {
   position: absolute;
   top: calc(100% + 8px);

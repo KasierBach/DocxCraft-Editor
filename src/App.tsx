@@ -10,6 +10,9 @@ import { EditorStatusBar } from './components/layout/EditorStatusBar';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { ShortcutHelpModal } from './components/ui/ShortcutHelpModal';
 import { ToastViewport } from './components/ToastViewport';
+import { FirstRunOnboarding } from './components/FirstRunOnboarding';
+import { logout } from './lib/documentApi';
+import { useAuthGate } from './components/AuthGateContext';
 import { createDemoDocument } from './demoDocument';
 import { useAnchors } from './hooks/useAnchors';
 import { useApiStatus } from './hooks/useApiStatus';
@@ -120,6 +123,19 @@ export default function App() {
   const refreshTimerRef = useRef<number | null>(null);
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
+  const { isAuthGated } = useAuthGate();
+
+  // Signing out clears the session cookie; a reload re-runs the auth gate,
+  // which routes back to the landing page.
+  const handleSignOut = useCallback(async () => {
+    try {
+      await logout();
+    } catch {
+      // The reload re-checks the session regardless of the logout result.
+    }
+    window.location.reload();
+  }, []);
+
   const activeParaIdRef = useRef<string | null>(null);
   const anchorsRef = useRef<AnchorTarget[]>([]);
   const lastLibraryErrorRef = useRef<string | null>(null);
@@ -1063,6 +1079,7 @@ export default function App() {
         onPrintPDF={handlePrintPDF}
         editorMode={editorMode}
         onEditorModeChange={setEditorMode}
+        onSignOut={isAuthGated ? handleSignOut : undefined}
       />
 
       {(showSidebar || showInfo) && (
@@ -1188,6 +1205,7 @@ export default function App() {
         onJumpToAnchor={jumpToAnchor}
       />
 
+      <FirstRunOnboarding />
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

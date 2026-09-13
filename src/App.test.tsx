@@ -220,7 +220,7 @@ describe('App', () => {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
-    await user.upload(screen.getByLabelText(/^open$/i), file);
+    await user.upload(screen.getByLabelText(/open \.docx from computer/i), file);
     await openUtilityMenu(user);
     expect(screen.getByRole('menuitem', { name: /reload current document/i })).toBeEnabled();
     await user.click(screen.getByRole('menuitem', { name: /reload current document/i }));

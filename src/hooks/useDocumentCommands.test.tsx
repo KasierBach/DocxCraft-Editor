@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { describeCommandError } from '../lib/errors';
 import { useDocumentCommands } from './useDocumentCommands';
 
 describe('useDocumentCommands', () => {
@@ -92,5 +93,29 @@ describe('useDocumentCommands', () => {
         await result.current.runCommand('Save', () => Promise.resolve('doc-1'));
       }),
     ).rejects.toThrow('toast layer down');
+  });
+});
+
+describe('describeCommandError', () => {
+  it('maps network failures to a plain-language message', () => {
+    expect(describeCommandError(new TypeError('Failed to fetch'), 'Save failed.')).toBe(
+      'Could not reach the server.',
+    );
+    expect(describeCommandError(new Error('NetworkError when attempting to fetch resource.'), 'Save failed.')).toBe(
+      'Could not reach the server.',
+    );
+  });
+
+  it('maps timeouts to a plain-language message', () => {
+    expect(describeCommandError(new DOMException('aborted', 'AbortError'), 'Save failed.')).toBe(
+      'The server took too long to respond.',
+    );
+  });
+
+  it('keeps server-provided messages and falls back for unknown errors', () => {
+    expect(describeCommandError(new Error('Document not found.'), 'Delete failed.')).toBe(
+      'Document not found.',
+    );
+    expect(describeCommandError('nope', 'Save failed.')).toBe('Save failed.');
   });
 });

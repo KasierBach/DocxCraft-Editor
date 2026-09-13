@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { describeCommandError } from '../lib/errors';
+
 import {
   deleteDocument,
   listDocuments,
@@ -85,7 +87,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
       setLibraryError(null);
       return documents;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load saved documents.';
+      const message = describeCommandError(error, 'Failed to load saved documents.');
       setLibraryError(message);
       throw error;
     } finally {
@@ -108,7 +110,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
       setVersionError(null);
       return versions;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load versions.';
+      const message = describeCommandError(error, 'Failed to load versions.');
       setVersionError(message);
       throw error;
     } finally {
@@ -181,7 +183,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         await refreshVersions(savedDocument.id);
         return savedDocument;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to save document.';
+        const message = describeCommandError(error, 'Failed to save document.');
         setLibraryError(message);
         throw error;
       } finally {
@@ -243,7 +245,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         await refreshDocuments();
         return renamedDocument;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to rename document.';
+        const message = describeCommandError(error, 'Failed to rename document.');
         setLibraryError(message);
         throw error;
       }
@@ -264,7 +266,7 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
         await refreshDocuments();
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to delete document.';
+        const message = describeCommandError(error, 'Failed to delete document.');
         setLibraryError(message);
         throw error;
       }

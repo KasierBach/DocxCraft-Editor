@@ -28,6 +28,7 @@ type HeaderProps = {
   onPrintPDF: () => void;
   editorMode: EditorMode;
   onEditorModeChange: (mode: EditorMode) => void;
+  onSignOut?: () => void;
 };
 
 type OpenMenu = 'export' | 'utility' | null;
@@ -75,6 +76,7 @@ function HeaderComponent({
   onPrintPDF,
   editorMode,
   onEditorModeChange,
+  onSignOut,
 }: HeaderProps) {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -315,7 +317,7 @@ function HeaderComponent({
             accept=".docx"
             className="visually-hidden"
             tabIndex={-1}
-            aria-label="Open"
+            aria-label="Open .docx from computer"
             onChange={onFileChange}
           />
 
@@ -461,6 +463,19 @@ function HeaderComponent({
                 >
                   Reload Current Document
                 </button>
+                {onSignOut && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button toolbar-dropdown__button--signout"
+                    onClick={() => {
+                      closeMenus();
+                      onSignOut();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                )}
               </div>
             )}
           </div>

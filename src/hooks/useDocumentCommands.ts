@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 
+import { describeCommandError } from '../lib/errors';
+
 type CommandTone = 'success' | 'error' | 'info';
 
 type PushToast = (tone: CommandTone, message: string) => void;
@@ -36,7 +38,7 @@ export function useDocumentCommands({ pushToast, setStatusMessage }: UseDocument
         pushToast(options?.successTone ?? 'success', message);
         return result;
       } catch (error) {
-        const message = error instanceof Error ? error.message : `${label} failed.`;
+        const message = describeCommandError(error, `${label} failed.`);
         setStatusMessage(options?.failureStatus ?? `${label} failed.`);
         pushToast('error', message);
         return undefined;
