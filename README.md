@@ -14,9 +14,10 @@ Built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), with a N
 
 ## Why DocxCraft?
 
-- **Truly local-first** — documents live on your own disk behind your own Fastify API. No account, no cloud, no telemetry.
-- **Self-host in one command** — a single `docker run` gets you the full editor with versioning, crash recovery, and a responsive UI on any device.
-- **Built like production software** — revision-based conflict detection, zip-bomb-hardened uploads, autosave recovery, a strict-TypedScript codebase with 150+ unit tests, 24 e2e tests, and a hardened CI/CD pipeline.
+- **Your documents never leave your machine.** Edit contracts, résumés, and confidential reports without uploading them to anyone's cloud — no account, no subscription, no telemetry. It's your API, your disk.
+- **Real `.docx` files, zero lock-in.** Documents are stored as native Word files on your own disk — open them in Microsoft Word, LibreOffice, or anything else, anytime. No exports, no conversions, no proprietary database.
+- **Built so you can't lose work.** Autosave backs up unsaved edits to IndexedDB, every save creates a restorable version, and a reload after a crash offers your work back — conflicts are rejected, never silently overwritten.
+- **Self-host in one command, use it anywhere.** One `docker run` on a home server, NAS, or VPS puts the full editor in your browser — desktop, tablet, or phone, with a UI built for each.
 
 ## Features
 
@@ -26,6 +27,8 @@ Built on [`@eigenpal/docx-editor-react`](https://www.docx-editor.dev/), with a N
 - **Crash recovery** — unsaved work is auto-backed-up to IndexedDB and offered for restore after a reload
 - **Command palette, keyboard shortcuts, deep links** — full keyboard-driven workflow (`Ctrl+/` for the cheat sheet)
 - **Responsive everywhere** — three-column desktop workspace; tablet and phone layouts collapse the sidebars into drawers
+- **Optional passphrase auth** — deployed instances show a landing page; the first visit claims the instance by setting a passphrase, later visitors sign in
+- **Onboarding tour** — a three-step welcome walkthrough shown once after first sign-in
 
 <details>
 <summary><strong>Everything else</strong></summary>
@@ -82,6 +85,32 @@ The Fastify server serves the built bundle from `dist/` alongside the API on one
 The Docker image is multi-stage (build → `node:22-slim` runtime running as a non-root user), binds to `0.0.0.0`, includes a container `HEALTHCHECK` against `/api/health`, and is published to GHCR on every `v*` tag with provenance and SBOM attestations.
 
 </details>
+
+### Deploy on a free VM (Oracle Cloud Always Free)
+
+Public deployments get a landing page, first-run passphrase claiming, and automatic HTTPS. `deploy/` contains a compose file that runs the app behind Caddy with Let's Encrypt certificates — using a free `sslip.io` hostname derived from the VM's IP, so no domain purchase is needed.
+
+```bash
+# on the VM (Ubuntu, Docker installed):
+git clone https://github.com/KasierBach/DocxCraft-Editor.git
+cd DocxCraft-Editor/deploy
+
+# Derive the hostname from the VM's public IP (dashes for dots):
+# 140.238.10.20 -> docx-140-238-10-20.sslip.io
+SITE_ADDRESS='docx-140-238-10-20.sslip.io' docker compose up -d
+```
+
+Open `https://docx-<vm-ip-with-dashes>.sslip.io` — the landing page loads with a **"Get started"** button: the first visit claims the instance by setting your passphrase (stored hashed, no recovery — make it memorable). Afterwards the landing page shows **"Sign in"**, and the editor greets you with a one-time onboarding tour. Documents persist in the `docxcraft-data` volume across reboots and redeploys.
+
+**Auth configuration** — auth is off by default (localhost use). Options:
+
+- `AUTH_MODE=claim` — first visitor sets the passphrase; the hash persists in `data/auth.json` (inside the data volume). Best for fresh deployments.
+- `AUTH_PASSPHRASE_HASH` — `scrypt:<salt>:<hash>` from `npm run hash-passphrase -- "your-passphrase"`; pre-seeds the passphrase and disables claiming.
+- `AUTH_PASSPHRASE` — plaintext convenience, hashed at boot.
+
+When auth is active, all `/api/*` routes except `session`/`login`/`logout`/`setup` require an HTTP-only session cookie (7-day expiry, `SameSite=Strict`, `Secure` behind HTTPS). Login and setup attempts are rate-limited to 5 per minute independently of the global API limit.
+
+**Local development and the landing page** — `npm run dev` starts the full gated experience: the landing page, first-run passphrase setup, and sign-in. Claim the instance once (the hash persists in `data/auth.json`, the session cookie lasts 7 days); delete `data/auth.json` to reset and see the setup flow again. Use `npm run dev:plain` (or `AUTH_MODE=off`) to skip auth and open the editor directly.
 
 <details>
 <summary><strong>Project structure</strong></summary>
@@ -146,7 +175,8 @@ e2e/                       — Playwright browser + API tests
 
 | Script | Description |
 |---|---|
-| `npm run dev` | Start frontend + API together |
+| `npm run dev` | Start frontend + API together (full experience with landing page and passphrase auth) |
+| `npm run dev:plain` | Start without auth — the editor opens directly |
 | `npm run dev:web` | Start Vite frontend only |
 | `npm run dev:api` | Start Fastify API only |
 | `npm run build` | Build production bundle |
@@ -226,7 +256,7 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 
 - **Unit** (`npm test`) — jsdom environment, `@testing-library/react`, per-module store/api mocks; see the run output for the current count
 - **Coverage** (`npm run test:coverage`) — thresholds enforced (lines/statements/functions 70%, branches 58%)
-- **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, responsive layout checks at 1920→320 px viewports, and accessibility (axe) checks. Playwright starts both servers automatically.
+- **E2E** (`npm run test:e2e`) — Playwright with Chromium, Firefox, WebKit, and mobile Chromium projects; includes API lifecycle, document workflow, theme persistence, responsive layout checks at 1920→320 px viewports, and accessibility (axe) checks. Playwright starts both servers itself (auth disabled, so stop any running `npm run dev` first).
 - **CI** (`.github/workflows/ci.yml`) — lint, typecheck, coverage, e2e, and build on every push and PR (nightly on `main`); CodeQL analysis, Dependabot updates, and Docker/GHCR publishing run in their own workflows. Releasing a `v*` tag re-verifies the full suite and attaches the bundle, checksums, and SBOM.
 
 </details>

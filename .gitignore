@@ -42,3 +42,6 @@ docs/
 *.njsproj
 *.sln
 *.sw?
+
+# Local runtime state (hashed passphrase + document index)
+/data/
