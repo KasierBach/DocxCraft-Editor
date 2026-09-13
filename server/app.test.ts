@@ -1,6 +1,8 @@
 // @vitest-environment node
 
 import { mkdtemp, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,6 +10,8 @@ import JSZip from 'jszip';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { API_VERSION, buildDocumentApiApp } from './app.ts';
+import { hashPassphrase } from './auth.ts';
+import { createFileAuthStateStore } from './authStore.ts';
 import { createDocumentStore } from './documentStore.ts';
 
 async function docxPayload(bytes: number[]) {
@@ -38,6 +42,318 @@ describe('buildDocumentApiApp', () => {
     await app.ready();
     return app;
   }
+
+  describe('passphrase auth', () => {
+    async function createAuthApp() {
+      const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-auth-'));
+      tempDirectories.push(storageDirectory);
+
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      const app = buildDocumentApiApp({
+        store,
+        authPassphraseHash: hashPassphrase('correct horse battery staple'),
+        rateLimitMaxRequests: false,
+      });
+      await app.ready();
+      return app;
+    }
+
+    function loginRequest(app: Awaited<ReturnType<typeof createAuthApp>>, passphrase: string) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'content-type': 'application/json' },
+        payload: JSON.stringify({ passphrase }),
+      });
+    }
+
+    it('rejects protected routes without a session', async () => {
+      const app = await createAuthApp();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/api/documents' });
+        expect(response.statusCode).toBe(401);
+        expect(response.json<{ message: string }>().message).toBe('Authentication required.');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('logs in with the correct passphrase and unlocks protected routes', async () => {
+      const app = await createAuthApp();
+
+      try {
+        const login = await loginRequest(app, 'correct horse battery staple');
+        expect(login.statusCode).toBe(204);
+
+        const cookie = login.headers['set-cookie'];
+        expect(String(cookie)).toContain('HttpOnly');
+        expect(String(cookie)).toContain('SameSite=Strict');
+
+        const documents = await app.inject({
+          method: 'GET',
+          url: '/api/documents',
+          headers: { cookie },
+        });
+        expect(documents.statusCode).toBe(200);
+        expect(documents.json<unknown[]>()).toEqual([]);
+
+        const session = await app.inject({
+          method: 'GET',
+          url: '/api/auth/session',
+          headers: { cookie },
+        });
+        expect(session.statusCode).toBe(200);
+        expect(
+          session.json<{ authRequired: boolean; needsSetup: boolean; authenticated: boolean }>(),
+        ).toEqual({
+          authRequired: true,
+          needsSetup: false,
+          authenticated: true,
+        });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('rejects a wrong passphrase and reports the session state', async () => {
+      const app = await createAuthApp();
+
+      try {
+        const login = await loginRequest(app, 'wrong passphrase');
+        expect(login.statusCode).toBe(401);
+
+        const session = await app.inject({ method: 'GET', url: '/api/auth/session' });
+        expect(
+          session.json<{ authRequired: boolean; needsSetup: boolean; authenticated: boolean }>(),
+        ).toEqual({
+          authRequired: true,
+          needsSetup: false,
+          authenticated: false,
+        });
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('clears the session cookie on logout', async () => {
+      const app = await createAuthApp();
+
+      try {
+        const login = await loginRequest(app, 'correct horse battery staple');
+        const cookie = login.headers['set-cookie'];
+
+        const logout = await app.inject({
+          method: 'POST',
+          url: '/api/auth/logout',
+          headers: { cookie },
+        });
+        expect(logout.statusCode).toBe(204);
+
+        const clearCookie = String(logout.headers['set-cookie']);
+        expect(clearCookie).toContain('Max-Age=0');
+
+        // A client that honours the cleared cookie (any real browser) is
+        // locked out; the stateless token itself is not revocable server-side.
+        const documents = await app.inject({ method: 'GET', url: '/api/documents' });
+        expect(documents.statusCode).toBe(401);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('rejects tampered session tokens', async () => {
+      const app = await createAuthApp();
+
+      try {
+        const login = await loginRequest(app, 'correct horse battery staple');
+        const cookie = String(login.headers['set-cookie']).split(';')[0];
+        const [name, token] = cookie.split('=');
+        const tampered = `${name}=${token.split('.')[0]}.deadbeef`;
+
+        const documents = await app.inject({
+          method: 'GET',
+          url: '/api/documents',
+          headers: { cookie: tampered },
+        });
+        expect(documents.statusCode).toBe(401);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('rate limits repeated failed logins', async () => {
+      const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-auth-rl-'));
+      tempDirectories.push(storageDirectory);
+
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      // The rate-limit plugin must be registered for the route-level login
+      // limit to engage, so this app keeps the (generous) global default.
+      const app = buildDocumentApiApp({
+        store,
+        authPassphraseHash: hashPassphrase('correct horse battery staple'),
+      });
+      await app.ready();
+
+      try {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const login = await loginRequest(app, 'wrong passphrase');
+          expect(login.statusCode).toBe(401);
+        }
+
+        const blocked = await loginRequest(app, 'correct horse battery staple');
+        expect(blocked.statusCode).toBe(429);
+      } finally {
+        await app.close();
+      }
+    });
+  });
+
+  describe('instance claiming (AUTH_MODE=claim)', () => {
+    function loginRequest(app: FastifyInstance, passphrase: string) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'content-type': 'application/json' },
+        payload: JSON.stringify({ passphrase }),
+      });
+    }
+
+    function createClaimApp() {
+      const storageDirectory = path.join(tmpdir(), `docx-editor-claim-${randomUUID()}`);
+      tempDirectories.push(storageDirectory);
+
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      const authStateStore = createFileAuthStateStore({
+        filePath: path.join(storageDirectory, '..', `claim-${randomUUID()}.json`),
+      });
+      const app = buildDocumentApiApp({
+        store,
+        authStateStore,
+        allowAuthClaim: true,
+        rateLimitMaxRequests: false,
+      });
+      return { app, authStateStore };
+    }
+
+    it('reports setup pending before claiming and locks protected routes', async () => {
+      const { app } = createClaimApp();
+      await app.ready();
+
+      try {
+        const session = await app.inject({ method: 'GET', url: '/api/auth/session' });
+        expect(session.json<{ authRequired: boolean; needsSetup: boolean }>().needsSetup).toBe(
+          true,
+        );
+
+        const documents = await app.inject({ method: 'GET', url: '/api/documents' });
+        expect(documents.statusCode).toBe(401);
+
+        const login = await loginRequest(app, 'anything');
+        expect(login.statusCode).toBe(409);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('claims the instance, signs in, and unlocks protected routes', async () => {
+      const { app } = createClaimApp();
+      await app.ready();
+
+      try {
+        const setup = await app.inject({
+          method: 'POST',
+          url: '/api/auth/setup',
+          headers: { 'content-type': 'application/json' },
+          payload: JSON.stringify({ passphrase: 'my-long-passphrase' }),
+        });
+        expect(setup.statusCode).toBe(204);
+
+        const cookie = setup.headers['set-cookie'];
+        expect(String(cookie)).toContain('HttpOnly');
+
+        const session = await app.inject({
+          method: 'GET',
+          url: '/api/auth/session',
+          headers: { cookie },
+        });
+        expect(session.json<{ authRequired: boolean; needsSetup: boolean; authenticated: boolean }>()).toEqual({
+          authRequired: true,
+          needsSetup: false,
+          authenticated: true,
+        });
+
+        const documents = await app.inject({
+          method: 'GET',
+          url: '/api/documents',
+          headers: { cookie },
+        });
+        expect(documents.statusCode).toBe(200);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('rejects weak passphrases and refuses double claiming', async () => {
+      const { app } = createClaimApp();
+      await app.ready();
+
+      try {
+        const weak = await app.inject({
+          method: 'POST',
+          url: '/api/auth/setup',
+          headers: { 'content-type': 'application/json' },
+          payload: JSON.stringify({ passphrase: 'short' }),
+        });
+        expect(weak.statusCode).toBe(400);
+
+        const setup = await app.inject({
+          method: 'POST',
+          url: '/api/auth/setup',
+          headers: { 'content-type': 'application/json' },
+          payload: JSON.stringify({ passphrase: 'my-long-passphrase' }),
+        });
+        expect(setup.statusCode).toBe(204);
+
+        const secondClaim = await app.inject({
+          method: 'POST',
+          url: '/api/auth/setup',
+          headers: { 'content-type': 'application/json' },
+          payload: JSON.stringify({ passphrase: 'other-long-passphrase' }),
+        });
+        expect(secondClaim.statusCode).toBe(409);
+
+        const session = await app.inject({ method: 'GET', url: '/api/auth/session' });
+        expect(session.json<{ needsSetup: boolean }>().needsSetup).toBe(false);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('does not expose the setup route when claiming is disabled', async () => {
+      const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-noclaim-'));
+      tempDirectories.push(storageDirectory);
+
+      const store = createDocumentStore({ rootDirectory: storageDirectory });
+      const app = buildDocumentApiApp({
+        store,
+        authPassphraseHash: hashPassphrase('correct horse battery staple'),
+      });
+      await app.ready();
+
+      try {
+        const setup = await app.inject({
+          method: 'POST',
+          url: '/api/auth/setup',
+          headers: { 'content-type': 'application/json' },
+          payload: JSON.stringify({ passphrase: 'my-long-passphrase' }),
+        });
+        expect(setup.statusCode).toBe(404);
+      } finally {
+        await app.close();
+      }
+    });
+  });
 
   it('creates documents, appends versions, and serves latest and historical content', async () => {
     const app = await createApp();

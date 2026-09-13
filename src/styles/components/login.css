@@ -1,0 +1,294 @@
+/* The pre-auth screens share the landing's print-studio identity: cream
+   paper, riso inks, Fraunces titles — always light, independent of theme.
+   Scoped variables keep the main app on the global tokens. */
+.login-screen,
+.policy-page {
+  --nb-black: #1c1917;
+  --nb-white: #fffdf7;
+  --nb-grey-100: #faf5ec;
+  --nb-grey-200: #e7dfcd;
+  --nb-grey-300: #6f675c;
+  --nb-accent: #ffd23f;
+  --nb-blue: #2b4bd6;
+  --nb-pink: #ff90c2;
+  --nb-font-display: 'Fraunces', Georgia, serif;
+
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--nb-grey-100);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"),
+    radial-gradient(circle at 2px 2px, var(--nb-grey-200) 1px, transparent 0);
+  background-size: 140px 140px, 24px 24px;
+  color: var(--nb-black);
+}
+
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(420px, 100%);
+  padding: 30px;
+  background: var(--nb-white);
+  border: 2px solid var(--nb-black);
+  box-shadow: 4px 4px 0 var(--nb-blue);
+}
+
+.login-card__eyebrow {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--nb-grey-300);
+}
+
+.login-card__title {
+  margin: 0;
+  font-family: var(--nb-font-display);
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--nb-black);
+}
+
+.login-card__copy {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--nb-grey-300);
+}
+
+.login-card__back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: -4px 0 -2px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--nb-blue);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.login-card__input {
+  border: var(--nb-border) solid var(--nb-black);
+  background: var(--nb-white);
+  padding: 13px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--nb-black);
+  outline: none;
+}
+
+.login-card__input:focus-visible {
+  box-shadow: var(--nb-shadow);
+}
+
+.login-card__error {
+  margin: 0;
+  padding: 9px 12px;
+  border: 2px solid var(--nb-black);
+  background: var(--nb-accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--nb-black);
+}
+
+.login-card__hint {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--nb-grey-300);
+}
+
+/* The primary action inside auth cards is the print-studio yellow button
+   with a riso-blue offset shadow. */
+.login-card .action-button--primary {
+  min-height: 46px;
+  border: 2px solid var(--nb-black);
+  background: var(--nb-accent) !important;
+  color: var(--nb-black);
+  font-size: 0.92rem;
+  box-shadow: 4px 4px 0 var(--nb-blue);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.login-card .action-button--primary:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--nb-blue);
+  background: var(--nb-accent) !important;
+}
+
+.login-card .action-button--primary:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 var(--nb-blue);
+}
+
+.login-card .action-button--primary:disabled {
+  border-color: var(--nb-grey-200);
+  background: var(--nb-grey-100) !important;
+  color: var(--nb-grey-300);
+  box-shadow: none;
+}
+
+/* ─── Onboarding (inside the app shell) ─── */
+
+.onboarding__step-count {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--nb-grey-300);
+}
+
+.onboarding__title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.onboarding__copy {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--nb-grey-300);
+}
+
+/* ─── Policy pages ─── */
+
+.policy-page {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px 60px;
+}
+
+.policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(720px, 100%);
+  padding: 30px;
+  background: var(--nb-white);
+  border: 2px solid var(--nb-black);
+  box-shadow: 4px 4px 0 var(--nb-pink);
+}
+
+.policy-card__title {
+  margin: 0;
+  font-family: var(--nb-font-display);
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--nb-black);
+}
+
+.policy-card__meta {
+  margin: 0 0 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--nb-grey-300);
+}
+
+.policy-card section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.policy-card section + section {
+  margin-top: 16px;
+}
+
+.policy-card h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--nb-black);
+}
+
+.policy-card p,
+.policy-card li {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--nb-grey-300);
+}
+
+.policy-card ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.policy-card__back {
+  align-self: flex-start;
+  margin-top: 12px;
+  min-height: 44px;
+}
+
+/* --- Docs & changelog pages --- */
+
+.policy-card--docs {
+  width: min(900px, 100%);
+}
+
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+
+.docs-table th,
+.docs-table td {
+  padding: 8px 10px;
+  border: 2px solid var(--nb-black);
+  text-align: left;
+  font-size: 0.82rem;
+  color: var(--nb-grey-300);
+  vertical-align: top;
+}
+
+.docs-table th {
+  background: var(--nb-grey-100);
+  color: var(--nb-black);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.docs-table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  color: var(--nb-black);
+  white-space: nowrap;
+}
+
+.policy-link {
+  color: var(--nb-blue);
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.policy-link:hover {
+  color: var(--nb-black);
+}
+
+.policy-card .landing-changelog {
+  margin-top: 6px;
+}
+
+.policy-card .landing-release {
+  box-shadow: 4px 4px 0 var(--nb-pink);
+}

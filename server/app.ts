@@ -10,7 +10,19 @@ import { z } from 'zod';
 
 import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
 import { validateDocx } from './docxValidation.ts';
+import type { AuthStateStore } from './authStore.ts';
 import type { DocumentStorePort } from './types.ts';
+import {
+  createClearCookie,
+  createSessionCookie,
+  createSessionToken,
+  hashPassphrase,
+  LOGIN_RATE_LIMIT_MAX,
+  LOGIN_RATE_LIMIT_WINDOW_MS,
+  readSessionCookie,
+  verifyPassphrase,
+  verifySessionToken,
+} from './auth.ts';
 
 export const API_VERSION = '2026-05-25-fastify-ts';
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
@@ -53,6 +65,21 @@ const documentContentQuerySchema = z.object({
     .optional()
     .transform((value) => value === 'true'),
 });
+
+const loginBodySchema = z.object({
+  passphrase: z.string().min(1).max(1024),
+});
+
+const setupBodySchema = z.object({
+  passphrase: z.string().min(8).max(1024),
+});
+
+const PUBLIC_AUTH_ROUTES = new Set([
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/session',
+  '/api/auth/setup',
+]);
 
 class RequestValidationError extends Error {
   constructor() {
@@ -137,6 +164,9 @@ export function buildDocumentApiApp({
   rateLimitMaxRequests = RATE_LIMIT_MAX_REQUESTS,
   rateLimitTimeWindowMs = RATE_LIMIT_TIME_WINDOW_MS,
   staticDir,
+  authPassphraseHash,
+  authStateStore,
+  allowAuthClaim = false,
 }: {
   store: DocumentStorePort;
   logger?: boolean | Record<string, unknown>;
@@ -144,6 +174,9 @@ export function buildDocumentApiApp({
   rateLimitMaxRequests?: number | false;
   rateLimitTimeWindowMs?: number;
   staticDir?: string;
+  authPassphraseHash?: string;
+  authStateStore?: AuthStateStore;
+  allowAuthClaim?: boolean;
 }): FastifyInstance {
   const app = Fastify({
     bodyLimit: MAX_DOCUMENT_BYTES,
@@ -199,6 +232,10 @@ export function buildDocumentApiApp({
     });
   }
 
+  const resolveAuthPassphraseHash = (): string | undefined =>
+    authPassphraseHash ?? authStateStore?.read();
+  const isAuthEnabled = Boolean(authPassphraseHash || allowAuthClaim || authStateStore);
+
   void app.register(async (scope) => {
     if (corsOrigin !== undefined) {
       await scope.register(cors, {
@@ -210,6 +247,125 @@ export function buildDocumentApiApp({
       await scope.register(rateLimit, {
         max: rateLimitMaxRequests,
         timeWindow: rateLimitTimeWindowMs,
+      });
+    }
+
+    scope.get('/api/auth/session', async (request) => {
+      if (!isAuthEnabled) {
+        return { authRequired: false, needsSetup: false, authenticated: true };
+      }
+
+      const currentHash = resolveAuthPassphraseHash();
+      const needsSetup = allowAuthClaim && !currentHash;
+      return {
+        authRequired: true,
+        needsSetup,
+        authenticated:
+          !needsSetup && currentHash
+            ? verifySessionToken(
+                readSessionCookie(request.headers as Record<string, unknown>),
+                currentHash,
+              )
+            : false,
+      };
+    });
+
+    if (isAuthEnabled) {
+      // Serialized so two racing visitors cannot both claim the instance.
+      let claimTask: Promise<void> | null = null;
+
+      scope.post(
+        '/api/auth/login',
+        {
+          config: {
+            rateLimit: {
+              max: LOGIN_RATE_LIMIT_MAX,
+              timeWindow: LOGIN_RATE_LIMIT_WINDOW_MS,
+            },
+          },
+        },
+        async (request, reply) => {
+          const body = parseWithSchema(loginBodySchema, request.body);
+          const currentHash = resolveAuthPassphraseHash();
+          if (!currentHash) {
+            return reply.code(409).send({ message: 'Setup required.' });
+          }
+          if (!verifyPassphrase(body.passphrase, currentHash)) {
+            return reply.code(401).send({ message: 'Incorrect passphrase.' });
+          }
+
+          const token = createSessionToken(currentHash);
+          reply.header(
+            'set-cookie',
+            createSessionCookie(token, request.headers as Record<string, unknown>),
+          );
+          return reply.code(204).send();
+        },
+      );
+
+      scope.post('/api/auth/logout', async (_request, reply) => {
+        reply.header('set-cookie', createClearCookie());
+        return reply.code(204).send();
+      });
+
+      scope.post(
+        '/api/auth/setup',
+        {
+          config: {
+            rateLimit: {
+              max: LOGIN_RATE_LIMIT_MAX,
+              timeWindow: LOGIN_RATE_LIMIT_WINDOW_MS,
+            },
+          },
+        },
+        async (request, reply) => {
+          if (!allowAuthClaim) {
+            return reply.code(404).send({ message: 'Route not found.' });
+          }
+
+          const body = parseWithSchema(setupBodySchema, request.body);
+          if (resolveAuthPassphraseHash()) {
+            return reply.code(409).send({ message: 'This instance is already claimed.' });
+          }
+          if (!authStateStore) {
+            return reply.code(500).send({ message: 'Auth state storage is unavailable.' });
+          }
+
+          const newHash = hashPassphrase(body.passphrase);
+          const claim = async () => {
+            await authStateStore.save(newHash);
+          };
+          claimTask = (claimTask ?? Promise.resolve()).then(claim, claim);
+
+          try {
+            await claimTask;
+          } catch {
+            return reply.code(500).send({ message: 'Failed to store the passphrase.' });
+          } finally {
+            claimTask = null;
+          }
+
+          const token = createSessionToken(newHash);
+          reply.header(
+            'set-cookie',
+            createSessionCookie(token, request.headers as Record<string, unknown>),
+          );
+          return reply.code(204).send();
+        },
+      );
+
+      // Fastify scope hooks apply to every route in the scope regardless of
+      // registration order, so public auth routes are exempted explicitly.
+      scope.addHook('preHandler', async (request, reply) => {
+        if (PUBLIC_AUTH_ROUTES.has(request.routeOptions?.url ?? '')) {
+          return;
+        }
+
+        const currentHash = resolveAuthPassphraseHash();
+        const token = readSessionCookie(request.headers as Record<string, unknown>);
+        if (!currentHash || !verifySessionToken(token, currentHash)) {
+          return reply.code(401).send({ message: 'Authentication required.' });
+        }
       });
     }
 

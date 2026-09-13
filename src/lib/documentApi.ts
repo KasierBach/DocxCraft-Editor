@@ -95,6 +95,52 @@ async function dedupeRequest<T>(key: string, fetcher: () => Promise<T>): Promise
   return promise;
 }
 
+export type AuthSession = {
+  authRequired: boolean;
+  needsSetup: boolean;
+  authenticated: boolean;
+};
+
+export async function readAuthSession() {
+  const response = await fetch('/api/auth/session', withRequestTimeout());
+  return readJson<AuthSession>(response);
+}
+
+export async function loginWithPassphrase(passphrase: string) {
+  const response = await fetch('/api/auth/login', withRequestTimeout({
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ passphrase }),
+  }));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+}
+
+export async function claimInstanceWithPassphrase(passphrase: string) {
+  const response = await fetch('/api/auth/setup', withRequestTimeout({
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ passphrase }),
+  }));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+}
+
+export async function logout() {
+  const response = await fetch('/api/auth/logout', withRequestTimeout({ method: 'POST' }));
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+}
+
 export async function listDocuments() {
   return dedupeRequest('list-documents', async () => {
     const response = await fetch(DOCUMENTS_API_PATH, withRequestTimeout());
