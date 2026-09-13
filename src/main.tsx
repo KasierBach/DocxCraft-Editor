@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 
 import '@eigenpal/docx-editor-react/styles.css';
 import App from './App';
-import { AuthGate } from './components/AuthGate';
+import { AuthGate } from './features/auth/AuthGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const rootElement = document.getElementById('app');
