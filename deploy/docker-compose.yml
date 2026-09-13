@@ -1,0 +1,38 @@
+services:
+  app:
+    image: ghcr.io/kasierbach/docxcraft-editor:latest # use :edge before the first v* release
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      # First visitor sets the passphrase (instance claiming). The hash is
+      # persisted in the docxcraft-data volume. Alternatively pre-seed
+      # AUTH_PASSPHRASE_HASH from `npm run hash-passphrase`.
+      AUTH_MODE: claim
+    volumes:
+      - docxcraft-data:/app/data
+    expose:
+      - "4175"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Derive the free hostname from the VM's public IP, e.g. IP 140.238.10.20
+      # becomes docx-140-238-10-20.sslip.io, which resolves back to the VM and
+      # lets Caddy issue a real Let's Encrypt certificate with no domain.
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS, e.g. docx-<vm-ip-with-dashes>.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  docxcraft-data:
+  caddy-data:
+  caddy-config:
