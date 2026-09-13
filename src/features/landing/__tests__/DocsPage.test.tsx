@@ -14,6 +14,8 @@ describe('DocsPage', () => {
     expect(screen.getByRole('heading', { name: /keyboard shortcuts/i })).toBeInTheDocument();
     expect(screen.getByText(/docker run/)).toBeInTheDocument();
     expect(screen.getByText('AUTH_MODE')).toBeInTheDocument();
+    expect(screen.getByText('AUTH_STATE_FILE')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /getting help/i })).toBeInTheDocument();
     expect(screen.getByText('Ctrl + P')).toBeInTheDocument();
   });
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SavedDocumentSummary } from '../../lib/documentApi';
 import { useModalDialog } from '../../hooks/useModalDialog';
+import { useTranslation } from '../../i18n';
 
 type CommandAction = {
   id: string;
@@ -35,6 +36,7 @@ export function CommandPalette({
   onOpenDocument,
   onJumpToAnchor,
 }: CommandPaletteProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -57,7 +59,7 @@ export function CommandPalette({
         id: document.id,
         label: document.name,
         type: 'document',
-        section: 'Documents',
+        section: t('palette.documents'),
       }));
     const anchorResults: CommandResult[] = anchors
       .filter((anchor) => anchor.label.toLowerCase().includes(normalizedQuery))
@@ -66,11 +68,11 @@ export function CommandPalette({
         id: anchor.id,
         label: anchor.label,
         type: 'anchor',
-        section: 'Outline',
+        section: t('palette.outline'),
       }));
 
     return [...actionResults, ...documentResults, ...anchorResults];
-  }, [actions, anchors, documents, query]);
+  }, [actions, anchors, documents, query, t]);
 
   const handleSelect = useCallback(
     (item: CommandResult) => {
@@ -143,18 +145,18 @@ export function CommandPalette({
         }}
       >
         <h2 id="command-palette-title" className="visually-hidden">
-          Command palette
+          {t('palette.title')}
         </h2>
         <div className="command-palette__input-wrapper">
           <span className="command-palette__icon" aria-hidden="true">/</span>
           <input
             ref={inputRef}
             className="command-palette__input"
-            placeholder="Search documents, outline, or commands"
+            placeholder={t('palette.searchPlaceholder')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             role="combobox"
-            aria-label="Search commands"
+            aria-label={t('palette.searchLabel')}
             aria-autocomplete="list"
             aria-controls="command-palette-results"
             aria-activedescendant={activeOptionId}
@@ -165,7 +167,7 @@ export function CommandPalette({
         <div className="command-palette__results">
           {filteredResults.length === 0 ? (
             <p className="command-palette__empty" aria-live="polite">
-              No results for &quot;{query}&quot;
+              {t('palette.empty', { query })}
             </p>
           ) : (
             <div id="command-palette-results" className="command-palette__list" role="listbox">
@@ -193,9 +195,9 @@ export function CommandPalette({
         </div>
 
         <div className="command-palette__footer" aria-hidden="true">
-          <span>Arrow keys navigate</span>
-          <span>Enter selects</span>
-          <span>Esc closes</span>
+          <span>{t('palette.navHint')}</span>
+          <span>{t('palette.selectHint')}</span>
+          <span>{t('palette.closeHint')}</span>
         </div>
       </section>
     </div>

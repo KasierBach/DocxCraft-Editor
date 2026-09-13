@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { AuthGate } from '../AuthGate';
@@ -17,14 +18,24 @@ vi.mock('../LoginScreen', () => ({ LoginScreen: () => <div data-testid="login" /
 vi.mock('../SetupScreen', () => ({ SetupScreen: () => <div data-testid="setup" /> }));
 vi.mock('../../landing/PrivacyPolicy', () => ({ PrivacyPolicy: () => <div /> }));
 vi.mock('../../landing/TermsOfUse', () => ({ TermsOfUse: () => <div /> }));
-vi.mock('../../landing/DocsPage', () => ({ DocsPage: () => <div /> }));
+vi.mock('../../landing/DocsPage', () => ({ DocsPage: () => <div data-testid="docs" /> }));
 vi.mock('../../landing/ChangelogPage', () => ({ ChangelogPage: () => <div /> }));
 
 import { readAuthSession } from '../../../lib/documentApi';
 
 function Probe() {
-  const { isAuthGated } = useAuthGate();
-  return <span data-testid="probe">{isAuthGated ? 'gated' : 'open'}</span>;
+  const { isAuthGated, openPage, closePage } = useAuthGate();
+  return (
+    <div>
+      <span data-testid="probe">{isAuthGated ? 'gated' : 'open'}</span>
+      <button type="button" onClick={() => openPage('docs')}>
+        open docs
+      </button>
+      <button type="button" onClick={closePage}>
+        close page
+      </button>
+    </div>
+  );
 }
 
 function renderGate() {
@@ -97,5 +108,28 @@ describe('AuthGate', () => {
     renderGate();
 
     expect(await screen.findByTestId('probe')).toHaveTextContent('gated');
+  });
+
+  it('opens reference pages over the running app and closes them with Escape', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: true,
+      needsSetup: false,
+      authenticated: true,
+    });
+    const user = userEvent.setup();
+
+    renderGate();
+    await screen.findByTestId('probe');
+
+    await user.click(screen.getByRole('button', { name: /open docs/i }));
+
+    expect(screen.getByTestId('docs')).toBeInTheDocument();
+    // The app stays mounted underneath the overlay.
+    expect(screen.getByTestId('probe')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByTestId('docs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('probe')).toBeInTheDocument();
   });
 });

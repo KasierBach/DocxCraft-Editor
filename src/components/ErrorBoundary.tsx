@@ -1,5 +1,7 @@
 import { Component, type ReactNode } from 'react';
 
+import { I18nContext, type I18nContextValue } from '../i18n';
+
 type ErrorBoundaryProps = {
   children: ReactNode;
 };
@@ -10,6 +12,9 @@ type ErrorBoundaryState = {
 };
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  static contextType = I18nContext;
+  declare context: I18nContextValue;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -29,12 +34,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (this.state.hasError) {
+      const { t } = this.context;
       return (
         <div className="error-boundary">
           <div className="error-boundary__content">
-            <h2 className="error-boundary__title">Something went wrong</h2>
+            <h2 className="error-boundary__title">{t('errors.boundaryTitle')}</h2>
             <p className="error-boundary__message">
-              {this.state.error?.message ?? 'An unexpected error occurred.'}
+              {this.state.error?.message ?? t('errors.boundaryFallback')}
             </p>
             <div className="error-boundary__actions">
               <button
@@ -42,14 +48,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 className="btn btn--primary"
                 onClick={this.handleRetry}
               >
-                Try again
+                {t('errors.tryAgain')}
               </button>
               <button
                 type="button"
                 className="btn btn--secondary"
                 onClick={() => window.location.reload()}
               >
-                Reload page
+                {t('errors.reloadPage')}
               </button>
             </div>
           </div>

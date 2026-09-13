@@ -12,6 +12,9 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
   const onLoadSample = vi.fn();
   const onReload = vi.fn();
   const onToggleTheme = vi.fn();
+  const onShowDocs = vi.fn();
+  const onShowChangelog = vi.fn();
+  const onShowHome = vi.fn();
   const user = userEvent.setup();
 
   render(
@@ -41,6 +44,9 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
         onPrintPDF={onPrintPDF}
         editorMode="editing"
         onEditorModeChange={vi.fn()}
+        onShowDocs={onShowDocs}
+        onShowChangelog={onShowChangelog}
+        onShowHome={onShowHome}
       />
       <button type="button">Outside</button>
     </div>,
@@ -53,6 +59,9 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
     onPrintPDF,
     onReload,
     onSaveAs,
+    onShowChangelog,
+    onShowDocs,
+    onShowHome,
     onToggleTheme,
     user,
   };
@@ -108,6 +117,24 @@ describe('Header action menus', () => {
     await user.click(moreButton);
     await user.click(screen.getByRole('menuitem', { name: /reload current document/i }));
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes documentation, changelog and the home page in the More actions menu', async () => {
+    const { onShowChangelog, onShowDocs, onShowHome, user } = renderHeader();
+    const moreButton = screen.getByRole('button', { name: /more actions/i });
+
+    await user.click(moreButton);
+    expect(screen.getByText(/^help$/i, { selector: 'h4' })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: /^documentation$/i }));
+    expect(onShowDocs).toHaveBeenCalledTimes(1);
+
+    await user.click(moreButton);
+    await user.click(screen.getByRole('menuitem', { name: /^changelog$/i }));
+    expect(onShowChangelog).toHaveBeenCalledTimes(1);
+
+    await user.click(moreButton);
+    await user.click(screen.getByRole('menuitem', { name: /home page/i }));
+    expect(onShowHome).toHaveBeenCalledTimes(1);
   });
 
   it('disables reload in the utility menu when reloading is unavailable', async () => {

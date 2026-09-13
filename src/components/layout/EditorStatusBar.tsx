@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { formatTime } from '../../lib/format';
+import { useTranslation } from '../../i18n';
 
 type EditorStatusBarProps = {
   wordCount: number;
@@ -19,22 +20,25 @@ export function EditorStatusBar({
   isDirty,
   onShowShortcuts,
 }: EditorStatusBarProps) {
+  const { t } = useTranslation();
   const formattedLastSaved = useMemo(() => {
-    if (isDirty) return 'Unsaved changes';
-    if (!lastSavedAt) return 'Not saved yet';
-    return `Saved at ${formatTime(lastSavedAt)}`;
-  }, [isDirty, lastSavedAt]);
+    if (isDirty) return t('statusBar.unsavedChanges');
+    if (!lastSavedAt) return t('statusBar.notSavedYet');
+    return t('statusBar.savedAt', { time: formatTime(lastSavedAt) });
+  }, [isDirty, lastSavedAt, t]);
 
   return (
     <footer className="editor-status-bar">
       <div className="editor-status-bar__left">
         <div className="status-segment">
-          <span className="status-label">Words</span>
+          <span className="status-label">{t('statusBar.words')}</span>
           <span className="status-value">{wordCount.toLocaleString()}</span>
         </div>
         <div className="status-segment">
-          <span className="status-label">{currentPage !== null ? `Page ${currentPage}` : 'Page'}</span>
-          <span className="status-label">of</span>
+          <span className="status-label">
+            {currentPage !== null ? t('statusBar.pageNumber', { page: currentPage }) : t('statusBar.page')}
+          </span>
+          <span className="status-label">{t('statusBar.of')}</span>
           <span className="status-value">{pageCount}</span>
         </div>
       </div>
@@ -53,10 +57,10 @@ export function EditorStatusBar({
           type="button"
           className="status-button"
           onClick={onShowShortcuts}
-          title="See keyboard shortcuts"
+          title={t('statusBar.shortcutsTitle')}
         >
           <span className="status-icon" aria-hidden="true">⌨️</span>
-          <span className="status-button__label">Shortcuts</span>
+          <span className="status-button__label">{t('statusBar.shortcuts')}</span>
         </button>
       </div>
     </footer>

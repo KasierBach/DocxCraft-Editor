@@ -1,6 +1,7 @@
 import { Fragment, useRef } from 'react';
 
 import { useModalDialog } from '../../hooks/useModalDialog';
+import { useTranslation } from '../../i18n';
 
 export type ShortcutDisplayEntry = {
   keys: string[];
@@ -17,6 +18,7 @@ type ShortcutHelpModalProps = {
 };
 
 export function ShortcutHelpModal({ isOpen, onClose, shortcuts }: ShortcutHelpModalProps) {
+  const { t } = useTranslation();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useModalDialog({
@@ -57,13 +59,13 @@ export function ShortcutHelpModal({ isOpen, onClose, shortcuts }: ShortcutHelpMo
         }}
       >
         <div className="modal-header">
-          <h2 id="shortcut-help-title">Keyboard shortcuts</h2>
+          <h2 id="shortcut-help-title">{t('shortcuts.title')}</h2>
           <button
             ref={closeButtonRef}
             type="button"
             className="close-button"
             onClick={onClose}
-            aria-label="Close keyboard shortcuts"
+            aria-label={t('shortcuts.closeLabel')}
           >
             &times;
           </button>
@@ -87,7 +89,7 @@ export function ShortcutHelpModal({ isOpen, onClose, shortcuts }: ShortcutHelpMo
         </div>
         <div className="modal-footer">
           <button type="button" className="action-button action-button--primary" onClick={onClose}>
-            Close
+            {t('shortcuts.close')}
           </button>
         </div>
       </section>

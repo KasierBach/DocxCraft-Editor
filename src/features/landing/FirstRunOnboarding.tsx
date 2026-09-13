@@ -1,23 +1,17 @@
 import { useState } from 'react';
 
+import { useTranslation } from '../../i18n';
+
 const STORAGE_KEY = 'docxcraft:onboarded';
 
 const STEPS = [
-  {
-    title: 'Open something',
-    copy: 'Drag in any .docx file (Ctrl+O) or start from the built-in sample — everything stays on your server.',
-  },
-  {
-    title: 'Navigate with the Anchor Map',
-    copy: 'The left panel lists every heading and paragraph by page. Click one to jump straight to it; it follows your cursor as you type.',
-  },
-  {
-    title: 'Nothing gets lost',
-    copy: 'Unsaved edits are backed up to this browser automatically, every save creates a restorable version, and Ctrl+S keeps your cursor in place.',
-  },
+  { titleKey: 'onboarding.openTitle', copyKey: 'onboarding.openCopy' },
+  { titleKey: 'onboarding.navigateTitle', copyKey: 'onboarding.navigateCopy' },
+  { titleKey: 'onboarding.safeTitle', copyKey: 'onboarding.safeCopy' },
 ];
 
 export function FirstRunOnboarding() {
+  const { t } = useTranslation();
   const [isActive, setIsActive] = useState(() => {
     try {
       return window.localStorage.getItem(STORAGE_KEY) !== 'done';
@@ -50,18 +44,18 @@ export function FirstRunOnboarding() {
         aria-labelledby="onboarding-title"
       >
         <div className="modal-header">
-          <h2 id="onboarding-title">Welcome to DOCX Workspace</h2>
+          <h2 id="onboarding-title">{t('onboarding.title')}</h2>
         </div>
         <div className="modal-body">
           <p className="onboarding__step-count" aria-hidden="true">
             {stepIndex + 1} / {STEPS.length}
           </p>
-          <h3 className="onboarding__title">{step.title}</h3>
-          <p className="onboarding__copy">{step.copy}</p>
+          <h3 className="onboarding__title">{t(step.titleKey)}</h3>
+          <p className="onboarding__copy">{t(step.copyKey)}</p>
         </div>
         <div className="modal-footer">
           <button type="button" className="action-button" onClick={finish}>
-            Skip
+            {t('onboarding.skip')}
           </button>
           <button
             type="button"
@@ -74,7 +68,7 @@ export function FirstRunOnboarding() {
               }
             }}
           >
-            {isLastStep ? 'Start editing' : 'Next'}
+            {isLastStep ? t('onboarding.startEditing') : t('onboarding.next')}
           </button>
         </div>
       </section>

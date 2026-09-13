@@ -2,17 +2,26 @@
  * Turns thrown command errors into something a user can act on: network
  * failures and timeouts get plain-language messages instead of the raw
  * browser strings ("Failed to fetch", "The operation was aborted").
+ *
+ * Pass a `translate` function to localize the two generic messages; the
+ * underlying error message (already user-facing) is passed through.
  */
-export function describeCommandError(error: unknown, fallbackMessage: string): string {
+export function describeCommandError(
+  error: unknown,
+  fallbackMessage: string,
+  translate?: (key: string) => string,
+): string {
+  const pick = (key: string, fallback: string) => (translate ? translate(key) : fallback);
+
   if (error instanceof DOMException && error.name === 'AbortError') {
-    return 'The server took too long to respond.';
+    return pick('errors.serverTimeout', 'The server took too long to respond.');
   }
 
   if (
     error instanceof TypeError ||
     (error instanceof Error && /failed to fetch|networkerror|load failed/i.test(error.message))
   ) {
-    return 'Could not reach the server.';
+    return pick('errors.serverUnreachable', 'Could not reach the server.');
   }
 
   return error instanceof Error && error.message ? error.message : fallbackMessage;

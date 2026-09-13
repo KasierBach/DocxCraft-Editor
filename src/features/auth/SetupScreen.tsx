@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import { claimInstanceWithPassphrase } from '../../lib/documentApi';
+import { useTranslation } from '../../i18n';
 
 const MIN_PASSPHRASE_LENGTH = 8;
 
@@ -9,6 +10,7 @@ type SetupScreenProps = {
 };
 
 export function SetupScreen({ onClaimed }: SetupScreenProps) {
+  const { t } = useTranslation();
   const [passphrase, setPassphrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,7 @@ export function SetupScreen({ onClaimed }: SetupScreenProps) {
       await claimInstanceWithPassphrase(passphrase);
       onClaimed();
     } catch (setupError) {
-      setError(setupError instanceof Error ? setupError.message : 'Setup failed.');
+      setError(setupError instanceof Error ? setupError.message : t('auth.setupFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -41,22 +43,17 @@ export function SetupScreen({ onClaimed }: SetupScreenProps) {
   return (
     <main className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <span className="login-card__eyebrow">One-time setup · first visit</span>
-        <h1 className="login-card__title">Set your passphrase</h1>
-        <p className="login-card__copy">
-          This editor is private to your server — you are its first user. Choose a
-          passphrase to lock it; you will use it to sign in from now on. It is stored
-          encrypted on this server and can never be recovered, so pick something you
-          will remember.
-        </p>
+        <span className="login-card__eyebrow">{t('auth.setupEyebrow')}</span>
+        <h1 className="login-card__title">{t('auth.setupTitle')}</h1>
+        <p className="login-card__copy">{t('auth.setupCopy')}</p>
 
         <input
           type="password"
           className="login-card__input"
           value={passphrase}
           onChange={(event) => setPassphrase(event.target.value)}
-          placeholder={`Passphrase (at least ${MIN_PASSPHRASE_LENGTH} characters)`}
-          aria-label="Passphrase"
+          placeholder={t('auth.passphraseMinPlaceholder', { min: MIN_PASSPHRASE_LENGTH })}
+          aria-label={t('auth.passphrase')}
           autoComplete="new-password"
           autoFocus
           disabled={isSubmitting}
@@ -67,20 +64,20 @@ export function SetupScreen({ onClaimed }: SetupScreenProps) {
           className="login-card__input"
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
-          placeholder="Repeat passphrase"
-          aria-label="Repeat passphrase"
+          placeholder={t('auth.repeatPassphrase')}
+          aria-label={t('auth.repeatPassphrase')}
           autoComplete="new-password"
           disabled={isSubmitting}
         />
 
         {isTooShort && (
           <p className="login-card__hint" role="status">
-            Use at least {MIN_PASSPHRASE_LENGTH} characters.
+            {t('auth.useAtLeast', { min: MIN_PASSPHRASE_LENGTH })}
           </p>
         )}
         {doesNotMatch && (
           <p className="login-card__hint" role="status">
-            The passphrases do not match.
+            {t('auth.passphrasesDoNotMatch')}
           </p>
         )}
         {error && (
@@ -94,7 +91,7 @@ export function SetupScreen({ onClaimed }: SetupScreenProps) {
           className="action-button action-button--primary login-card__submit"
           disabled={!canSubmit}
         >
-          {isSubmitting ? 'Saving...' : 'Save passphrase and start'}
+          {isSubmitting ? t('auth.saving') : t('auth.savePassphraseAndStart')}
         </button>
       </form>
     </main>

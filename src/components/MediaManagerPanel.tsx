@@ -1,5 +1,6 @@
 import { Panel } from './ui/Panel';
 import type { MediaItem } from '../lib/mediaScanner';
+import { useTranslation } from '../i18n';
 
 type MediaManagerPanelProps = {
   items: MediaItem[];
@@ -7,16 +8,18 @@ type MediaManagerPanelProps = {
 };
 
 export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelProps) {
+  const { t } = useTranslation();
+
   if (items.length === 0) {
     return (
-      <Panel title="Media Manager">
-        <p className="panel-copy">No images or tables found in this document.</p>
+      <Panel title={t('documents.mediaTitle')}>
+        <p className="panel-copy">{t('documents.mediaEmpty')}</p>
       </Panel>
     );
   }
 
   return (
-    <Panel title={`Media Manager (${items.length})`}>
+    <Panel title={t('documents.mediaTitleCount', { count: items.length })}>
       <div className="media-list">
         {items.map((item) => (
           <button
@@ -34,7 +37,7 @@ export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelPr
                   {item.label}
                 </span>
                 <span className="saved-document-card__meta">
-                  Paragraph {item.paragraphIndex}
+                  {t('documents.paragraph', { index: item.paragraphIndex })}
                 </span>
               </span>
             </span>

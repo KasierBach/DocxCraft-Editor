@@ -28,3 +28,27 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     }
     globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
+
+// jsdom does not implement smooth scrolling used by the landing page.
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => undefined;
+}
+
+// jsdom does not implement IntersectionObserver, used by the landing page's
+// reveal/count-up animations. The stub never fires, so animations stay at
+// their initial (rendered) state.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+    class IntersectionObserverStub {
+        root = null;
+        rootMargin = '';
+        thresholds: number[] = [];
+        observe() { }
+        unobserve() { }
+        disconnect() { }
+        takeRecords() {
+            return [];
+        }
+    }
+    globalThis.IntersectionObserver =
+        IntersectionObserverStub as unknown as typeof IntersectionObserver;
+}

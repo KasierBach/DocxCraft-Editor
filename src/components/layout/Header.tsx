@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { EditorMode } from '@eigenpal/docx-editor-react';
 import { Breadcrumbs } from './Breadcrumbs';
+import { LanguageSwitcher } from '../ui/LanguageSwitcher';
+import { useTranslation } from '../../i18n';
 import '../../styles/layout/breadcrumbs.css';
 
 type HeaderProps = {
@@ -29,25 +31,30 @@ type HeaderProps = {
   editorMode: EditorMode;
   onEditorModeChange: (mode: EditorMode) => void;
   onSignOut?: () => void;
+  onShowDocs?: () => void;
+  onShowChangelog?: () => void;
+  onShowHome?: () => void;
 };
 
 type OpenMenu = 'export' | 'utility' | null;
 
-const MODE_OPTIONS: Array<{ value: EditorMode; hint: string }> = [
-  { value: 'editing', hint: 'Edit document content directly' },
-  { value: 'suggesting', hint: 'Propose changes as suggestions without altering the text' },
-  { value: 'viewing', hint: 'Read-only preview of the document' },
+const MODE_OPTIONS: Array<{ value: EditorMode; labelKey: string; hintKey: string }> = [
+  { value: 'editing', labelKey: 'header.modeEditing', hintKey: 'header.modeEditingHint' },
+  { value: 'suggesting', labelKey: 'header.modeSuggesting', hintKey: 'header.modeSuggestingHint' },
+  { value: 'viewing', labelKey: 'header.modeViewing', hintKey: 'header.modeViewingHint' },
 ];
 
-function getApiStatusLabel(apiStatus: HeaderProps['apiStatus']) {
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+function getApiStatusLabel(apiStatus: HeaderProps['apiStatus'], t: Translate) {
   switch (apiStatus) {
     case 'connected':
-      return 'Online';
+      return t('header.apiOnline');
     case 'offline':
-      return 'Offline';
+      return t('header.apiOffline');
     case 'checking':
     default:
-      return 'Checking';
+      return t('header.apiChecking');
   }
 }
 
@@ -77,7 +84,11 @@ function HeaderComponent({
   editorMode,
   onEditorModeChange,
   onSignOut,
+  onShowDocs,
+  onShowChangelog,
+  onShowHome,
 }: HeaderProps) {
+  const { t } = useTranslation();
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
@@ -207,8 +218,8 @@ function HeaderComponent({
               type="button"
               className="action-button action-button--menu"
               onClick={onToggleSidebar}
-              title={showSidebar ? 'Hide outline' : 'Show outline'}
-              aria-label={showSidebar ? 'Hide document outline' : 'Show document outline'}
+              title={showSidebar ? t('header.hideOutline') : t('header.showOutline')}
+              aria-label={showSidebar ? t('header.hideOutline') : t('header.showOutline')}
               aria-pressed={showSidebar}
             >
               {showSidebar ? '<' : '>'}
@@ -217,8 +228,8 @@ function HeaderComponent({
               type="button"
               className="action-button action-button--menu action-button--menu-secondary"
               onClick={onToggleInfo}
-              title={showInfo ? 'Hide details' : 'Show details'}
-              aria-label={showInfo ? 'Hide document details' : 'Show document details'}
+              title={showInfo ? t('header.hideDetails') : t('header.showDetails')}
+              aria-label={showInfo ? t('header.hideDetails') : t('header.showDetails')}
               aria-pressed={showInfo}
             >
               {showInfo ? '>' : '<'}
@@ -227,21 +238,22 @@ function HeaderComponent({
               type="button"
               className="action-button action-button--menu action-button--menu-secondary"
               onClick={onToggleTheme}
-              title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')}
+              aria-label={theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')}
               aria-pressed={theme === 'dark'}
             >
               {theme === 'dark' ? '☀' : '☾'}
             </button>
+            <LanguageSwitcher />
           </div>
           <div className="brand__text">
             <div className="brand__title-row">
-              <h1 className="logo-text">DOCX Workspace</h1>
+              <h1 className="logo-text">{t('header.appName')}</h1>
               <div className={`status-badge status-badge--api status-badge--${apiStatus}`}>
-                {getApiStatusLabel(apiStatus)}
+                {getApiStatusLabel(apiStatus, t)}
               </div>
             </div>
-            <p className="eyebrow">Review and navigate</p>
+            <p className="eyebrow">{t('header.tagline')}</p>
           </div>
         </div>
 
@@ -253,13 +265,13 @@ function HeaderComponent({
               className="document-name-input"
               value={documentName}
               onChange={(event) => onDocumentNameChange(event.target.value)}
-              placeholder="Untitled document"
-              title="Click to rename"
-              aria-label="Document name"
+              placeholder={t('header.documentNamePlaceholder')}
+              title={t('header.renameHint')}
+              aria-label={t('header.documentNameLabel')}
             />
             {isDirty && (
-              <span className="status-badge status-badge--dirty" title="Unsaved changes">
-                Edited
+              <span className="status-badge status-badge--dirty" title={t('statusBar.unsavedChanges')}>
+                {t('header.edited')}
               </span>
             )}
           </div>
@@ -269,11 +281,11 @@ function HeaderComponent({
         <div className="toolbar">
         <div className="toolbar__actions">
           <div className="mode-picker-group">
-            <span className="mode-picker-group__title">Mode</span>
+            <span className="mode-picker-group__title">{t('header.mode')}</span>
             <div
               className="mode-picker"
               role="radiogroup"
-              aria-label="Editing mode"
+              aria-label={t('header.editingModeLabel')}
               onKeyDown={handleModeKeyDown}
             >
               <span className="mode-picker__icon" aria-hidden="true">✎</span>
@@ -285,11 +297,11 @@ function HeaderComponent({
                   data-mode={mode.value}
                   aria-checked={editorMode === mode.value}
                   tabIndex={editorMode === mode.value ? 0 : -1}
-                  title={mode.hint}
+                  title={t(mode.hintKey)}
                   className={`mode-picker__option${editorMode === mode.value ? ' mode-picker__option--active' : ''}`}
                   onClick={() => onEditorModeChange(mode.value)}
                 >
-                  <span className="mode-picker__label">{mode.value}</span>
+                  <span className="mode-picker__label">{t(mode.labelKey)}</span>
                 </button>
               ))}
             </div>
@@ -301,7 +313,7 @@ function HeaderComponent({
             onClick={onSave}
             disabled={isSaving}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('header.saving') : t('header.save')}
           </button>
 
           <button
@@ -309,7 +321,7 @@ function HeaderComponent({
             className="action-button"
             onClick={() => fileInputRef.current?.click()}
           >
-            Open
+            {t('header.open')}
           </button>
           <input
             ref={fileInputRef}
@@ -317,7 +329,7 @@ function HeaderComponent({
             accept=".docx"
             className="visually-hidden"
             tabIndex={-1}
-            aria-label="Open .docx from computer"
+            aria-label={t('header.openFileLabel')}
             onChange={onFileChange}
           />
 
@@ -338,7 +350,7 @@ function HeaderComponent({
               aria-expanded={openMenu === 'export'}
               aria-haspopup="menu"
             >
-              Export
+              {t('header.export')}
               <span className="button-caret" aria-hidden="true" />
             </button>
 
@@ -349,7 +361,7 @@ function HeaderComponent({
                 aria-label="Export"
                 onKeyDown={handleMenuKeyDown}
               >
-                <h4>Export</h4>
+                <h4>{t('header.export')}</h4>
                 <button
                   type="button"
                   role="menuitem"
@@ -359,7 +371,7 @@ function HeaderComponent({
                     onDownloadCurrent();
                   }}
                 >
-                  Export .docx
+                  {t('header.exportDocx')}
                 </button>
                 <button
                   type="button"
@@ -370,7 +382,7 @@ function HeaderComponent({
                     onExportMarkdown();
                   }}
                 >
-                  Save as Markdown (.md)
+                  {t('header.saveMarkdown')}
                 </button>
                 <button
                   type="button"
@@ -381,7 +393,7 @@ function HeaderComponent({
                     onPrintPDF();
                   }}
                 >
-                  Print as PDF
+                  {t('header.printPdf')}
                 </button>
               </div>
             )}
@@ -392,7 +404,7 @@ function HeaderComponent({
             className="action-button action-button--refresh"
             onClick={onRefresh}
           >
-            Refresh Map
+            {t('header.refreshMap')}
           </button>
 
           <div
@@ -409,8 +421,8 @@ function HeaderComponent({
               type="button"
               className={`action-button action-button--icon ${openMenu === 'utility' ? 'action-button--active' : ''}`}
               onClick={() => toggleMenu('utility')}
-              title="More actions"
-              aria-label="More actions"
+              title={t('header.moreActions')}
+              aria-label={t('header.moreActions')}
               aria-expanded={openMenu === 'utility'}
               aria-haspopup="menu"
             >
@@ -428,7 +440,7 @@ function HeaderComponent({
                 aria-label="More actions"
                 onKeyDown={handleMenuKeyDown}
               >
-                <h4>More actions</h4>
+                <h4>{t('header.moreActions')}</h4>
                 <button
                   type="button"
                   role="menuitem"
@@ -438,7 +450,7 @@ function HeaderComponent({
                     onSaveAs();
                   }}
                 >
-                  Save as Copy
+                  {t('header.saveAsCopy')}
                 </button>
                 <button
                   type="button"
@@ -449,7 +461,7 @@ function HeaderComponent({
                     onLoadSample();
                   }}
                 >
-                  Load Sample
+                  {t('header.loadSample')}
                 </button>
                 <button
                   type="button"
@@ -461,8 +473,48 @@ function HeaderComponent({
                   }}
                   disabled={!canReload}
                 >
-                  Reload Current Document
+                  {t('header.reloadCurrent')}
                 </button>
+                {(onShowDocs || onShowChangelog || onShowHome) &&                 <h4>{t('header.help')}</h4>}
+                {onShowDocs && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowDocs();
+                    }}
+                  >
+                    {t('header.documentation')}
+                  </button>
+                )}
+                {onShowChangelog && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowChangelog();
+                    }}
+                  >
+                    {t('header.changelog')}
+                  </button>
+                )}
+                {onShowHome && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowHome();
+                    }}
+                  >
+                    {t('header.homePage')}
+                  </button>
+                )}
                 {onSignOut && (
                   <button
                     type="button"
@@ -473,7 +525,7 @@ function HeaderComponent({
                       onSignOut();
                     }}
                   >
-                    Sign out
+                    {t('header.signOut')}
                   </button>
                 )}
               </div>

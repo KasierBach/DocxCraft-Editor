@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { SavedDocumentVersionSummary } from '../lib/documentApi';
 import { formatBytes, formatDateTime } from '../lib/format';
 import { Panel } from './ui/Panel';
+import { useTranslation } from '../i18n';
 
 type VersionHistoryPanelProps = {
   documentName: string;
@@ -21,6 +22,7 @@ export function VersionHistoryPanel({
   onRestore,
   onDownload,
 }: VersionHistoryPanelProps) {
+  const { t } = useTranslation();
   const [pendingAction, setPendingAction] = useState<{
     versionId: string;
     type: 'restore' | 'download';
@@ -47,13 +49,13 @@ export function VersionHistoryPanel({
   };
 
   return (
-    <Panel title="Version history">
+    <Panel title={t('documents.versionTitle')}>
       {!documentId ? (
-        <p className="panel-copy">Save this document to the library to start version tracking.</p>
+        <p className="panel-copy">{t('documents.versionSaveFirst')}</p>
       ) : isLoading ? (
-        <p className="panel-copy">Loading versions for {documentName}...</p>
+        <p className="panel-copy">{t('documents.versionLoading', { name: documentName })}</p>
       ) : versions.length === 0 ? (
-        <p className="panel-copy">No versions available yet.</p>
+        <p className="panel-copy">{t('documents.versionEmpty')}</p>
       ) : (
         <div className="version-history-list">
           {versions.map((version, index) => {
@@ -66,7 +68,9 @@ export function VersionHistoryPanel({
                 aria-busy={isPending ? 'true' : 'false'}
               >
                 <span className="saved-document-card__name">
-                  {index === 0 ? 'Latest version' : `Version ${versions.length - index}`}
+                  {index === 0
+                    ? t('documents.latestVersion')
+                    : t('documents.versionNumber', { number: versions.length - index })}
                 </span>
                 <span className="saved-document-card__meta">
                   {formatDateTime(version.createdAt)} | {formatBytes(version.sizeInBytes)}
@@ -79,11 +83,11 @@ export function VersionHistoryPanel({
                       void handleAction(version.id, 'download', onDownload);
                     }}
                     disabled={isPending}
-                    aria-label={`Download version from ${formatDateTime(version.createdAt)}`}
+                    aria-label={t('documents.downloadVersionLabel', { date: formatDateTime(version.createdAt) })}
                   >
                     {pendingAction?.versionId === version.id && pendingAction.type === 'download'
-                      ? 'Downloading...'
-                      : 'Download'}
+                      ? t('documents.downloading')
+                      : t('documents.download')}
                   </button>
                   <button
                     type="button"
@@ -92,11 +96,11 @@ export function VersionHistoryPanel({
                       void handleAction(version.id, 'restore', onRestore);
                     }}
                     disabled={isPending}
-                    aria-label={`Restore version from ${formatDateTime(version.createdAt)}`}
+                    aria-label={t('documents.restoreVersionLabel', { date: formatDateTime(version.createdAt) })}
                   >
                     {pendingAction?.versionId === version.id && pendingAction.type === 'restore'
-                      ? 'Restoring...'
-                      : 'Restore'}
+                      ? t('documents.restoring')
+                      : t('documents.restore')}
                   </button>
                 </div>
               </div>

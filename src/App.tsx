@@ -22,6 +22,8 @@ import { useDocumentLibrary } from './hooks/useDocumentLibrary';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRecoveryDraft } from './hooks/useRecoveryDraft';
 import { useToastManager } from './hooks/useToastManager';
+import { useTranslation } from './i18n';
+import { editorVi } from './i18n/editor/vi';
 import { collectAnchorTargets, type AnchorTarget, type PageContent } from './lib/anchors';
 import { buildDeepLinkSearch, readDeepLink } from './lib/deepLink';
 import { downloadBufferAsDocx } from './lib/download';
@@ -47,19 +49,19 @@ type ShortcutSpec = {
   key: string;
   ctrlKey?: boolean;
   shiftKey?: boolean;
-  description: string;
+  descriptionKey: string;
 };
 
 // Single source of truth for shortcut bindings and the help modal: handlers
 // are attached by id in the component, so the two can never drift apart.
 const SHORTCUT_SPECS = [
-  { id: 'save', key: 's', ctrlKey: true, description: 'Save current document' },
-  { id: 'open', key: 'o', ctrlKey: true, description: 'Open .docx from computer' },
-  { id: 'save-as', key: 's', ctrlKey: true, shiftKey: true, description: 'Save as new document' },
-  { id: 'help', key: '/', ctrlKey: true, description: 'Show or hide shortcut help' },
-  { id: 'outline', key: '\\', ctrlKey: true, description: 'Toggle document outline' },
-  { id: 'details', key: 'i', ctrlKey: true, description: 'Toggle document details' },
-  { id: 'palette', key: 'p', ctrlKey: true, description: 'Open command palette' },
+  { id: 'save', key: 's', ctrlKey: true, descriptionKey: 'app.shortcutSave' },
+  { id: 'open', key: 'o', ctrlKey: true, descriptionKey: 'app.shortcutOpen' },
+  { id: 'save-as', key: 's', ctrlKey: true, shiftKey: true, descriptionKey: 'app.shortcutSaveAs' },
+  { id: 'help', key: '/', ctrlKey: true, descriptionKey: 'app.shortcutHelp' },
+  { id: 'outline', key: '\\', ctrlKey: true, descriptionKey: 'app.shortcutOutline' },
+  { id: 'details', key: 'i', ctrlKey: true, descriptionKey: 'app.shortcutDetails' },
+  { id: 'palette', key: 'p', ctrlKey: true, descriptionKey: 'app.shortcutPalette' },
 ] as const satisfies ReadonlyArray<ShortcutSpec>;
 
 type ShortcutId = (typeof SHORTCUT_SPECS)[number]['id'];
@@ -123,7 +125,8 @@ export default function App() {
   const refreshTimerRef = useRef<number | null>(null);
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
-  const { isAuthGated } = useAuthGate();
+  const { isAuthGated, openPage } = useAuthGate();
+  const { t } = useTranslation();
 
   // Signing out clears the session cookie; a reload re-runs the auth gate,
   // which routes back to the landing page.
@@ -163,7 +166,7 @@ export default function App() {
   // Use toast manager hook
   const { toasts, pushToast, dismissToast } = useToastManager();
 
-  const { runCommand } = useDocumentCommands({ pushToast, setStatusMessage });
+  const { runCommand } = useDocumentCommands({ pushToast, setStatusMessage, translate: t });
 
   const {
     currentDocumentId,
@@ -263,21 +266,21 @@ export default function App() {
 
   useEffect(() => {
     if (libraryError && libraryError !== lastLibraryErrorRef.current) {
-      setStatusMessage('Library issue.');
+      setStatusMessage(t('app.libraryIssue'));
       pushToast('error', libraryError);
     }
 
     lastLibraryErrorRef.current = libraryError;
-  }, [libraryError, pushToast]);
+  }, [libraryError, pushToast, t]);
 
   useEffect(() => {
     if (versionError && versionError !== lastVersionErrorRef.current) {
-      setStatusMessage('Version history issue.');
+      setStatusMessage(t('app.versionHistoryIssue'));
       pushToast('error', versionError);
     }
 
     lastVersionErrorRef.current = versionError;
-  }, [pushToast, versionError]);
+  }, [pushToast, versionError, t]);
 
   const refreshAnchors = useCallback(() => {
     const editor = editorRef.current;
@@ -324,11 +327,11 @@ export default function App() {
     });
 
     if (anchorsChanged && nextAnchors.length > 0) {
-      setStatusMessage(`Indexed ${nextAnchors.length} paragraphs across ${totalPages} pages.`);
+      setStatusMessage(t('app.indexed', { paragraphs: nextAnchors.length, pages: totalPages }));
     }
 
     return nextAnchors.length > 0;
-  }, [setActiveParaId, setAnchors]);
+  }, [setActiveParaId, setAnchors, t]);
 
   const scheduleAnchorRefresh = useCallback(
     (attempts = ANCHOR_REFRESH_DEFAULT_ATTEMPTS) => {
@@ -400,9 +403,9 @@ export default function App() {
     setCurrentDraft({ name: SAMPLE_DOCUMENT_NAME, documentId: null });
     setPendingDeepLinkParaId(initialDeepLink.source === 'sample' ? initialDeepLink.paraId : null);
     discardRecovery();
-    setStatusMessage('Sample reloaded.');
-    pushToast('info', 'Sample reloaded.');
-  }, [confirmDiscardChanges, discardRecovery, initialDeepLink.paraId, initialDeepLink.source, loadEditorSource, pushToast, setCurrentDraft]);
+    setStatusMessage(t('app.sampleReloaded'));
+    pushToast('info', t('app.sampleReloaded'));
+  }, [confirmDiscardChanges, discardRecovery, initialDeepLink.paraId, initialDeepLink.source, loadEditorSource, pushToast, setCurrentDraft, t]);
 
   const restoreRecoverySnapshot = useCallback(
     (snapshot: RecoverySnapshot) => {
@@ -436,12 +439,12 @@ export default function App() {
       setIsDirty(true);
       discardRecovery();
 
-      const message = `Restored unsaved work for ${snapshot.documentName}.`;
+      const message = t('app.restoredWork', { name: snapshot.documentName });
 
       setStatusMessage(message);
       pushToast('info', message);
     },
-    [discardRecovery, loadEditorSource, pushToast, refreshVersions, setCurrentDraft],
+    [discardRecovery, loadEditorSource, pushToast, refreshVersions, setCurrentDraft, t],
   );
 
   useEffect(() => {
@@ -468,8 +471,8 @@ export default function App() {
             buffer: openedDocument.buffer,
           });
           setPendingDeepLinkParaId(initialDeepLink.paraId);
-          setStatusMessage(`Opened ${openedDocument.name} from a deep link.`);
-          pushToast('info', `Opened ${openedDocument.name} from a deep link.`);
+          setStatusMessage(t('app.openedFromDeepLink', { name: openedDocument.name }));
+          pushToast('info', t('app.openedFromDeepLink', { name: openedDocument.name }));
           setLastSavedAt(new Date().toISOString());
         } catch (error) {
           if (isCancelled) {
@@ -477,7 +480,7 @@ export default function App() {
           }
 
           const message = error instanceof Error ? error.message : 'Deep link open failed.';
-          setStatusMessage('Deep link open failed.');
+          setStatusMessage(t('app.deepLinkFailed'));
           pushToast('error', message);
         }
       })();
@@ -487,7 +490,7 @@ export default function App() {
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialDeepLink.documentId, initialDeepLink.paraId, initialDeepLink.source]);
+  }, [initialDeepLink.documentId, initialDeepLink.paraId, initialDeepLink.source, t]);
 
 
   useEffect(() => {
@@ -540,12 +543,12 @@ export default function App() {
     (name: string) => {
       if (name !== documentName) {
         setIsDirty(true);
-        setStatusMessage('Unsaved changes.');
+        setStatusMessage(t('app.unsavedChanges'));
       }
 
       setDocumentName(name);
     },
-    [documentName, setDocumentName],
+    [documentName, setDocumentName, t],
   );
 
   // On compact (drawer) layouts, only one drawer is shown at a time; on
@@ -635,17 +638,17 @@ export default function App() {
           buffer,
         });
         setCurrentDraft({ name: file.name, documentId: null });
-        setStatusMessage(`Loaded ${file.name}.`);
-        pushToast('info', `Loaded ${file.name}.`);
+        setStatusMessage(t('app.loaded', { name: file.name }));
+        pushToast('info', t('app.loaded', { name: file.name }));
       } catch (error) {
         const message = error instanceof Error ? error.message : 'File read error.';
-        setStatusMessage('File load failed.');
+        setStatusMessage(t('app.fileLoadFailed'));
         pushToast('error', message);
       } finally {
         event.target.value = '';
       }
     },
-    [confirmDiscardChanges, loadEditorSource, pushToast, setCurrentDraft],
+    [confirmDiscardChanges, loadEditorSource, pushToast, setCurrentDraft, t],
   );
 
   const handleSaveDocument = useCallback(async () => {
@@ -653,16 +656,16 @@ export default function App() {
 
     const buffer = await getEditorBuffer();
     if (!buffer) {
-      setStatusMessage('Save failed.');
-      pushToast('error', 'The editor did not return a document buffer.');
+      setStatusMessage(t('app.saveFailed'));
+      pushToast('error', t('app.noBuffer'));
       return;
     }
 
-    const savedDocument = await runCommand('Save', () => saveCurrentDocument(buffer), {
+    const savedDocument = await runCommand('app.commandSave', () => saveCurrentDocument(buffer), {
       successMessage: (result) =>
         source.kind === 'saved-document'
-          ? `Changes saved to "${result.name}"`
-          : `Document "${result.name}" saved to library`,
+          ? t('app.savedChanges', { name: result.name })
+          : t('app.savedToLibrary', { name: result.name }),
     });
     if (!savedDocument) {
       return;
@@ -684,22 +687,22 @@ export default function App() {
     runCommand,
     saveCurrentDocument,
     source.kind,
-  ]);
+  t]);
 
   const handleSaveAsDocument = useCallback(async () => {
     if (isSaving) return;
 
     const buffer = await getEditorBuffer();
     if (!buffer) {
-      setStatusMessage('Save as failed.');
-      pushToast('error', 'The editor did not return a document buffer.');
+      setStatusMessage(t('app.saveAsFailed'));
+      pushToast('error', t('app.noBuffer'));
       return;
     }
 
     const savedDocument = await runCommand(
-      'Save as',
+      'app.commandSaveAs',
       () => saveCurrentDocument(buffer, { asNew: true, name: documentName }),
-      { successMessage: (result) => `Saved ${result.name} as a new document.` },
+      { successMessage: (result) => t('app.savedAsNew', { name: result.name }) },
     );
     if (!savedDocument) {
       return;
@@ -722,30 +725,30 @@ export default function App() {
     pushToast,
     runCommand,
     saveCurrentDocument,
-  ]);
+  t]);
 
   const handleDownloadCurrent = useCallback(async () => {
     const buffer = await getEditorBuffer();
     if (!buffer) {
-      setStatusMessage('Download failed.');
-      pushToast('error', 'The editor did not return a document buffer.');
+      setStatusMessage(t('app.downloadFailed'));
+      pushToast('error', t('app.noBuffer'));
       return;
     }
 
     downloadBufferAsDocx(documentName, buffer);
-    setStatusMessage(`Downloaded ${documentName}.`);
-    pushToast('success', `Downloaded ${documentName}.`);
-  }, [documentName, getEditorBuffer, pushToast]);
+    setStatusMessage(t('app.downloaded', { name: documentName }));
+    pushToast('success', t('app.downloaded', { name: documentName }));
+  }, [documentName, getEditorBuffer, pushToast, t]);
 
   const handleOpenSavedDocument = useCallback(
     async (documentId: string) => {
       if (!confirmDiscardChanges()) return;
 
       const openedDocument = await runCommand(
-        'Open',
+        'app.commandOpen',
         () => openSavedDocument(documentId),
         {
-          successMessage: (result) => `Opened ${result.name} from the local library.`,
+          successMessage: (result) => t('app.openedFromLibrary', { name: result.name }),
         },
       );
       if (!openedDocument) {
@@ -759,7 +762,7 @@ export default function App() {
         buffer: openedDocument.buffer,
       });
     },
-    [confirmDiscardChanges, loadEditorSource, openSavedDocument, runCommand],
+    [confirmDiscardChanges, loadEditorSource, openSavedDocument, runCommand, t],
   );
 
   const handleReloadDocument = useCallback(async () => {
@@ -772,10 +775,10 @@ export default function App() {
 
     if (source.kind === 'saved-document' && currentDocumentId === source.documentId) {
       const reopenedDocument = await runCommand(
-        'Reload',
+        'app.commandReload',
         () => openSavedDocument(source.documentId),
         {
-          successMessage: (result) => `Reloaded ${result.name} from the local library.`,
+          successMessage: (result) => t('app.reloadedFromLibrary', { name: result.name }),
           successTone: 'info',
         },
       );
@@ -798,8 +801,8 @@ export default function App() {
       buffer: source.buffer.slice(0),
     });
     discardRecovery();
-    setStatusMessage(`Reloaded ${source.name}.`);
-    pushToast('info', `Reloaded ${source.name}.`);
+    setStatusMessage(t('app.reloaded', { name: source.name }));
+    pushToast('info', t('app.reloaded', { name: source.name }));
   }, [
     confirmDiscardChanges,
     currentDocumentId,
@@ -810,35 +813,35 @@ export default function App() {
     pushToast,
     runCommand,
     source,
-  ]);
+  t]);
 
   const handleExportMarkdown = useCallback(() => {
     if (!editorRef.current) return;
     try {
       const markdown = convertToMarkdown(editorRef.current);
       downloadMarkdown(documentName || 'document', markdown);
-      pushToast('success', 'Document exported as Markdown.');
+      pushToast('success', t('app.exportedMarkdown'));
     } catch {
-      pushToast('error', 'Failed to export Markdown.');
+      pushToast('error', t('app.exportMarkdownFailed'));
     }
-  }, [documentName, pushToast]);
+  }, [documentName, pushToast, t]);
 
   const handlePrintPDF = useCallback(() => {
     editorRef.current?.openPrintPreview();
   }, []);
 
   const handleRefreshDocuments = useCallback(async () => {
-    await runCommand('Refresh', () => refreshDocuments(), {
-      successMessage: () => 'Saved documents refreshed.',
+      await runCommand('documents.refresh', () => refreshDocuments(), {
+      successMessage: () => t('app.savedDocumentsRefreshed'),
     });
-  }, [refreshDocuments, runCommand]);
+  }, [refreshDocuments, runCommand, t]);
 
   const handleRenameSavedDocument = useCallback(
     async (documentId: string, name: string) => {
       const renamedDocument = await runCommand(
-        'Rename',
+        'app.commandRename',
         () => renameSavedDocument(documentId, name),
-        { successMessage: (result) => `Renamed saved document to ${result.name}.` },
+        { successMessage: (result) => t('app.renamed', { name: result.name }) },
       );
       if (!renamedDocument) {
         return;
@@ -848,7 +851,7 @@ export default function App() {
         rememberSavedSource(documentId, renamedDocument.name, source.buffer);
       }
     },
-    [rememberSavedSource, renameSavedDocument, runCommand, source],
+    [rememberSavedSource, renameSavedDocument, runCommand, source, t],
   );
 
   const handleDeleteSavedDocument = useCallback(
@@ -859,13 +862,13 @@ export default function App() {
       if (deletesCurrentDocument && !confirmDiscardChanges()) return;
 
       const deleted = await runCommand(
-        'Delete',
+        'app.commandDelete',
         () => deleteSavedDocument(documentId),
         {
           successMessage: () =>
             deletedDocument
-              ? `Deleted ${deletedDocument.name} from the local library.`
-              : 'Deleted saved document from the local library.',
+              ? t('app.deleted', { name: deletedDocument.name })
+              : t('app.deletedGeneric'),
         },
       );
 
@@ -880,16 +883,16 @@ export default function App() {
       runCommand,
       savedDocuments,
       source,
-    ],
+    t],
   );
 
   const handleDuplicateSavedDocument = useCallback(
     async (documentId: string) => {
-      await runCommand('Duplicate', () => duplicateSavedDocument(documentId), {
-        successMessage: (result) => `Duplicated ${result.name}.`,
+      await runCommand('app.commandDuplicate', () => duplicateSavedDocument(documentId), {
+        successMessage: (result) => t('app.duplicated', { name: result.name }),
       });
     },
-    [duplicateSavedDocument, runCommand],
+    [duplicateSavedDocument, runCommand, t],
   );
 
   const handleDownloadSavedDocument = useCallback(
@@ -898,8 +901,8 @@ export default function App() {
         savedDocuments.find((document) => document.id === documentId) ?? null;
       const name = savedDocument?.name ?? documentName;
 
-      const buffer = await runCommand('Download', () => readSavedDocumentBuffer(documentId), {
-        successMessage: () => `Downloaded ${name}.`,
+      const buffer = await runCommand('app.commandDownload', () => readSavedDocumentBuffer(documentId), {
+        successMessage: () => t('app.downloaded', { name }),
       });
       if (!buffer) {
         return;
@@ -907,7 +910,7 @@ export default function App() {
 
       downloadBufferAsDocx(name, buffer);
     },
-    [documentName, readSavedDocumentBuffer, runCommand, savedDocuments],
+    [documentName, readSavedDocumentBuffer, runCommand, savedDocuments, t],
   );
 
   const handleRestoreVersion = useCallback(
@@ -915,10 +918,10 @@ export default function App() {
       if (!confirmDiscardChanges()) return;
 
       const restored = await runCommand(
-        'Restore version',
+        'app.commandRestoreVersion',
         () => restoreDocumentVersion(documentId, versionId),
         {
-          successMessage: (result) => `Restored a saved version of ${result.document.name}.`,
+          successMessage: (result) => t('app.restoredVersion', { name: result.document.name }),
         },
       );
       if (!restored) {
@@ -939,7 +942,7 @@ export default function App() {
       loadEditorSource,
       restoreDocumentVersion,
       runCommand,
-    ],
+    t],
   );
 
   const handleDownloadVersion = useCallback(
@@ -949,9 +952,9 @@ export default function App() {
       const name = version?.name ?? documentName;
 
       const buffer = await runCommand(
-        'Download version',
+        'app.commandDownloadVersion',
         () => readVersionBuffer(documentId, versionId),
-        { successMessage: () => `Downloaded ${name}.` },
+        { successMessage: () => t('app.downloaded', { name }) },
       );
       if (!buffer) {
         return;
@@ -959,7 +962,7 @@ export default function App() {
 
       downloadBufferAsDocx(name, buffer);
     },
-    [currentDocumentVersions, documentName, readVersionBuffer, runCommand],
+    [currentDocumentVersions, documentName, readVersionBuffer, runCommand, t],
   );
 
   const handleRestoreRecovery = useCallback(async () => {
@@ -997,22 +1000,25 @@ export default function App() {
   );
 
   const commandActions = useMemo(() => [
-    { id: 'save', label: 'Save Document', section: 'Actions', handler: handleSaveDocument },
-    { id: 'save-as', label: 'Save As Copy', section: 'Actions', handler: handleSaveAsDocument },
-    { id: 'export', label: 'Export to .docx', section: 'Actions', handler: handleDownloadCurrent },
-    { id: 'sample', label: 'Load Sample Document', section: 'Actions', handler: loadBuiltInSample },
-    { id: 'toggle-sidebar', label: 'Toggle Left Sidebar', section: 'Actions', handler: handleToggleSidebar },
-    { id: 'toggle-info', label: 'Toggle Right Sidebar', section: 'Actions', handler: handleToggleInfo },
+    { id: 'save', label: t('app.actionSave'), section: t('app.actionSection'), handler: handleSaveDocument },
+    { id: 'save-as', label: t('app.actionSaveAs'), section: t('app.actionSection'), handler: handleSaveAsDocument },
+    { id: 'export', label: t('app.actionExport'), section: t('app.actionSection'), handler: handleDownloadCurrent },
+    { id: 'sample', label: t('app.actionSample'), section: t('app.actionSection'), handler: loadBuiltInSample },
+    { id: 'toggle-sidebar', label: t('app.actionToggleSidebar'), section: t('app.actionSection'), handler: handleToggleSidebar },
+    { id: 'toggle-info', label: t('app.actionToggleInfo'), section: t('app.actionSection'), handler: handleToggleInfo },
     {
       id: 'help',
-      label: 'Show Keyboard Shortcuts',
-      section: 'Actions',
+      label: t('app.actionHelp'),
+      section: t('app.actionSection'),
       handler: () => {
         setShowShortcutHelp(true);
         setShowCommandPalette(false);
       },
     },
-  ], [handleDownloadCurrent, handleSaveAsDocument, handleSaveDocument, handleToggleInfo, handleToggleSidebar, loadBuiltInSample]);
+    { id: 'docs', label: t('app.actionDocs'), section: t('app.helpSection'), handler: () => openPage('docs') },
+    { id: 'changelog', label: t('app.actionChangelog'), section: t('app.helpSection'), handler: () => openPage('changelog') },
+    { id: 'home', label: t('app.actionHome'), section: t('app.helpSection'), handler: () => openPage('landing') },
+  ], [handleDownloadCurrent, handleSaveAsDocument, handleSaveDocument, handleToggleInfo, handleToggleSidebar, loadBuiltInSample, openPage, t]);
 
   const shortcutHandlers: Record<ShortcutId, () => void> = {
     save: handleSaveDocument,
@@ -1049,7 +1055,7 @@ export default function App() {
 
   const shortcutHelpEntries = SHORTCUT_SPECS.map((spec: ShortcutSpec) => ({
     keys: [modifierLabel, ...(spec.shiftKey ? ['Shift'] : []), spec.key.toUpperCase()],
-    description: spec.description,
+    description: t(spec.descriptionKey),
   }));
 
   return (
@@ -1080,6 +1086,9 @@ export default function App() {
         editorMode={editorMode}
         onEditorModeChange={setEditorMode}
         onSignOut={isAuthGated ? handleSignOut : undefined}
+        onShowDocs={() => openPage('docs')}
+        onShowChangelog={() => openPage('changelog')}
+        onShowHome={() => openPage('landing')}
       />
 
       {(showSidebar || showInfo) && (
@@ -1122,6 +1131,7 @@ export default function App() {
               documentBuffer={source.kind !== 'sample' ? source.buffer : undefined}
               mode={editorMode}
               onModeChange={setEditorMode}
+              i18n={editorVi}
               className="docx-editor-frame"
               onChange={() => {
                 if (Date.now() < ignoreContentChangeUntilRef.current) {
@@ -1129,7 +1139,7 @@ export default function App() {
                 }
 
                 setIsDirty(true);
-                setStatusMessage('Unsaved changes.');
+                setStatusMessage(t('app.unsavedChanges'));
                 scheduleAnchorRefresh();
               }}
               onSelectionChange={(selectionState) => {

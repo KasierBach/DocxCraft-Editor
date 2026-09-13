@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnchorTarget } from '../lib/anchors';
+import { useTranslation } from '../i18n';
 
 type AnchorNavigatorProps = {
   anchors: AnchorTarget[];
@@ -8,6 +9,7 @@ type AnchorNavigatorProps = {
 };
 
 export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigatorProps) {
+  const { t } = useTranslation();
   const activeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [collapsedPages, setCollapsedPages] = useState<Set<number>>(new Set());
 
@@ -78,20 +80,20 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
   };
 
   if (anchors.length === 0) {
-    return <p className="anchor-empty">No matching paragraphs found.</p>;
+    return <p className="anchor-empty">{t('outline.noMatches')}</p>;
   }
 
   return (
     <div
       className="anchor-list"
-      aria-label="Paragraph anchors"
+      aria-label={t('outline.listLabel')}
     >
       <div className="anchor-list__controls">
         <button type="button" className="control-button" onClick={collapseAll}>
-          Collapse All
+          {t('outline.collapseAll')}
         </button>
         <button type="button" className="control-button" onClick={expandAll}>
-          Expand All
+          {t('outline.expandAll')}
         </button>
       </div>
 
@@ -108,7 +110,7 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
               aria-expanded={!isCollapsed}
               aria-controls={`anchor-page-${pageNum}-content`}
             >
-              <span className="anchor-group__title">Page {page}</span>
+              <span className="anchor-group__title">{t('outline.page', { page: pageNum })}</span>
               <span className="anchor-group__toggle-icon" aria-hidden="true">
                 {isCollapsed ? '+' : '−'}
               </span>
@@ -127,7 +129,7 @@ export function AnchorNavigator({ anchors, activeParaId, onJump }: AnchorNavigat
                   >
                     <span className="anchor-button__label">{anchor.label}</span>
                     <span className="anchor-button__meta">
-                      <span className="anchor-tag">{anchor.styleId || 'Normal'}</span>
+                      <span className="anchor-tag">{anchor.styleId || t('outline.normal')}</span>
                       <span className="anchor-id">{anchor.id}</span>
                     </span>
                   </button>

@@ -9,6 +9,7 @@ describe('ChangelogPage', () => {
     render(<ChangelogPage onBack={() => undefined} />);
 
     expect(screen.getByRole('heading', { name: /^changelog$/i })).toBeInTheDocument();
+    expect(screen.getByText('Unreleased')).toBeInTheDocument();
     expect(screen.getByText('v0.1.0')).toBeInTheDocument();
     expect(screen.getByText('First public release')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /security/i })).toBeInTheDocument();

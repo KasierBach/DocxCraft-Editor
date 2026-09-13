@@ -44,4 +44,12 @@ export default tseslint.config(
             'react-refresh/only-export-components': 'off',
         },
     },
+    {
+        // The i18n module ships hooks and pure helpers alongside the provider;
+        // it is not an HMR component boundary.
+        files: ['src/i18n/**'],
+        rules: {
+            'react-refresh/only-export-components': 'off',
+        },
+    },
 );

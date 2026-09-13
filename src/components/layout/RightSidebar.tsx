@@ -9,6 +9,7 @@ import { SavedDocumentsPanel } from '../SavedDocumentsPanel';
 import { VersionHistoryPanel } from '../VersionHistoryPanel';
 import { Panel } from '../ui/Panel';
 import { DrawerCloseButton } from '../ui/DrawerCloseButton';
+import { useTranslation } from '../../i18n';
 
 type RightSidebarProps = {
   activeParaId: string | null;
@@ -61,6 +62,7 @@ export function RightSidebar({
   onJumpToMedia,
   onClose,
 }: RightSidebarProps) {
+  const { t } = useTranslation();
   const [isRestoringRecovery, setIsRestoringRecovery] = useState(false);
 
   const handleRestoreRecovery = useCallback(async () => {
@@ -73,24 +75,24 @@ export function RightSidebar({
   }, [onRestoreRecovery]);
 
   return (
-    <aside className="right-sidebar" aria-label="Document details">
-      {onClose && <DrawerCloseButton ariaLabel="Close document details" onClick={onClose} />}
-      <Panel title="Current target">
+    <aside className="right-sidebar" aria-label={t('documents.regionLabel')}>
+      {onClose && <DrawerCloseButton ariaLabel={t('documents.closeLabel')} onClick={onClose} />}
+      <Panel title={t('documents.currentTarget')}>
         <dl className="meta-grid">
           <div>
-            <dt>Document</dt>
+            <dt>{t('documents.document')}</dt>
             <dd>{documentName}</dd>
           </div>
           <div>
-            <dt>Selected ID</dt>
-            <dd>{activeParaId ?? 'None'}</dd>
+            <dt>{t('documents.selectedId')}</dt>
+            <dd>{activeParaId ?? t('documents.none')}</dd>
           </div>
           <div>
-            <dt>Current Page</dt>
-            <dd>{currentPage ?? 'Unknown'}</dd>
+            <dt>{t('documents.currentPage')}</dt>
+            <dd>{currentPage ?? t('documents.unknown')}</dd>
           </div>
           <div>
-            <dt>Preview</dt>
+            <dt>{t('documents.preview')}</dt>
             <dd>{currentTargetLabel}</dd>
           </div>
         </dl>
@@ -99,9 +101,9 @@ export function RightSidebar({
       <MediaManagerPanel items={mediaItems} onJumpToParaId={onJumpToMedia} />
 
       {recoverySnapshot && (
-        <Panel title="Recovery draft">
+        <Panel title={t('documents.recoveryDraft')}>
           <p className="panel-copy">
-            Unsaved work from {formatDateTime(recoverySnapshot.savedAt)} is available.
+            {t('documents.recoveryAvailable', { time: formatDateTime(recoverySnapshot.savedAt) })}
           </p>
           <div className="saved-document-card__actions">
             <button
@@ -112,7 +114,7 @@ export function RightSidebar({
               }}
               disabled={isRestoringRecovery}
             >
-              {isRestoringRecovery ? 'Restoring...' : 'Restore'}
+              {isRestoringRecovery ? t('documents.restoring') : t('documents.restore')}
             </button>
             <button
               type="button"
@@ -120,7 +122,7 @@ export function RightSidebar({
               onClick={onDiscardRecovery}
               disabled={isRestoringRecovery}
             >
-              Dismiss
+              {t('documents.dismiss')}
             </button>
           </div>
         </Panel>

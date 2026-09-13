@@ -2,7 +2,8 @@
    paper, riso inks, Fraunces titles — always light, independent of theme.
    Scoped variables keep the main app on the global tokens. */
 .login-screen,
-.policy-page {
+.policy-page,
+.app-overlay {
   --nb-black: #1c1917;
   --nb-white: #fffdf7;
   --nb-grey-100: #faf5ec;
@@ -21,6 +22,23 @@
     radial-gradient(circle at 2px 2px, var(--nb-grey-200) 1px, transparent 0);
   background-size: 140px 140px, 24px 24px;
   color: var(--nb-black);
+}
+
+/* Full-screen overlay for the landing/docs/changelog pages opened from the
+   running app. It sits above the header, drawers, and dialogs (but below
+   toasts) and keeps the editor mounted underneath. */
+.app-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The container only takes focus programmatically so keyboard users land
+   inside the overlay; the full-screen outline would just be noise. */
+.app-overlay:focus {
+  outline: none;
 }
 
 .login-screen {

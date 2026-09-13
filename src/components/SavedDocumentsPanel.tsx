@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import type { SavedDocumentSummary } from '../lib/documentApi';
 import { formatBytes, formatDateTime } from '../lib/format';
 import { Panel } from './ui/Panel';
+import { useTranslation } from '../i18n';
 
 type SavedDocumentsPanelProps = {
   documents: SavedDocumentSummary[];
@@ -52,6 +53,7 @@ export function SavedDocumentsPanel({
   onDuplicate,
   onDownload,
 }: SavedDocumentsPanelProps) {
+  const { t } = useTranslation();
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
   const [confirmDeleteDocumentId, setConfirmDeleteDocumentId] = useState<string | null>(null);
   const [pendingDocumentAction, setPendingDocumentAction] = useState<PendingDocumentAction | null>(
@@ -214,7 +216,7 @@ export function SavedDocumentsPanel({
                   cancelRename();
                 }
               }}
-              aria-label={`Edit name for ${document.name}`}
+              aria-label={t('documents.editNameLabel', { name: document.name })}
               disabled={pendingType === 'rename'}
             />
             <div className="saved-document-card__actions">
@@ -224,26 +226,26 @@ export function SavedDocumentsPanel({
                 onClick={() => {
                   void saveRename(document.id);
                 }}
-                aria-label={`Save name for ${document.name}`}
+                aria-label={t('documents.saveNameLabel', { name: document.name })}
                 disabled={pendingType === 'rename'}
               >
-                {pendingType === 'rename' ? 'Saving...' : 'Save'}
+                {pendingType === 'rename' ? t('documents.saving') : t('documents.save')}
               </button>
               <button
                 type="button"
                 className="action-button"
                 onClick={cancelRename}
-                aria-label={`Cancel rename for ${document.name}`}
+                aria-label={t('documents.cancelRenameLabel', { name: document.name })}
                 disabled={pendingType === 'rename'}
               >
-                Cancel
+                {t('documents.cancel')}
               </button>
             </div>
           </>
         ) : isConfirmingDelete ? (
           <>
             <p className="saved-document-card__warning" role="status">
-              Delete this saved document?
+              {t('documents.deleteConfirm')}
             </p>
             <div className="saved-document-card__actions">
               <button
@@ -252,19 +254,19 @@ export function SavedDocumentsPanel({
                 onClick={() => {
                   void confirmDeleteAction(document.id);
                 }}
-                aria-label={`Confirm delete ${document.name}`}
+                aria-label={t('documents.confirmDeleteLabel', { name: document.name })}
                 disabled={pendingType === 'delete'}
               >
-                {pendingType === 'delete' ? 'Deleting...' : 'Confirm'}
+                {pendingType === 'delete' ? t('documents.deleting') : t('documents.confirm')}
               </button>
               <button
                 type="button"
                 className="action-button"
                 onClick={cancelDelete}
-                aria-label={`Cancel delete ${document.name}`}
+                aria-label={t('documents.cancelDeleteLabel', { name: document.name })}
                 disabled={pendingType === 'delete'}
               >
-                Cancel
+                {t('documents.cancel')}
               </button>
             </div>
           </>
@@ -277,21 +279,22 @@ export function SavedDocumentsPanel({
               onClick={() => {
                 void runAction(document.id, 'open', onOpen);
               }}
-              aria-label={`Open ${document.name}`}
+              aria-label={t('documents.openLabel', { name: document.name })}
               disabled={pendingType !== null}
             >
               <span className="saved-document-card__name">{document.name}</span>
               <span className="saved-document-card__meta">
-                {formatBytes(document.sizeInBytes)} | Updated {formatDateTime(document.updatedAt)}
+                {formatBytes(document.sizeInBytes)} |{' '}
+                {t('documents.updated', { date: formatDateTime(document.updatedAt) })}
               </span>
               <span className="saved-document-card__meta">
-                Versions {document.versionCount}
+                {t('documents.versionsCount', { count: document.versionCount })}
                 {document.lastOpenedAt
-                  ? ` | Opened ${formatDateTime(document.lastOpenedAt)}`
+                  ? ` | ${t('documents.opened', { date: formatDateTime(document.lastOpenedAt) })}`
                   : ''}
               </span>
               {pendingType === 'open' && (
-                <span className="saved-document-card__status">Opening...</span>
+                <span className="saved-document-card__status">{t('documents.opening')}</span>
               )}
             </button>
             <div className="saved-document-card__actions saved-document-card__actions--wrap">
@@ -301,10 +304,10 @@ export function SavedDocumentsPanel({
                 onClick={() => {
                   void runAction(document.id, 'download', onDownload);
                 }}
-                aria-label={`Download ${document.name}`}
+                aria-label={t('documents.downloadLabel', { name: document.name })}
                 disabled={pendingType !== null}
               >
-                {pendingType === 'download' ? 'Downloading...' : 'Download'}
+                {pendingType === 'download' ? t('documents.downloading') : t('documents.download')}
               </button>
               <button
                 type="button"
@@ -312,28 +315,28 @@ export function SavedDocumentsPanel({
                 onClick={() => {
                   void runAction(document.id, 'duplicate', onDuplicate);
                 }}
-                aria-label={`Duplicate ${document.name}`}
+                aria-label={t('documents.duplicateLabel', { name: document.name })}
                 disabled={pendingType !== null}
               >
-                {pendingType === 'duplicate' ? 'Duplicating...' : 'Duplicate'}
+                {pendingType === 'duplicate' ? t('documents.duplicating') : t('documents.duplicate')}
               </button>
               <button
                 type="button"
                 className="action-button"
                 onClick={() => startRename(document)}
-                aria-label={`Rename ${document.name}`}
+                aria-label={t('documents.renameLabel', { name: document.name })}
                 disabled={pendingType !== null}
               >
-                Edit
+                {t('documents.edit')}
               </button>
               <button
                 type="button"
                 className="action-button"
                 onClick={() => confirmDelete(document.id)}
-                aria-label={`Delete ${document.name}`}
+                aria-label={t('documents.deleteLabel', { name: document.name })}
                 disabled={pendingType !== null}
               >
-                Delete
+                {t('documents.delete')}
               </button>
             </div>
           </>
@@ -343,11 +346,9 @@ export function SavedDocumentsPanel({
   };
 
   return (
-    <Panel title="Saved documents">
+    <Panel title={t('documents.savedTitle')}>
       <div className="saved-documents-toolbar">
-        <p className="panel-copy">
-          Keep the current editor state on the backend, then reopen it later from this list.
-        </p>
+        <p className="panel-copy">{t('documents.savedCopy')}</p>
         <button
           type="button"
           className="action-button"
@@ -356,7 +357,7 @@ export function SavedDocumentsPanel({
           }}
           disabled={isRefreshing}
         >
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          {isRefreshing ? t('documents.refreshing') : t('documents.refresh')}
         </button>
       </div>
 
@@ -366,30 +367,30 @@ export function SavedDocumentsPanel({
           className="filter-input"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search saved docs..."
-          aria-label="Search saved documents"
+          placeholder={t('documents.searchSavedPlaceholder')}
+          aria-label={t('documents.searchSavedLabel')}
         />
         <select
           className="filter-select"
           value={sortMode}
           onChange={(event) => setSortMode(event.target.value as SortMode)}
-          aria-label="Sort saved documents"
+          aria-label={t('documents.sortLabel')}
         >
-          <option value="updated-desc">Updated</option>
-          <option value="opened-desc">Recent</option>
-          <option value="name-asc">Name</option>
+          <option value="updated-desc">{t('documents.sortUpdated')}</option>
+          <option value="opened-desc">{t('documents.sortRecent')}</option>
+          <option value="name-asc">{t('documents.sortName')}</option>
         </select>
       </div>
 
       {isLoading ? (
-        <p className="panel-copy">Loading saved documents...</p>
+        <p className="panel-copy">{t('documents.loadingSaved')}</p>
       ) : documents.length === 0 ? (
-        <p className="panel-copy">No saved documents yet.</p>
+        <p className="panel-copy">{t('documents.noSaved')}</p>
       ) : (
         <>
           {shouldShowRecentSection && (
             <div className="saved-documents-section">
-              <p className="saved-documents-section__title">Recent</p>
+              <p className="saved-documents-section__title">{t('documents.recent')}</p>
               <div className="saved-documents-list">{recentDocuments.map(renderDocumentCard)}</div>
             </div>
           )}
@@ -398,13 +399,13 @@ export function SavedDocumentsPanel({
             <div className="saved-documents-section">
               <p className="saved-documents-section__title">
                 {searchQuery.trim()
-                  ? `Search results (${filteredDocuments.length})`
+                  ? t('documents.searchResults', { count: filteredDocuments.length })
                   : shouldShowRecentSection
-                    ? 'More documents'
-                    : 'All documents'}
+                    ? t('documents.moreDocuments')
+                    : t('documents.allDocuments')}
               </p>
               {filteredDocuments.length === 0 ? (
-                <p className="panel-copy">No saved documents match that search.</p>
+                <p className="panel-copy">{t('documents.noMatchSearch')}</p>
               ) : (
                 <div className="saved-documents-list">{primaryDocuments.map(renderDocumentCard)}</div>
               )}

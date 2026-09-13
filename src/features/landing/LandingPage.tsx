@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CopyableCommand } from '../../components/ui/CopyableCommand';
+import { LanguageSwitcher } from '../../components/ui/LanguageSwitcher';
+import { useTranslation } from '../../i18n';
 
 type LandingPageProps = {
   needsSetup: boolean;
@@ -11,56 +13,54 @@ type LandingPageProps = {
   onShowTerms: () => void;
 };
 
-const HEADLINE = 'Your documents.\nYour server.\nYour rules.';
-
-const MARQUEE_ITEMS = [
-  'Native .docx',
-  'Version history',
-  'Anchor Map',
-  'Crash recovery',
-  'Command palette',
-  'Dark mode',
-  'Offline-first',
-  'Self-hosted',
-  'MIT licensed',
-  'No telemetry',
+const MARQUEE_KEYS = [
+  'landing.marquee.nativeDocx',
+  'landing.marquee.versionHistory',
+  'landing.marquee.anchorMap',
+  'landing.marquee.crashRecovery',
+  'landing.marquee.commandPalette',
+  'landing.marquee.darkMode',
+  'landing.marquee.offlineFirst',
+  'landing.marquee.selfHosted',
+  'landing.marquee.mitLicensed',
+  'landing.marquee.noTelemetry',
 ];
 
 const FEATURES = [
   {
     index: '01',
-    title: 'Real Word files, zero lock-in',
-    copy: 'Documents stay native .docx on your disk. Open them in Word, LibreOffice, or here — no exports, no conversions.',
+    titleKey: 'landing.features.nativeTitle',
+    copyKey: 'landing.features.nativeCopy',
     mock: 'file',
   },
   {
     index: '02',
-    title: 'Anchor Map',
-    copy: 'A live outline of every heading, synced to your cursor. One click jumps and flash-highlights the target.',
+    titleKey: 'landing.features.outlineTitle',
+    copyKey: 'landing.features.outlineCopy',
     mock: 'outline',
   },
   {
     index: '03',
-    title: 'Version history',
-    copy: 'Every save snapshots. Restore or download any of the last 100 versions.',
+    titleKey: 'landing.features.versionsTitle',
+    copyKey: 'landing.features.versionsCopy',
     mock: 'timeline',
   },
   {
     index: '04',
-    title: 'Crash recovery',
-    copy: 'Unsaved edits are backed up to your browser between saves — reload after a crash and keep working.',
+    titleKey: 'landing.features.recoveryTitle',
+    copyKey: 'landing.features.recoveryCopy',
     mock: 'pulse',
   },
   {
     index: '05',
-    title: 'Keyboard-first',
-    copy: 'Palette, deep links, and shortcuts drive the whole workflow.',
+    titleKey: 'landing.features.keyboardTitle',
+    copyKey: 'landing.features.keyboardCopy',
     mock: 'keys',
   },
   {
     index: '06',
-    title: 'Nothing leaves your server',
-    copy: 'No analytics. No telemetry. No account. The only network requests go to the one server you control.',
+    titleKey: 'landing.features.privacyTitle',
+    copyKey: 'landing.features.privacyCopy',
     mock: null,
   },
 ] as const;
@@ -68,102 +68,118 @@ const FEATURES = [
 const STEPS = [
   {
     index: '01',
-    title: 'Deploy in one command',
-    copy: 'A single Docker command puts the whole editor on your own machine or VPS.',
+    titleKey: 'landing.how.step1Title',
+    copyKey: 'landing.how.step1Copy',
   },
   {
     index: '02',
-    title: 'Set your passphrase',
-    copy: 'The first visit locks the editor with a passphrase you choose. Stored encrypted — even the operator cannot read it.',
+    titleKey: 'landing.how.step2Title',
+    copyKey: 'landing.how.step2Copy',
   },
   {
     index: '03',
-    title: 'Write like you own it',
-    copy: 'Open .docx files, edit with full fidelity, and let versioning guard your work.',
+    titleKey: 'landing.how.step3Title',
+    copyKey: 'landing.how.step3Copy',
   },
 ];
 
 const PERSONAS = [
   {
-    label: 'Contracts & legal',
-    copy: 'Client agreements and case files stay on infrastructure you control, not a vendor’s.',
+    labelKey: 'landing.personas.contractsLabel',
+    copyKey: 'landing.personas.contractsCopy',
   },
   {
-    label: 'Research & writing',
-    copy: 'Long documents with headings, tables, and images — navigable from the Anchor Map.',
+    labelKey: 'landing.personas.researchLabel',
+    copyKey: 'landing.personas.researchCopy',
   },
   {
-    label: 'Internal documents',
-    copy: 'Policies, reports, and drafts that should not sit in somebody else’s cloud.',
+    labelKey: 'landing.personas.internalLabel',
+    copyKey: 'landing.personas.internalCopy',
   },
   {
-    label: 'Self-hosters',
-    copy: 'One container, one volume, no database — happy on a NAS, home server, or $5 VPS.',
+    labelKey: 'landing.personas.selfHostLabel',
+    copyKey: 'landing.personas.selfHostCopy',
   },
 ];
 
 const COMPARISON_COLUMNS = ['DocxCraft', 'Google Docs', 'Word Online', 'OnlyOffice'];
 
 const COMPARISON_ROWS = [
-  { label: 'Where files live', values: ['Your disk', 'Google cloud', 'Microsoft cloud', 'Your server'] },
-  { label: 'Account required', values: ['No', 'Yes', 'Yes', 'No'] },
-  { label: 'Self-hostable', values: ['One container', 'No', 'No', 'Several services'] },
-  { label: 'Works without internet', values: ['Yes', 'Limited', 'Limited', 'Yes'] },
-  { label: 'Telemetry', values: ['None', 'Yes', 'Yes', 'Configurable'] },
-  { label: 'License', values: ['MIT', 'Proprietary', 'Proprietary', 'AGPL-3.0'] },
+  {
+    labelKey: 'landing.compare.labels.whereFiles',
+    valueKeys: [
+      'landing.compare.values.yourDisk',
+      'landing.compare.values.googleCloud',
+      'landing.compare.values.microsoftCloud',
+      'landing.compare.values.yourServer',
+    ],
+  },
+  {
+    labelKey: 'landing.compare.labels.accountRequired',
+    valueKeys: [
+      'landing.compare.values.no',
+      'landing.compare.values.yes',
+      'landing.compare.values.yes',
+      'landing.compare.values.no',
+    ],
+  },
+  {
+    labelKey: 'landing.compare.labels.selfHostable',
+    valueKeys: [
+      'landing.compare.values.oneContainer',
+      'landing.compare.values.no',
+      'landing.compare.values.no',
+      'landing.compare.values.severalServices',
+    ],
+  },
+  {
+    labelKey: 'landing.compare.labels.worksOffline',
+    valueKeys: [
+      'landing.compare.values.yes',
+      'landing.compare.values.limited',
+      'landing.compare.values.limited',
+      'landing.compare.values.yes',
+    ],
+  },
+  {
+    labelKey: 'landing.compare.labels.telemetry',
+    valueKeys: [
+      'landing.compare.values.none',
+      'landing.compare.values.yes',
+      'landing.compare.values.yes',
+      'landing.compare.values.configurable',
+    ],
+  },
+  {
+    labelKey: 'landing.compare.labels.license',
+    valueKeys: [
+      'landing.compare.values.mit',
+      'landing.compare.values.proprietary',
+      'landing.compare.values.proprietary',
+      'landing.compare.values.agpl',
+    ],
+  },
 ];
 
 const INSTALL_COMMAND =
-  'docker run -d -p 4175:4175 -v docxcraft-data:/app/data ghcr.io/kasierbach/docxcraft-editor';
+  'docker run -d -p 4175:4175 -e AUTH_MODE=claim -v docxcraft-data:/app/data ghcr.io/kasierbach/docxcraft-editor';
 
 const REPOSITORY_URL = 'https://github.com/KasierBach/DocxCraft-Editor';
 
 const FAQ_ITEMS = [
-  {
-    question: 'Where are my documents actually stored?',
-    answer:
-      'On the server you run, as native .docx files plus their version snapshots. Nothing is uploaded to a third-party service, and the app makes no network requests beyond your own server.',
-  },
-  {
-    question: 'Is it really free?',
-    answer:
-      'Yes. MIT licensed, no accounts, no subscription, no usage limits, and no telemetry. Self-hosting costs whatever your machine or VPS costs — nothing else.',
-  },
-  {
-    question: 'Does it need a server?',
-    answer:
-      'A small one. The Fastify server serves the editor and stores documents on disk; there is no database and no cloud dependency. One Docker container is enough.',
-  },
-  {
-    question: 'What happens if I forget my passphrase?',
-    answer:
-      'It is stored as a salted hash, so it cannot be recovered. Delete data/auth.json on the server (or reset the volume) and the next visit lets you claim the instance with a new passphrase. Your documents are untouched.',
-  },
-  {
-    question: 'Can I use it offline?',
-    answer:
-      'The editor is served from your own server, so it works without internet access once reachable. Unsaved edits are also backed up inside your browser, so a crash or reload does not lose work.',
-  },
-  {
-    question: 'How do I back up my documents?',
-    answer:
-      'Copy the data directory (or the Docker volume). Documents and their version history are plain files on disk, so a normal file backup is enough — no export step.',
-  },
-  {
-    question: 'Does it work on phones and tablets?',
-    answer:
-      'Yes. The workspace is responsive: on small screens the sidebars become drawers and the toolbar folds down, but it is the same editor — not a stripped-down mode.',
-  },
-  {
-    question: 'Can several people use one instance?',
-    answer:
-      'Not at the same time. DocxCraft is deliberately a single-user workspace: one passphrase, one document library, no accounts or sharing. Collaborate by giving each person their own instance.',
-  },
+  { questionKey: 'landing.faq.q1', answerKey: 'landing.faq.a1' },
+  { questionKey: 'landing.faq.q2', answerKey: 'landing.faq.a2' },
+  { questionKey: 'landing.faq.q3', answerKey: 'landing.faq.a3' },
+  { questionKey: 'landing.faq.q4', answerKey: 'landing.faq.a4' },
+  { questionKey: 'landing.faq.q5', answerKey: 'landing.faq.a5' },
+  { questionKey: 'landing.faq.q6', answerKey: 'landing.faq.a6' },
+  { questionKey: 'landing.faq.q7', answerKey: 'landing.faq.a7' },
+  { questionKey: 'landing.faq.q8', answerKey: 'landing.faq.a8' },
 ];
 
 const NAV_SECTIONS = [
-  { id: 'features', label: 'Features' },
-  { id: 'how-it-works', label: 'How it works' },
+  { id: 'features', labelKey: 'landing.nav.features' },
+  { id: 'how-it-works', labelKey: 'landing.nav.howItWorks' },
 ];
 
 function prefersReducedMotion() {
@@ -345,6 +361,8 @@ function Reveal({
 }
 
 function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
+  const { t } = useTranslation();
+
   if (kind === 'outline') {
     return (
       <div className="landing-mock landing-mock--outline" aria-hidden="true">
@@ -364,7 +382,7 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
         <span className="landing-mock__node" />
         <span className="landing-mock__node" />
         <span className="landing-mock__node" />
-        <span className="landing-mock__tag">v42 · 2 min ago</span>
+        <span className="landing-mock__tag">{t('landing.mock.versionsTag')}</span>
       </div>
     );
   }
@@ -373,7 +391,7 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
     return (
       <div className="landing-mock landing-mock--pulse" aria-hidden="true">
         <span className="landing-mock__pulse-dot" />
-        <span className="landing-mock__pulse-label">autosaved · IndexedDB</span>
+        <span className="landing-mock__pulse-label">{t('landing.mock.autosaveLabel')}</span>
       </div>
     );
   }
@@ -384,7 +402,7 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
         <kbd>Ctrl</kbd>
         <span>+</span>
         <kbd>P</kbd>
-        <span className="landing-mock__keys-caption">command palette</span>
+        <span className="landing-mock__keys-caption">{t('landing.mock.commandPaletteCaption')}</span>
       </div>
     );
   }
@@ -394,7 +412,7 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
       <div className="landing-mock landing-mock--file" aria-hidden="true">
         <span className="landing-mock__file-icon">📄</span>
         <span className="landing-mock__file-name">report-final-FINAL.docx</span>
-        <span className="landing-mock__file-size">42 KB · yours</span>
+        <span className="landing-mock__file-size">{t('landing.mock.fileSize')}</span>
       </div>
     );
   }
@@ -410,6 +428,12 @@ export function LandingPage({
   onShowPrivacy,
   onShowTerms,
 }: LandingPageProps) {
+  const { t } = useTranslation();
+  const HEADLINE = [
+    t('landing.hero.headlineLine1'),
+    t('landing.hero.headlineLine2'),
+    t('landing.hero.headlineLine3'),
+  ].join('\n');
   const { typed, isDone } = useTypewriter(HEADLINE);
   const tiltRef = useTilt();
 
@@ -427,7 +451,7 @@ export function LandingPage({
           <span className="landing-nav__mark" aria-hidden="true" />
           DOCXCRAFT
         </span>
-        <div className="landing-nav__sections" aria-label="Pages">
+        <div className="landing-nav__sections" aria-label={t('landing.nav.sectionsLabel')}>
           {NAV_SECTIONS.map((section) => (
             <button
               key={section.id}
@@ -435,49 +459,52 @@ export function LandingPage({
               className="landing-nav__link"
               onClick={() => scrollToSection(section.id)}
             >
-              {section.label}
+              {t(section.labelKey)}
             </button>
           ))}
           <button type="button" className="landing-nav__link" onClick={onShowDocs}>
-            Docs
+            {t('landing.nav.docs')}
           </button>
           <button type="button" className="landing-nav__link" onClick={onShowChangelog}>
-            Changelog
+            {t('landing.nav.changelog')}
           </button>
         </div>
         <div className="landing-nav__actions">
+          <LanguageSwitcher className="landing-button landing-button--small" />
           <a
             className="landing-button landing-button--small landing-button--star"
             href={REPOSITORY_URL}
             target="_blank"
             rel="noreferrer"
           >
-            <span aria-hidden="true">★</span> Star on GitHub
+            <span aria-hidden="true">★</span> {t('landing.nav.starOnGitHub')}
           </a>
           <button
             type="button"
             className="landing-button landing-button--small landing-button--primary"
             onClick={onPrimaryAction}
           >
-            {needsSetup ? 'Get started' : 'Sign in'}
+            {needsSetup ? t('landing.nav.getStarted') : t('landing.nav.signIn')}
           </button>
         </div>
       </nav>
 
       <section className="landing-hero">
         <Reveal>
-          <span className="landing-hero__badge">Local-first .docx editing</span>
+          <span className="landing-hero__badge">{t('landing.hero.badge')}</span>
         </Reveal>
 
         <h1 className="landing-hero__title" aria-label={HEADLINE.replace(/\n/g, ' ')}>
           {isDone ? (
             <>
-              Your documents.
+              {t('landing.hero.headlineLine1')}
               <br />
-              Your server.
+              {t('landing.hero.headlineLine2')}
               <br />
               <span className="landing-hero__title-accent">
-                <span className="landing-hero__title-accent-text">Your rules.</span>
+                <span className="landing-hero__title-accent-text">
+                  {t('landing.hero.headlineLine3')}
+                </span>
               </span>
             </>
           ) : (
@@ -494,10 +521,7 @@ export function LandingPage({
           {isDone ? <span className="landing-caret landing-caret--done" /> : null}
         </h1>
 
-        <p className="landing-hero__copy">
-          A full Word workspace — version history, smart navigation, crash recovery — running
-          entirely on your machine. No accounts. No telemetry. No cloud.
-        </p>
+        <p className="landing-hero__copy">{t('landing.hero.copy')}</p>
 
         <div className="landing-hero__actions">
           <button
@@ -505,22 +529,24 @@ export function LandingPage({
             className="landing-button landing-button--primary"
             onClick={onPrimaryAction}
           >
-            {needsSetup ? 'Get started — set your passphrase' : 'Sign in to your workspace'}
+            {needsSetup
+              ? t('landing.hero.getStartedSetup')
+              : t('landing.hero.signInWorkspace')}
           </button>
           <button type="button" className="landing-button" onClick={() => scrollToSection('features')}>
-            See what&apos;s inside ↓
+            {t('landing.hero.seeWhatInside')}
           </button>
         </div>
 
         <p className={`landing-hero__autosave ${isDone ? 'landing-hero__autosave--visible' : ''}`}>
-          ✓ Saved — to your server, and nowhere else.
+          {t('landing.hero.autosaved')}
         </p>
 
         <div className="landing-hero__install">
-          <span className="landing-hero__install-label">Or run it yourself</span>
+          <span className="landing-hero__install-label">{t('landing.hero.installLabel')}</span>
           <CopyableCommand code={INSTALL_COMMAND} wrap />
           <button type="button" className="landing-hero__install-link" onClick={onShowDocs}>
-            Full setup guide →
+            {t('landing.hero.setupGuide')}
           </button>
         </div>
 
@@ -531,21 +557,21 @@ export function LandingPage({
                 <span className="landing-shot__dot" />
                 <span className="landing-shot__dot" />
                 <span className="landing-shot__dot" />
-                <span className="landing-shot__url">your-server.local</span>
+                <span className="landing-shot__url">{t('landing.hero.browserUrl')}</span>
               </div>
               <img
                 className="landing-shot__image"
                 src="/screenshot.png"
-                alt="DocxCraft Editor with the document outline, editor, and version history open"
+                alt={t('landing.hero.screenshotAlt')}
                 width={1536}
                 height={864}
               />
             </figure>
             <span className="landing-sticker landing-sticker--local" aria-hidden="true">
-              100% LOCAL
+              {t('landing.hero.stickerLocal')}
             </span>
             <span className="landing-sticker landing-sticker--cloud" aria-hidden="true">
-              NO CLOUD ✂
+              {t('landing.hero.stickerNoCloud')}
             </span>
           </div>
         </div>
@@ -562,7 +588,7 @@ export function LandingPage({
                 150+
               </a>
             </dt>
-            <dd className="landing-stats__label">automated tests, run in CI</dd>
+            <dd className="landing-stats__label">{t('landing.hero.statsTestsLabel')}</dd>
           </div>
           <div className="landing-stats__item">
             <dt className="landing-stats__value">
@@ -575,7 +601,7 @@ export function LandingPage({
                 <CountUp target={4} />
               </a>
             </dt>
-            <dd className="landing-stats__label">browser engines tested</dd>
+            <dd className="landing-stats__label">{t('landing.hero.statsEnginesLabel')}</dd>
           </div>
           <div className="landing-stats__item">
             <dt className="landing-stats__value landing-stats__value--static">
@@ -588,34 +614,32 @@ export function LandingPage({
                 MIT
               </a>
             </dt>
-            <dd className="landing-stats__label">licensed, no strings</dd>
+            <dd className="landing-stats__label">{t('landing.hero.statsLicenseLabel')}</dd>
           </div>
           <div className="landing-stats__item">
             <dt className="landing-stats__value landing-stats__value--static">100%</dt>
-            <dd className="landing-stats__label">of data on your server</dd>
+            <dd className="landing-stats__label">{t('landing.hero.statsDataLabel')}</dd>
           </div>
         </dl>
       </section>
 
       <div className="landing-marquee" aria-hidden="true">
         <div className="landing-marquee__track">
-          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, index) => (
-            <span key={`${item}-${index}`} className="landing-marquee__item">
-              {item} <span className="landing-marquee__star">✦</span>
+          {[...MARQUEE_KEYS, ...MARQUEE_KEYS].map((key, index) => (
+            <span key={`${key}-${index}`} className="landing-marquee__item">
+              {t(key)} <span className="landing-marquee__star">✦</span>
             </span>
           ))}
         </div>
       </div>
 
-      <section className="landing-section" id="features" aria-label="What you get">
+      <section className="landing-section" id="features" aria-label={t('landing.features.sectionLabel')}>
         <Reveal>
-          <span className="landing-section__eyebrow">Features</span>
+          <span className="landing-section__eyebrow">{t('landing.features.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">Everything a word processor should be</span>
+            <span className="landing-marker">{t('landing.features.title')}</span>
           </h2>
-          <p className="landing-section__copy">
-            All the machinery of a modern editor — none of the reach of a modern platform.
-          </p>
+          <p className="landing-section__copy">{t('landing.features.copy')}</p>
         </Reveal>
 
         <div className="landing-grid">
@@ -623,8 +647,8 @@ export function LandingPage({
             <Reveal key={feature.index} delayMs={(index % 3) * 90}>
               <article className="landing-card">
                 <span className="landing-card__index">{feature.index}</span>
-                <h3 className="landing-card__title">{feature.title}</h3>
-                <p className="landing-card__copy">{feature.copy}</p>
+                <h3 className="landing-card__title">{t(feature.titleKey)}</h3>
+                <p className="landing-card__copy">{t(feature.copyKey)}</p>
                 <FeatureMock kind={feature.mock} />
               </article>
             </Reveal>
@@ -632,15 +656,16 @@ export function LandingPage({
         </div>
       </section>
 
-      <section className="landing-section landing-section--centered" aria-label="In the details">
+      <section
+        className="landing-section landing-section--centered"
+        aria-label={t('landing.proof.sectionLabel')}
+      >
         <Reveal>
-          <span className="landing-section__eyebrow">In the details</span>
+          <span className="landing-section__eyebrow">{t('landing.proof.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">See it for real</span>
+            <span className="landing-marker">{t('landing.proof.title')}</span>
           </h2>
-          <p className="landing-section__copy">
-            Not mockups — these are windows from the app itself.
-          </p>
+          <p className="landing-section__copy">{t('landing.proof.copy')}</p>
         </Reveal>
 
         <div className="landing-proof">
@@ -651,12 +676,12 @@ export function LandingPage({
                   <span className="landing-shot__dot" />
                   <span className="landing-shot__dot" />
                   <span className="landing-shot__dot" />
-                  <span className="landing-shot__url">Version history</span>
+                  <span className="landing-shot__url">{t('landing.proof.windowTitle')}</span>
                 </div>
                 <img
                   className="landing-proof__image"
                   src="/shot-versions.png"
-                  alt="Version history panel listing restore points for a document, each with restore and download actions"
+                  alt={t('landing.proof.versionsAlt')}
                   width={520}
                   height={1004}
                   loading="lazy"
@@ -669,7 +694,7 @@ export function LandingPage({
                 <img
                   className="landing-proof__image"
                   src="/shot-mobile.png"
-                  alt="Document outline drawer open over the editor on a phone-sized screen"
+                  alt={t('landing.proof.mobileAlt')}
                   width={780}
                   height={1688}
                   loading="lazy"
@@ -681,47 +706,41 @@ export function LandingPage({
 
           <Reveal className="landing-proof__captions" delayMs={120}>
             <div className="landing-proof__text">
-              <h3 className="landing-proof__title">Every save is a restore point</h3>
-              <p className="landing-proof__copy">
-                Up to 100 versions per document — restore or download any of them, or
-                reopen after a crash.
-              </p>
+              <h3 className="landing-proof__title">{t('landing.proof.caption1Title')}</h3>
+              <p className="landing-proof__copy">{t('landing.proof.caption1Copy')}</p>
             </div>
             <div className="landing-proof__text">
-              <h3 className="landing-proof__title">The full workspace, in your pocket</h3>
-              <p className="landing-proof__copy">
-                On phones the sidebars become drawers and the toolbar folds down — the same
-                editor, not a stripped-down mode.
-              </p>
+              <h3 className="landing-proof__title">{t('landing.proof.caption2Title')}</h3>
+              <p className="landing-proof__copy">{t('landing.proof.caption2Copy')}</p>
             </div>
           </Reveal>
         </div>
       </section>
 
-      <section className="landing-section" aria-label="Who it's for">
+      <section className="landing-section" aria-label={t('landing.personas.sectionLabel')}>
         <Reveal>
-          <span className="landing-section__eyebrow">Who it's for</span>
+          <span className="landing-section__eyebrow">{t('landing.personas.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">Built for people with documents to keep</span>
+            <span className="landing-marker">{t('landing.personas.title')}</span>
           </h2>
         </Reveal>
         <div className="landing-personas">
           {PERSONAS.map((persona, index) => (
-            <Reveal key={persona.label} delayMs={index * 80}>
+            <Reveal key={persona.labelKey} delayMs={index * 80}>
               <article className="landing-persona">
-                <h3 className="landing-persona__label">{persona.label}</h3>
-                <p className="landing-persona__copy">{persona.copy}</p>
+                <h3 className="landing-persona__label">{t(persona.labelKey)}</h3>
+                <p className="landing-persona__copy">{t(persona.copyKey)}</p>
               </article>
             </Reveal>
           ))}
         </div>
       </section>
 
-      <section className="landing-section" id="how-it-works" aria-label="How it works">
+      <section className="landing-section" id="how-it-works" aria-label={t('landing.how.sectionLabel')}>
         <Reveal>
-          <span className="landing-section__eyebrow">How it works</span>
+          <span className="landing-section__eyebrow">{t('landing.how.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">Up in three steps</span>
+            <span className="landing-marker">{t('landing.how.title')}</span>
           </h2>
         </Reveal>
         <ol className="landing-steps">
@@ -729,34 +748,30 @@ export function LandingPage({
             <Reveal key={step.index} delayMs={index * 100} className="landing-steps__wrap">
               <li className="landing-steps__item">
                 <span className="landing-steps__index">{step.index}</span>
-                <h3 className="landing-steps__title">{step.title}</h3>
-                <p className="landing-steps__copy">{step.copy}</p>
+                <h3 className="landing-steps__title">{t(step.titleKey)}</h3>
+                <p className="landing-steps__copy">{t(step.copyKey)}</p>
               </li>
             </Reveal>
           ))}
         </ol>
       </section>
 
-      <section className="landing-section" id="compare" aria-label="Compare">
+      <section className="landing-section" id="compare" aria-label={t('landing.compare.sectionLabel')}>
         <Reveal>
-          <span className="landing-section__eyebrow">Compare</span>
+          <span className="landing-section__eyebrow">{t('landing.compare.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">Why not just use Google Docs?</span>
+            <span className="landing-marker">{t('landing.compare.title')}</span>
           </h2>
-          <p className="landing-section__copy">
-            Because the document is the point — and it should live somewhere you control.
-          </p>
+          <p className="landing-section__copy">{t('landing.compare.copy')}</p>
         </Reveal>
 
         <Reveal>
           <table className="landing-compare">
-            <caption className="visually-hidden">
-              Feature comparison between DocxCraft, Google Docs, Word Online, and OnlyOffice
-            </caption>
+            <caption className="visually-hidden">{t('landing.compare.caption')}</caption>
             <thead>
               <tr>
                 <th scope="col" className="landing-compare__corner">
-                  <span className="visually-hidden">Feature</span>
+                  <span className="visually-hidden">{t('landing.compare.featureLabel')}</span>
                 </th>
                 {COMPARISON_COLUMNS.map((column) => (
                   <th key={column} scope="col" className="landing-compare__column">
@@ -767,46 +782,45 @@ export function LandingPage({
             </thead>
             <tbody>
               {COMPARISON_ROWS.map((row) => (
-                <tr key={row.label}>
+                <tr key={row.labelKey}>
                   <th scope="row" className="landing-compare__label">
-                    {row.label}
+                    {t(row.labelKey)}
                   </th>
-                  {row.values.map((value, index) => (
+                  {row.valueKeys.map((valueKey, index) => (
                     <td
-                      key={`${row.label}-${COMPARISON_COLUMNS[index]}`}
+                      key={`${row.labelKey}-${COMPARISON_COLUMNS[index]}`}
                       className={index === 0 ? 'landing-compare__us' : undefined}
                     >
-                      {value}
+                      {t(valueKey)}
                     </td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="landing-compare__footnote">
-            Publicly documented behavior of each product, checked in 2026 — always read the
-            vendors' own terms. DocxCraft keeps every file on the server you run.
-          </p>
+          <p className="landing-compare__footnote">{t('landing.compare.footnote')}</p>
         </Reveal>
       </section>
 
-      <section className="landing-section landing-section--centered" id="faq" aria-label="FAQ">
+      <section
+        className="landing-section landing-section--centered"
+        id="faq"
+        aria-label={t('landing.faq.sectionLabel')}
+      >
         <Reveal>
-          <span className="landing-section__eyebrow">FAQ</span>
+          <span className="landing-section__eyebrow">{t('landing.faq.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">Questions, answered</span>
+            <span className="landing-marker">{t('landing.faq.title')}</span>
           </h2>
-          <p className="landing-section__copy">
-            The honest details about storage, security, and running your own instance.
-          </p>
+          <p className="landing-section__copy">{t('landing.faq.copy')}</p>
         </Reveal>
 
         <div className="landing-faq">
           {FAQ_ITEMS.map((item, index) => (
-            <Reveal key={item.question} delayMs={Math.min(index * 60, 240)}>
+            <Reveal key={item.questionKey} delayMs={Math.min(index * 60, 240)}>
               <details className="landing-faq__item">
-                <summary className="landing-faq__question">{item.question}</summary>
-                <p className="landing-faq__answer">{item.answer}</p>
+                <summary className="landing-faq__question">{t(item.questionKey)}</summary>
+                <p className="landing-faq__answer">{t(item.answerKey)}</p>
               </details>
             </Reveal>
           ))}
@@ -816,14 +830,14 @@ export function LandingPage({
       <section className="landing-cta">
         <Reveal>
           <h2 className="landing-cta__title">
-            <span className="landing-marker landing-marker--sweep">Own your words.</span>
+            <span className="landing-marker landing-marker--sweep">{t('landing.cta.title')}</span>
           </h2>
           <button
             type="button"
             className="landing-button landing-button--primary landing-button--huge"
             onClick={onPrimaryAction}
           >
-            {needsSetup ? 'Claim your instance' : 'Sign in'}
+            {needsSetup ? t('landing.cta.claim') : t('landing.cta.signIn')}
           </button>
         </Reveal>
       </section>
@@ -832,60 +846,58 @@ export function LandingPage({
         <div className="landing-footer__top">
           <div className="landing-footer__brand-col">
             <span className="landing-footer__brand">DOCXCRAFT</span>
-            <p className="landing-footer__tagline">
-              A local-first .docx workspace that runs on your own server.
-            </p>
-            <span className="landing-footer__note">MIT licensed · No telemetry · Self-hosted</span>
+            <p className="landing-footer__tagline">{t('landing.footer.tagline')}</p>
+            <span className="landing-footer__note">{t('landing.footer.note')}</span>
           </div>
 
-          <nav className="landing-footer__col" aria-label="Product">
-            <h3>Product</h3>
+          <nav className="landing-footer__col" aria-label={t('landing.footer.productLabel')}>
+            <h3>{t('landing.footer.productLabel')}</h3>
             <button type="button" onClick={() => scrollToSection('features')}>
-              Features
+              {t('landing.nav.features')}
             </button>
             <button type="button" onClick={() => scrollToSection('how-it-works')}>
-              How it works
+              {t('landing.nav.howItWorks')}
             </button>
             <button type="button" onClick={onShowDocs}>
-              Docs
+              {t('landing.nav.docs')}
             </button>
             <button type="button" onClick={onShowChangelog}>
-              Changelog
+              {t('landing.nav.changelog')}
             </button>
           </nav>
 
-          <nav className="landing-footer__col" aria-label="Resources">
-            <h3>Resources</h3>
+          <nav className="landing-footer__col" aria-label={t('landing.footer.resourcesLabel')}>
+            <h3>{t('landing.footer.resourcesLabel')}</h3>
             <a href={`${REPOSITORY_URL}#readme`} target="_blank" rel="noreferrer">
               README
             </a>
             <a href={`${REPOSITORY_URL}/releases`} target="_blank" rel="noreferrer">
-              Releases
+              {t('landing.footer.releases')}
             </a>
             <a href={`${REPOSITORY_URL}/pkgs/container/docxcraft-editor`} target="_blank" rel="noreferrer">
-              Container image
+              {t('landing.footer.containerImage')}
             </a>
             <a href={`${REPOSITORY_URL}/issues`} target="_blank" rel="noreferrer">
-              Issues
+              {t('landing.footer.issues')}
             </a>
           </nav>
 
-          <nav className="landing-footer__col" aria-label="Legal">
-            <h3>Legal</h3>
+          <nav className="landing-footer__col" aria-label={t('landing.footer.legalLabel')}>
+            <h3>{t('landing.footer.legalLabel')}</h3>
             <button type="button" onClick={onShowPrivacy}>
-              Privacy policy
+              {t('landing.footer.privacyPolicy')}
             </button>
             <button type="button" onClick={onShowTerms}>
-              Terms of use
+              {t('landing.footer.termsOfUse')}
             </button>
             <a href={`${REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
-              MIT license
+              {t('landing.footer.mitLicense')}
             </a>
           </nav>
         </div>
 
         <div className="landing-footer__bottom">
-          <span>Built in the open — issues and pull requests welcome.</span>
+          <span>{t('landing.footer.builtInOpen')}</span>
           <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">
             GitHub ↗
           </a>

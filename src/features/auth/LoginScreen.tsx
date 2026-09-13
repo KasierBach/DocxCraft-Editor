@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import { loginWithPassphrase } from '../../lib/documentApi';
+import { useTranslation } from '../../i18n';
 
 type LoginScreenProps = {
   onAuthenticated: () => void;
@@ -8,6 +9,7 @@ type LoginScreenProps = {
 };
 
 export function LoginScreen({ onAuthenticated, onBack }: LoginScreenProps) {
+  const { t } = useTranslation();
   const [passphrase, setPassphrase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,7 +24,7 @@ export function LoginScreen({ onAuthenticated, onBack }: LoginScreenProps) {
       await loginWithPassphrase(passphrase);
       onAuthenticated();
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Login failed.');
+      setError(loginError instanceof Error ? loginError.message : t('auth.loginFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -31,15 +33,13 @@ export function LoginScreen({ onAuthenticated, onBack }: LoginScreenProps) {
   return (
     <main className="login-screen">
       <form className="login-card" onSubmit={handleSubmit}>
-        <span className="login-card__eyebrow">Welcome back</span>
-        <h1 className="login-card__title">Sign in</h1>
-        <p className="login-card__copy">
-          Enter the passphrase you set for this server to open your workspace.
-        </p>
+        <span className="login-card__eyebrow">{t('auth.welcomeBack')}</span>
+        <h1 className="login-card__title">{t('auth.signInTitle')}</h1>
+        <p className="login-card__copy">{t('auth.signInCopy')}</p>
 
         {onBack && (
           <button type="button" className="login-card__back" onClick={onBack}>
-            ← Back
+            {t('common.back')}
           </button>
         )}
 
@@ -48,8 +48,8 @@ export function LoginScreen({ onAuthenticated, onBack }: LoginScreenProps) {
           className="login-card__input"
           value={passphrase}
           onChange={(event) => setPassphrase(event.target.value)}
-          placeholder="Passphrase"
-          aria-label="Passphrase"
+          placeholder={t('auth.passphrase')}
+          aria-label={t('auth.passphrase')}
           autoComplete="current-password"
           autoFocus
           disabled={isSubmitting}
@@ -66,12 +66,13 @@ export function LoginScreen({ onAuthenticated, onBack }: LoginScreenProps) {
           className="action-button action-button--primary login-card__submit"
           disabled={isSubmitting || !passphrase}
         >
-          {isSubmitting ? 'Unlocking...' : 'Unlock'}
+          {isSubmitting ? t('auth.unlocking') : t('auth.unlock')}
         </button>
 
         <p className="login-card__hint">
-          Lost your passphrase? Reset it on the server by deleting{' '}
-          <code>data/auth.json</code>, then set a new one.
+          {t('auth.lostPassphrasePrefix')}
+          <code>data/auth.json</code>
+          {t('auth.lostPassphraseSuffix')}
         </p>
       </form>
     </main>

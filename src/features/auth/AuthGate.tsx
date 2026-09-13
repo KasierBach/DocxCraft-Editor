@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { readAuthSession } from '../../lib/documentApi';
-import { AuthGateContext } from './AuthGateContext';
+import { AuthGateContext, type AppPage } from './AuthGateContext';
 import { ChangelogPage } from '../landing/ChangelogPage';
 import { DocsPage } from '../landing/DocsPage';
 import { LandingPage } from '../landing/LandingPage';
@@ -30,10 +30,15 @@ type GateView =
  * claiming, and sign-in. Renders the app only once a session exists (or auth
  * is disabled). A failed session check (API offline) falls through to the
  * app, which surfaces its own offline state.
+ *
+ * Once the app is running, the same pages open as an overlay on top of it so
+ * the editor, the open document, and unsaved edits are never unmounted.
  */
 export function AuthGate({ children }: AuthGateProps) {
   const [view, setView] = useState<GateView>({ kind: 'checking' });
   const [isAuthGated, setIsAuthGated] = useState(false);
+  const [overlayPage, setOverlayPage] = useState<AppPage | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -61,7 +66,69 @@ export function AuthGate({ children }: AuthGateProps) {
     };
   }, []);
 
-  const appView = <AuthGateContext.Provider value={{ isAuthGated }}>{children}</AuthGateContext.Provider>;
+  const openPage = useCallback((page: AppPage) => setOverlayPage(page), []);
+  const closePage = useCallback(() => setOverlayPage(null), []);
+
+  // Escape closes the overlay and stops there, so editor drawers and menus
+  // behind it keep their own Escape handling untouched. Focus moves into the
+  // overlay so keyboard users are not left on the now-closed menu trigger.
+  useEffect(() => {
+    if (!overlayPage) {
+      return undefined;
+    }
+
+    overlayRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.stopPropagation();
+      setOverlayPage(null);
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [overlayPage]);
+
+  const contextValue = useMemo(
+    () => ({ isAuthGated, openPage, closePage }),
+    [closePage, isAuthGated, openPage],
+  );
+
+  const overlay = overlayPage ? (
+    <div
+      ref={overlayRef}
+      className="app-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Information page"
+      tabIndex={-1}
+    >
+      {overlayPage === 'landing' && (
+        <LandingPage
+          needsSetup={false}
+          onPrimaryAction={closePage}
+          onShowDocs={() => setOverlayPage('docs')}
+          onShowChangelog={() => setOverlayPage('changelog')}
+          onShowPrivacy={() => setOverlayPage('privacy')}
+          onShowTerms={() => setOverlayPage('terms')}
+        />
+      )}
+      {overlayPage === 'docs' && <DocsPage onBack={closePage} />}
+      {overlayPage === 'changelog' && <ChangelogPage onBack={closePage} />}
+      {overlayPage === 'privacy' && <PrivacyPolicy onBack={closePage} />}
+      {overlayPage === 'terms' && <TermsOfUse onBack={closePage} />}
+    </div>
+  ) : null;
+
+  const appView = (
+    <AuthGateContext.Provider value={contextValue}>
+      {children}
+      {overlay}
+    </AuthGateContext.Provider>
+  );
 
   switch (view.kind) {
     case 'checking':
