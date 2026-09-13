@@ -29,7 +29,7 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',
       exclude: ['**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx'],
-      thresholds: { lines: 70, functions: 70, statements: 70, branches: 58 },
+      thresholds: { lines: 74, functions: 73, statements: 74, branches: 64 },
     },
   },
 });

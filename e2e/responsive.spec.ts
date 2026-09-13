@@ -80,6 +80,8 @@ test.describe('responsive layout', () => {
       });
       await page.goto('/');
       await page.waitForLoadState('networkidle');
+      // The auth gate resolves the session before mounting the app shell.
+      await page.locator('.app-shell').waitFor({ state: 'visible' });
 
       const layout = await measureLayout(page);
 
@@ -186,6 +188,7 @@ test.describe('responsive layout', () => {
       await page.setViewportSize(size);
       await page.goto('/');
       await page.waitForLoadState('networkidle');
+      await page.locator('.app-shell').waitFor({ state: 'visible' });
 
       await page.keyboard.press('Control+P');
       const palette = page.getByRole('dialog', { name: 'Command palette' });
