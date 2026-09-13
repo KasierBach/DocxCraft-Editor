@@ -60,3 +60,52 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  smoke:
+    name: Smoke test the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # Built for the local daemon instead of the registry, so a broken image
+      # fails here rather than during a deploy.
+      - name: Build image for smoke testing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: docxcraft-smoke:ci
+          cache-from: type=gha
+
+      - name: Run the container and probe it
+        run: |
+          set -euo pipefail
+          docker run -d --name docxcraft-smoke -p 4180:4175 -e AUTH_MODE=claim docxcraft-smoke:ci
+
+          healthy=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4180/api/health > /dev/null; then
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+
+          echo "--- container logs ---"
+          docker logs docxcraft-smoke
+          test "$healthy" = "1"
+
+          # The built bundle must be inside the image, not just the API.
+          curl -fsS http://127.0.0.1:4180/ | grep -qi "<title>"
+          # Claim mode is the documented deployment default.
+          curl -fsS http://127.0.0.1:4180/api/auth/session | grep -q '"needsSetup":true'
+          # A missing bundle must 404 instead of serving index.html.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4180/assets/does-not-exist.js)" = "404"
+
+          docker rm -f docxcraft-smoke
