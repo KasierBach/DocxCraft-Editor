@@ -17,7 +17,7 @@ import type {
 
 const INDEX_FILENAME = 'index.json';
 const FILE_EXTENSION = '.docx';
-const MAX_VERSIONS_PER_DOCUMENT = 100;
+const DEFAULT_MAX_VERSIONS_PER_DOCUMENT = 100;
 
 type StoredDocumentSummary = Omit<SavedDocumentSummary, 'revision'> & {
   latestVersionId: string;
@@ -85,8 +85,17 @@ export class FileDocumentStore implements DocumentStorePort {
 
   private writeQueue: Promise<void> = Promise.resolve();
 
-  constructor({ dataDir }: { dataDir: string }) {
+  private readonly maxVersionsPerDocument: number;
+
+  constructor({
+    dataDir,
+    maxVersionsPerDocument = DEFAULT_MAX_VERSIONS_PER_DOCUMENT,
+  }: {
+    dataDir: string;
+    maxVersionsPerDocument?: number;
+  }) {
     this.dataDir = dataDir;
+    this.maxVersionsPerDocument = maxVersionsPerDocument;
     this.indexPath = join(dataDir, INDEX_FILENAME);
   }
 
@@ -401,7 +410,7 @@ export class FileDocumentStore implements DocumentStorePort {
     const versions = index.versions
       .filter((version) => version.documentId === documentId)
       .sort(byCreatedAtDescending);
-    const retained = new Set(versions.slice(0, MAX_VERSIONS_PER_DOCUMENT).map((version) => version.id));
+    const retained = new Set(versions.slice(0, this.maxVersionsPerDocument).map((version) => version.id));
     const removed = versions.filter((version) => !retained.has(version.id));
     if (removed.length === 0) return;
 
@@ -518,5 +527,6 @@ export function createDocumentStore(options?: CreateDocumentStoreOptions) {
 
   return new FileDocumentStore({
     dataDir,
+    maxVersionsPerDocument: options?.maxVersionsPerDocument,
   });
 }

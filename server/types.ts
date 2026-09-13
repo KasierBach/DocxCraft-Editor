@@ -32,6 +32,8 @@ export type RenameDocumentInput = {
 export type CreateDocumentStoreOptions = {
   dataDir?: string;
   rootDirectory?: string;
+  /** How many versions to retain per document (default 100). */
+  maxVersionsPerDocument?: number;
 };
 
 export interface DocumentStorePort {
