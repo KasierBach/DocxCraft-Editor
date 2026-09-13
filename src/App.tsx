@@ -126,7 +126,7 @@ export default function App() {
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
   const { isAuthGated, openPage } = useAuthGate();
-  const { t } = useTranslation();
+  const { language, t } = useTranslation();
 
   // Signing out clears the session cookie; a reload re-runs the auth gate,
   // which routes back to the landing page.
@@ -1131,7 +1131,10 @@ export default function App() {
               documentBuffer={source.kind !== 'sample' ? source.buffer : undefined}
               mode={editorMode}
               onModeChange={setEditorMode}
-              i18n={editorVi}
+              // The editor's built-in UI follows the active language: English
+              // needs no catalog (its strings are English by default and unset
+              // keys fall back), Vietnamese is overridden with our catalog.
+              i18n={language === 'vi' ? editorVi : undefined}
               className="docx-editor-frame"
               onChange={() => {
                 if (Date.now() < ignoreContentChangeUntilRef.current) {
