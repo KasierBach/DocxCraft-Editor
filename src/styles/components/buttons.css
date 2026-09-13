@@ -43,7 +43,7 @@
 }
 
 .action-button--primary:hover {
-  background: #89c4ff !important;
+  background: var(--nb-primary-hover) !important;
 }
 
 .action-button--secondary {
@@ -51,7 +51,7 @@
 }
 
 .action-button--secondary:hover {
-  background: #b8eb6a !important;
+  background: var(--nb-secondary-hover) !important;
 }
 
 .action-button--menu {

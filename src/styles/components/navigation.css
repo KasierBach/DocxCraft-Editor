@@ -66,7 +66,7 @@
   font-size: 0.75rem;
   font-weight: 900;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--nb-text-muted);
   letter-spacing: 0.1em;
 }
 
@@ -88,8 +88,8 @@
   padding: 20px;
   text-align: center;
   font-weight: 600;
-  color: #9ca3af;
-  border: 2px dashed #9ca3af;
+  color: var(--nb-text-faint);
+  border: 2px dashed var(--nb-text-faint);
 }
 
 .anchor-button {
@@ -142,20 +142,20 @@
   font-weight: 900;
   text-transform: uppercase;
   color: var(--nb-black);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--nb-hover-overlay);
   padding: 2px 6px;
   border: 1px solid var(--nb-black);
   border-radius: 2px;
 }
 
 .anchor-button[data-active='true'] .anchor-tag {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--nb-hover-contrast);
 }
 
 .anchor-id {
   font-size: 0.65rem;
   font-family: monospace;
-  color: rgba(0, 0, 0, 0.4);
+  color: var(--nb-scrollbar-thumb);
 }
 
 /* ─── Custom Scrollbar ─── */

@@ -74,7 +74,7 @@
   padding: 40px;
   text-align: center;
   font-weight: 700;
-  color: #888;
+  color: var(--nb-text-muted);
 }
 
 .command-palette__footer {
@@ -86,7 +86,7 @@
   font-size: 0.7rem;
   font-weight: 800;
   text-transform: uppercase;
-  color: #666;
+  color: var(--nb-text-muted);
 }
 
 /* Short viewports: reduce the top gap and shrink the result list. */

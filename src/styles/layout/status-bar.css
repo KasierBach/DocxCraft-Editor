@@ -34,7 +34,7 @@
 }
 
 .status-label {
-  color: #888;
+  color: var(--nb-text-muted);
 }
 
 .status-value {
@@ -56,8 +56,8 @@
 }
 
 .save-status--dirty {
-  background: #ffec99;
-  color: #856404;
+  background: var(--nb-warning-bg);
+  color: var(--nb-warning-text);
 }
 
 .status-button {

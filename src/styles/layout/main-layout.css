@@ -136,7 +136,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--nb-scrim);
     z-index: 1045;
     animation: drawer-backdrop-fade-in 200ms ease-out;
   }

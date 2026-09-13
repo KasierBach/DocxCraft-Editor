@@ -33,7 +33,7 @@
 }
 
 .app-toast--error {
-  background: #fecaca;
+  background: var(--nb-danger-surface);
 }
 
 .app-toast__message {

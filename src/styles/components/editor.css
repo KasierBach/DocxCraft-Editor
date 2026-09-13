@@ -39,7 +39,7 @@
   align-items: center;
   gap: 12px;
   min-height: 28px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid var(--nb-inverse-divider);
 }
 
 .status-bar__message {

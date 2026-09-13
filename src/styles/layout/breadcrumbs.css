@@ -22,7 +22,7 @@
   font-size: 0.6rem;
   font-weight: 800;
   text-transform: uppercase;
-  color: #7b7b7b;
+  color: var(--nb-text-muted);
   letter-spacing: 0.05em;
   background: none;
   border: none;
@@ -31,7 +31,7 @@
 
 .breadcrumbs__separator {
   font-weight: 900;
-  color: #ccc;
+  color: var(--nb-text-faint);
   font-size: 0.62rem;
 }
 
@@ -39,7 +39,7 @@
   font-size: 0.6rem;
   font-weight: 900;
   text-transform: uppercase;
-  color: #505050;
+  color: var(--nb-text-muted);
   background: none;
   border: none;
   padding: 0;
