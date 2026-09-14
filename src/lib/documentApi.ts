@@ -95,10 +95,25 @@ async function dedupeRequest<T>(key: string, fetcher: () => Promise<T>): Promise
   return promise;
 }
 
+export type AuthSessionUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  isAnonymous: boolean;
+};
+
+export type AuthProvider = {
+  id: string;
+  label: string;
+};
+
 export type AuthSession = {
   authRequired: boolean;
   needsSetup: boolean;
   authenticated: boolean;
+  user?: AuthSessionUser;
+  providers?: AuthProvider[];
 };
 
 export async function readAuthSession() {
@@ -137,7 +152,24 @@ export async function claimInstanceWithPassphrase(passphrase: string) {
 export async function logout() {
   const response = await fetch('/api/auth/logout', withRequestTimeout({ method: 'POST' }));
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new Error('Sign out failed.');
+  }
+}
+
+/** Downloads the account export as JSON text. */
+export async function exportAccount() {
+  const response = await fetch('/api/account/export', withRequestTimeout());
+  if (!response.ok) {
+    throw new Error('Account export failed.');
+  }
+  return response.text();
+}
+
+/** Deletes the signed-in account and all of its documents. */
+export async function deleteAccount() {
+  const response = await fetch('/api/account', withRequestTimeout({ method: 'DELETE' }));
+  if (!response.ok) {
+    throw new Error('Account deletion failed.');
   }
 }
 

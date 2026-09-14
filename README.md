@@ -271,3 +271,21 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 ## License
 
 [MIT](LICENSE)
+
+## Hosted deployment hardening
+
+The hosted build (Postgres + OAuth accounts) needs operational pieces the self-host image does not:
+
+- **Edge/WAF** — put Cloudflare (free plan) in front of Caddy for WAF, bot management, DDoS absorption, and CDN caching. Keep Caddy for TLS.
+- **Uptime + errors** — monitor `GET /api/health` and add error tracking (e.g. Sentry) via the edge or a log drain.
+- **Backups** — take logical dumps regularly and rehearse a restore:
+
+  ```sh
+  docker compose -f docker-compose.dev.yml exec -T postgres \
+    pg_dump -U docxcraft docxcraft > backup.sql
+  cat backup.sql | docker compose -f docker-compose.dev.yml exec -T postgres \
+    psql -U docxcraft -d docxcraft
+  ```
+
+  Enable versioning and a lifecycle policy on the blob bucket as well.
+- **Migrations** — run `npm run db:migrate` (Prisma migrate deploy) as a deploy step before starting the new app version.

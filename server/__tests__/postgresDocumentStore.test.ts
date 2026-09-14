@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,7 @@ import {
   describeDocumentStoreContract,
   type StoreHarness,
 } from './support/documentStoreContract.ts';
+import { acquireDatabaseLock } from './support/databaseLock.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const hasDatabase = Boolean(databaseUrl);
@@ -27,6 +29,7 @@ describe.skipIf(!hasDatabase)('PostgresDocumentStore (integration)', () => {
       throw new Error('TEST_DATABASE_URL is required for the Postgres store contract.');
     }
 
+    const releaseLock = await acquireDatabaseLock(databaseUrl);
     const prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: databaseUrl }),
     });
@@ -43,6 +46,7 @@ describe.skipIf(!hasDatabase)('PostgresDocumentStore (integration)', () => {
       dispose: async () => {
         await prisma.$disconnect();
         await rm(blobRoot, { recursive: true, force: true });
+        await releaseLock();
       },
     };
   });

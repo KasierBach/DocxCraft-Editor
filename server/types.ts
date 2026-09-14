@@ -38,6 +38,11 @@ export type CreateDocumentStoreOptions = {
 
 export interface DocumentStorePort {
   verifyIntegrity(): Promise<void>;
+  /**
+   * Returns a view scoped to a single owner. The file store is single-tenant
+   * and returns itself; the Postgres store filters and stamps `ownerId`.
+   */
+  forOwner(ownerId: string): DocumentStorePort;
   listDocuments(): Promise<SavedDocumentSummary[]>;
   listDocumentVersions(documentId: string): Promise<SavedDocumentVersionSummary[]>;
   saveNewDocument(input: SaveDocumentInput): Promise<SavedDocumentSummary>;

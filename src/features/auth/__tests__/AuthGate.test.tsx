@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { AuthGate } from '../AuthGate';
@@ -20,6 +21,9 @@ vi.mock('../../landing/PrivacyPolicy', () => ({ PrivacyPolicy: () => <div /> }))
 vi.mock('../../landing/TermsOfUse', () => ({ TermsOfUse: () => <div /> }));
 vi.mock('../../landing/DocsPage', () => ({ DocsPage: () => <div data-testid="docs" /> }));
 vi.mock('../../landing/ChangelogPage', () => ({ ChangelogPage: () => <div /> }));
+vi.mock('../../library/DocumentsPage', () => ({
+  DocumentsPage: () => <div data-testid="library" />,
+}));
 
 import { readAuthSession } from '../../../lib/documentApi';
 
@@ -38,11 +42,13 @@ function Probe() {
   );
 }
 
-function renderGate() {
+function renderGate(path = '/app') {
   return render(
-    <AuthGate>
-      <Probe />
-    </AuthGate>,
+    <MemoryRouter initialEntries={[path]}>
+      <AuthGate>
+        <Probe />
+      </AuthGate>
+    </MemoryRouter>,
   );
 }
 
@@ -51,7 +57,7 @@ describe('AuthGate', () => {
     vi.mocked(readAuthSession).mockReset();
   });
 
-  it('renders the app directly when auth is disabled', async () => {
+  it('renders the app at /app when auth is disabled', async () => {
     vi.mocked(readAuthSession).mockResolvedValue({
       authRequired: false,
       needsSetup: false,
@@ -64,28 +70,29 @@ describe('AuthGate', () => {
     expect(screen.queryByTestId('landing')).not.toBeInTheDocument();
   });
 
-  it('shows the landing page with setup pending for a fresh instance', async () => {
+  it('shows the landing page at / for a fresh instance', async () => {
     vi.mocked(readAuthSession).mockResolvedValue({
       authRequired: true,
       needsSetup: true,
       authenticated: false,
     });
 
-    renderGate();
+    renderGate('/');
 
-    expect(await screen.findByTestId('landing')).toHaveTextContent('needs-setup');
+    // Landing is unreachable until the instance is claimed; setup comes first.
+    expect(await screen.findByTestId('setup')).toBeInTheDocument();
   });
 
-  it('shows the landing page for a claimed instance without a session', async () => {
+  it('shows sign-in for a claimed instance without a session', async () => {
     vi.mocked(readAuthSession).mockResolvedValue({
       authRequired: true,
       needsSetup: false,
       authenticated: false,
     });
 
-    renderGate();
+    renderGate('/');
 
-    expect(await screen.findByTestId('landing')).toHaveTextContent('ready');
+    expect(await screen.findByTestId('login')).toBeInTheDocument();
   });
 
   it('falls through to the app when the session check fails', async () => {
@@ -108,6 +115,18 @@ describe('AuthGate', () => {
     renderGate();
 
     expect(await screen.findByTestId('probe')).toHaveTextContent('gated');
+  });
+
+  it('renders the documents library at /documents', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: false,
+      needsSetup: false,
+      authenticated: true,
+    });
+
+    renderGate('/documents');
+
+    expect(await screen.findByTestId('library')).toBeInTheDocument();
   });
 
   it('opens reference pages over the running app and closes them with Escape', async () => {

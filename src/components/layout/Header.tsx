@@ -34,6 +34,10 @@ type HeaderProps = {
   onShowDocs?: () => void;
   onShowChangelog?: () => void;
   onShowHome?: () => void;
+  onShowLibrary?: () => void;
+  onShowSettings?: () => void;
+  signInProviders?: Array<{ id: string; label: string }>;
+  isAnonymous?: boolean;
 };
 
 type OpenMenu = 'export' | 'utility' | null;
@@ -87,6 +91,10 @@ function HeaderComponent({
   onShowDocs,
   onShowChangelog,
   onShowHome,
+  onShowLibrary,
+  onShowSettings,
+  signInProviders,
+  isAnonymous = false,
 }: HeaderProps) {
   const { t } = useTranslation();
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
@@ -475,7 +483,33 @@ function HeaderComponent({
                 >
                   {t('header.reloadCurrent')}
                 </button>
-                {(onShowDocs || onShowChangelog || onShowHome) &&                 <h4>{t('header.help')}</h4>}
+                {onShowLibrary && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowLibrary();
+                    }}
+                  >
+                    {t('header.myDocuments')}
+                  </button>
+                )}
+                {onShowSettings && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowSettings();
+                    }}
+                  >
+                    {t('header.settings')}
+                  </button>
+                )}
+                {(onShowDocs || onShowChangelog || onShowHome) && <h4>{t('header.help')}</h4>}
                 {onShowDocs && (
                   <button
                     type="button"
@@ -514,6 +548,21 @@ function HeaderComponent({
                   >
                     {t('header.homePage')}
                   </button>
+                )}
+                {isAnonymous && signInProviders && signInProviders.length > 0 && (
+                  <>
+                    <h4>{t('auth.signInTitle')}</h4>
+                    {signInProviders.map((provider) => (
+                      <a
+                        key={provider.id}
+                        className="action-button toolbar-dropdown__button"
+                        href={`/api/auth/${provider.id}/start`}
+                        onClick={closeMenus}
+                      >
+                        {t('header.signInWith', { provider: provider.label })}
+                      </a>
+                    ))}
+                  </>
                 )}
                 {onSignOut && (
                   <button

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
@@ -11,6 +11,15 @@ import { z } from 'zod';
 import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
 import { validateDocx } from './docxValidation.ts';
 import type { AuthStateStore } from './authStore.ts';
+import {
+  handleHostedSession,
+  registerAccountDataRoutes,
+  registerAccountRoutes,
+  type AccountsOptions,
+} from './auth/routes.ts';
+import { readCookies } from './cookies.ts';
+import { QuotaExceededError, assertWithinQuota as checkQuota } from './quotas.ts';
+import { SESSION_COOKIE_NAME } from './session.ts';
 import type { DocumentStorePort } from './types.ts';
 import {
   createClearCookie,
@@ -167,6 +176,8 @@ export function buildDocumentApiApp({
   authPassphraseHash,
   authStateStore,
   allowAuthClaim = false,
+  accounts,
+  quotas,
 }: {
   store: DocumentStorePort;
   logger?: boolean | Record<string, unknown>;
@@ -177,6 +188,10 @@ export function buildDocumentApiApp({
   authPassphraseHash?: string;
   authStateStore?: AuthStateStore;
   allowAuthClaim?: boolean;
+  /** Hosted accounts (guest + OAuth). Omit for the self-host passphrase flow. */
+  accounts?: AccountsOptions;
+  /** Per-owner limits; only enforced when accounts are enabled. */
+  quotas?: { maxDocuments: number; maxStorageBytes: number };
 }): FastifyInstance {
   const app = Fastify({
     bodyLimit: MAX_DOCUMENT_BYTES,
@@ -250,7 +265,11 @@ export function buildDocumentApiApp({
       });
     }
 
-    scope.get('/api/auth/session', async (request) => {
+    scope.get('/api/auth/session', async (request, reply) => {
+      if (accounts) {
+        return handleHostedSession(request, reply, accounts);
+      }
+
       if (!isAuthEnabled) {
         return { authRequired: false, needsSetup: false, authenticated: true };
       }
@@ -270,7 +289,7 @@ export function buildDocumentApiApp({
       };
     });
 
-    if (isAuthEnabled) {
+    if (isAuthEnabled && !accounts) {
       // Serialized so two racing visitors cannot both claim the instance.
       let claimTask: Promise<void> | null = null;
 
@@ -369,7 +388,12 @@ export function buildDocumentApiApp({
       });
     }
 
-    registerDocumentRoutes(scope, store);
+    if (accounts) {
+      registerAccountRoutes(scope, accounts);
+      registerAccountDataRoutes(scope, accounts);
+    }
+
+    registerDocumentRoutes(scope, store, accounts, quotas);
   });
 
   app.addHook('onSend', async (request, reply) => {
@@ -391,6 +415,11 @@ export function buildDocumentApiApp({
   );
 
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof QuotaExceededError) {
+      void reply.code(413).send({ message: error.message });
+      return;
+    }
+
     if (error instanceof RequestValidationError) {
       void reply.code(400).send({ message: error.message });
       return;
@@ -441,59 +470,137 @@ export function buildDocumentApiApp({
   return app;
 }
 
-function registerDocumentRoutes(app: FastifyInstance, store: DocumentStorePort) {
-  app.get('/api/documents', async () => store.listDocuments());
+function registerDocumentRoutes(
+  app: FastifyInstance,
+  store: DocumentStorePort,
+  accounts?: AccountsOptions,
+  quotas?: { maxDocuments: number; maxStorageBytes: number },
+) {
+  // With hosted accounts every document call runs against a store scoped to the
+  // session's user. Without an account layer (self-host) the base store is used
+  // directly and behaviour is unchanged.
+  const resolveScope = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!accounts) return { store, userId: null as string | null };
 
-  app.get('/api/documents/:documentId/versions', async (request) => {
+    const session = await accounts.sessions.resolve(
+      readCookies(request.headers.cookie)[SESSION_COOKIE_NAME],
+    );
+    if (!session) {
+      void reply.code(401).send({ message: 'A session is required.' });
+      return null;
+    }
+
+    return { store: store.forOwner(session.user.id), userId: session.user.id };
+  };
+
+  const assertWithinQuota = (
+    scoped: DocumentStorePort,
+    extraBytes: number,
+    options: { countLimit: boolean },
+  ) => checkQuota(scoped, quotas, extraBytes, options);
+
+  app.get('/api/documents', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    return scope ? scope.store.listDocuments() : reply;
+  });
+
+  app.get('/api/documents/:documentId/versions', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
-    return store.listDocumentVersions(documentId);
+    return scope.store.listDocumentVersions(documentId);
   });
 
   app.post('/api/documents', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const buffer = await readDocumentBuffer(request.body);
-    const document = await store.saveNewDocument({
+    await assertWithinQuota(scope.store, buffer.byteLength, { countLimit: true });
+    const document = await scope.store.saveNewDocument({
       name: readDocumentName(request.headers as Record<string, unknown>),
       buffer,
+    });
+    await accounts?.audit?.record({
+      action: 'document.create',
+      actorUserId: scope.userId,
+      documentId: document.id,
+      ip: request.ip,
     });
 
     return reply.code(201).send(document);
   });
 
   app.put('/api/documents/:documentId', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const buffer = await readDocumentBuffer(request.body);
-    const document = await store.updateDocument(documentId, {
+    await assertWithinQuota(scope.store, buffer.byteLength, { countLimit: false });
+    const document = await scope.store.updateDocument(documentId, {
       name: readDocumentName(request.headers as Record<string, unknown>),
       buffer,
       expectedRevision: readExpectedRevision(request.headers as Record<string, unknown>),
+    });
+    await accounts?.audit?.record({
+      action: 'document.update',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
     });
 
     return reply.code(200).send(document);
   });
 
   app.patch('/api/documents/:documentId', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const body = parseWithSchema(renameDocumentBodySchema, request.body);
-    const document = await store.renameDocument(documentId, { name: body.name });
+    const document = await scope.store.renameDocument(documentId, { name: body.name });
+    await accounts?.audit?.record({
+      action: 'document.rename',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
+    });
     return reply.code(200).send(document);
   });
 
   app.delete('/api/documents/:documentId', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
-    await store.deleteDocument(documentId);
+    await scope.store.deleteDocument(documentId);
+    await accounts?.audit?.record({
+      action: 'document.delete',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
+    });
     return reply.code(204).send();
   });
 
   app.post('/api/documents/:documentId/duplicate', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
-    const document = await store.duplicateDocument(documentId);
+    await assertWithinQuota(scope.store, 0, { countLimit: true });
+    const document = await scope.store.duplicateDocument(documentId);
+    await accounts?.audit?.record({
+      action: 'document.duplicate',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
+    });
     return reply.code(201).send(document);
   });
 
   app.get('/api/documents/:documentId/content', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const query = parseWithSchema(documentContentQuerySchema, request.query);
-    const document = await store.readDocumentRecord(documentId, {
+    const document = await scope.store.readDocumentRecord(documentId, {
       markOpened: query.markOpened,
     });
 
@@ -507,8 +614,10 @@ function registerDocumentRoutes(app: FastifyInstance, store: DocumentStorePort) 
   });
 
   app.get('/api/documents/:documentId/versions/:versionId/content', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
     const { documentId, versionId } = parseWithSchema(documentVersionParamsSchema, request.params);
-    const version = await store.readDocumentVersionRecord(documentId, versionId);
+    const version = await scope.store.readDocumentVersionRecord(documentId, versionId);
 
     reply.header(
       'content-type',

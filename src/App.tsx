@@ -125,7 +125,7 @@ export default function App() {
   const refreshTimerRef = useRef<number | null>(null);
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
-  const { isAuthGated, openPage } = useAuthGate();
+  const { isAuthGated, openPage, openLibrary, openSettings, providers, isAnonymous } = useAuthGate();
   const { language, t } = useTranslation();
 
   // Signing out clears the session cookie; a reload re-runs the auth gate,
@@ -1089,6 +1089,10 @@ export default function App() {
         onShowDocs={() => openPage('docs')}
         onShowChangelog={() => openPage('changelog')}
         onShowHome={() => openPage('landing')}
+        onShowLibrary={openLibrary}
+        onShowSettings={openSettings}
+        signInProviders={providers}
+        isAnonymous={isAnonymous}
       />
 
       {(showSidebar || showInfo) && (

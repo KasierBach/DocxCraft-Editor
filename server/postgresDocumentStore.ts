@@ -79,23 +79,42 @@ export class PostgresDocumentStore implements DocumentStorePort {
 
   private readonly maxVersionsPerDocument: number;
 
+  private readonly ownerId: string | null;
+
   constructor({
     prisma,
     blobs,
     maxVersionsPerDocument = DEFAULT_MAX_VERSIONS_PER_DOCUMENT,
+    ownerId = null,
   }: {
     prisma: PrismaClient;
     blobs: BlobStoragePort;
     maxVersionsPerDocument?: number;
+    ownerId?: string | null;
   }) {
     this.prisma = prisma;
     this.blobs = blobs;
     this.maxVersionsPerDocument = maxVersionsPerDocument;
+    this.ownerId = ownerId;
+  }
+
+  forOwner(ownerId: string): DocumentStorePort {
+    return new PostgresDocumentStore({
+      prisma: this.prisma,
+      blobs: this.blobs,
+      maxVersionsPerDocument: this.maxVersionsPerDocument,
+      ownerId,
+    });
+  }
+
+  /** Owner filter applied to every query; `undefined` means "no scoping". */
+  private get ownerFilter() {
+    return this.ownerId ? { ownerId: this.ownerId } : {};
   }
 
   async listDocuments() {
     const rows = await this.prisma.document.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...this.ownerFilter },
       orderBy: { updatedAt: 'desc' },
     });
     return rows.map(toDocumentSummary);
@@ -123,6 +142,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
         await tx.document.create({
           data: {
             id: documentId,
+            ownerId: this.ownerId,
             name: documentName,
             sizeInBytes: BigInt(buffer.byteLength),
             versionCount: 1,
@@ -271,7 +291,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
 
   async verifyIntegrity() {
     const documents = await this.prisma.document.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...this.ownerFilter },
       select: { id: true, latestVersionId: true },
     });
 
@@ -324,7 +344,9 @@ export class PostgresDocumentStore implements DocumentStorePort {
   }
 
   private async requireDocument(db: Database, id: string) {
-    const document = await db.document.findFirst({ where: { id, deletedAt: null } });
+    const document = await db.document.findFirst({
+      where: { id, deletedAt: null, ...this.ownerFilter },
+    });
     if (!document) {
       throw new DocumentNotFoundError(`Document ${id} was not found.`);
     }

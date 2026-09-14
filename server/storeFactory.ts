@@ -7,8 +7,14 @@ import { PrismaClient } from './generated/prisma/client.ts';
 import { PostgresDocumentStore } from './postgresDocumentStore.ts';
 import type { DocumentStorePort } from './types.ts';
 
+export type DocumentStoreBundle = {
+  store: DocumentStorePort;
+  /** Present only for the postgres store; shared with the account services. */
+  prisma?: PrismaClient;
+};
+
 /** Builds the document store selected by configuration. */
-export function createDocumentStoreFromConfig(config: AppConfig): DocumentStorePort {
+export function createDocumentStoreFromConfig(config: AppConfig): DocumentStoreBundle {
   if (config.documentStore === 'postgres') {
     if (!config.databaseUrl) {
       throw new Error('DATABASE_URL is required for the postgres document store.');
@@ -18,11 +24,14 @@ export function createDocumentStoreFromConfig(config: AppConfig): DocumentStoreP
       adapter: new PrismaPg({ connectionString: config.databaseUrl }),
     });
 
-    return new PostgresDocumentStore({
+    return {
+      store: new PostgresDocumentStore({
+        prisma,
+        blobs: new DiskBlobStorage({ rootDir: config.blobDir }),
+      }),
       prisma,
-      blobs: new DiskBlobStorage({ rootDir: config.blobDir }),
-    });
+    };
   }
 
-  return createDocumentStore({ rootDirectory: config.dataDir });
+  return { store: createDocumentStore({ rootDirectory: config.dataDir }) };
 }

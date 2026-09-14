@@ -320,3 +320,88 @@
 .media-list__label {
   font-size: 0.75rem;
 }
+
+/* --- Documents dashboard --- */
+.documents-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.documents-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.documents-page__title {
+  margin: 0 0 4px;
+}
+
+.documents-page__intro {
+  margin: 0;
+  color: var(--nb-text-muted);
+}
+
+.documents-page__state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.documents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* --- Settings page --- */
+.settings-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.settings-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.settings-page__title {
+  margin: 0 0 4px;
+}
+
+.settings-page__intro {
+  margin: 0;
+  color: var(--nb-text-muted);
+}
+
+.settings-section {
+  border-top: 2px solid var(--nb-divider);
+  padding: 20px 0;
+}
+
+.settings-section h2 {
+  margin: 0 0 8px;
+}
+
+.settings-section h3 {
+  margin: 12px 0 6px;
+}
+
+.settings-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}

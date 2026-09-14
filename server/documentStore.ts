@@ -90,8 +90,12 @@ export class FileDocumentStore implements DocumentStorePort {
     return result;
   }
 
-  async verifyIntegrity() {
-    const index = await this.readIndex();
+  /** Self-host is single-tenant: ownership is not modelled, so this is a no-op. */
+  forOwner(): DocumentStorePort {
+    return this;
+  }
+
+  async verifyIntegrity() {    const index = await this.readIndex();
     const documentIds = new Set(index.documents.map((document) => document.id));
     const versionIds = new Set(index.versions.map((version) => `${version.documentId}:${version.id}`));
 

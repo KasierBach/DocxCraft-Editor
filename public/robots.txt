@@ -1,2 +1,9 @@
+# Public marketing and reference pages are indexable; app surfaces are not.
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /app
+Disallow: /documents
+Disallow: /settings
+Disallow: /login
+Disallow: /setup

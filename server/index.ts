@@ -1,10 +1,17 @@
 import { pathToFileURL } from 'node:url';
 
 import { buildDocumentApiApp } from './app.ts';
+import { AccountService } from './accountService.ts';
 import { hashPassphrase } from './auth.ts';
+import { AuditService } from './audit.ts';
+import { createOAuthProviders } from './auth/providers.ts';
+import type { AccountsOptions } from './auth/routes.ts';
 import { createFileAuthStateStore, defaultAuthStateFilePath, type AuthStateStore } from './authStore.ts';
-import { resolveAppConfig } from './config.ts';
+import { resolveAppConfig, type AppConfig } from './config.ts';
+import type { PrismaClient } from './generated/prisma/client.ts';
+import { loadEnvFileIfPresent } from './loadEnv.ts';
 import { createServerLoggerOptions } from './logger.ts';
+import { SessionService } from './session.ts';
 import { createDocumentStoreFromConfig } from './storeFactory.ts';
 
 export const DEFAULT_PORT = 4175;
@@ -66,6 +73,25 @@ function readCorsOrigin() {
   return value.split(',').map((entry) => entry.trim()).filter(Boolean);
 }
 
+/** Builds the hosted accounts wiring when a database and an OAuth provider exist. */
+function buildAccountsOptions(
+  config: AppConfig,
+  prisma?: PrismaClient,
+): AccountsOptions | undefined {
+  const { google, github, baseUrl, sessionTtlMs } = config.auth;
+  if (!prisma || !baseUrl || (!google && !github)) {
+    return undefined;
+  }
+
+  return {
+    accounts: new AccountService({ prisma }),
+    sessions: new SessionService({ prisma, ttlMs: sessionTtlMs }),
+    providers: createOAuthProviders({ google, github }),
+    baseUrl,
+    audit: new AuditService({ prisma }),
+  };
+}
+
 export async function startDocumentApiServer({
   port = DEFAULT_PORT,
   host = '127.0.0.1',
@@ -74,7 +100,8 @@ export async function startDocumentApiServer({
   host?: string;
 } = {}) {
   const config = resolveAppConfig(process.env);
-  const store = createDocumentStoreFromConfig(config);
+  const { store, prisma } = createDocumentStoreFromConfig(config);
+  const accounts = buildAccountsOptions(config, prisma);
   const { authStateStore, allowAuthClaim } = resolveAuthState(process.env, config.dataDir);
   const app = buildDocumentApiApp({
     store,
@@ -82,6 +109,8 @@ export async function startDocumentApiServer({
     authPassphraseHash: resolveAuthPassphraseHash(process.env),
     authStateStore,
     allowAuthClaim,
+    accounts,
+    quotas: config.quotas,
     logger: createServerLoggerOptions({
       env: process.env.NODE_ENV,
       level: process.env.LOG_LEVEL ?? 'info',
@@ -106,6 +135,7 @@ export async function startDocumentApiServer({
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  loadEnvFileIfPresent();
   startDocumentApiServer({
     port: readPort(process.env.PORT),
     host: process.env.HOST ?? '127.0.0.1',

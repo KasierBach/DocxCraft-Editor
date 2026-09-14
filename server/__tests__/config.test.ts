@@ -32,4 +32,40 @@ describe('resolveAppConfig', () => {
       resolveAppConfig({ DOCUMENT_STORE: 'sqlite' } as NodeJS.ProcessEnv),
     ).toThrow(/Invalid environment configuration/);
   });
+
+  it('reads OAuth clients, base URL, and session TTL', () => {
+    const config = resolveAppConfig({
+      GOOGLE_CLIENT_ID: 'google-id',
+      GOOGLE_CLIENT_SECRET: 'google-secret',
+      APP_BASE_URL: 'https://editor.example.com',
+      SESSION_TTL_DAYS: '7',
+    } as NodeJS.ProcessEnv);
+
+    expect(config.auth.google).toEqual({ clientId: 'google-id', clientSecret: 'google-secret' });
+    expect(config.auth.github).toBeUndefined();
+    expect(config.auth.baseUrl).toBe('https://editor.example.com');
+    expect(config.auth.sessionTtlMs).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it('ignores a half-configured OAuth client', () => {
+    const config = resolveAppConfig({
+      GITHUB_CLIENT_ID: 'github-id',
+    } as NodeJS.ProcessEnv);
+
+    expect(config.auth.github).toBeUndefined();
+  });
+
+  it('treats blank values as unset (empty .env placeholders)', () => {
+    const config = resolveAppConfig({
+      DOCUMENT_STORE: 'postgres',
+      DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
+      GOOGLE_CLIENT_ID: '',
+      GOOGLE_CLIENT_SECRET: '',
+      APP_BASE_URL: '',
+    } as NodeJS.ProcessEnv);
+
+    expect(config.documentStore).toBe('postgres');
+    expect(config.auth.google).toBeUndefined();
+    expect(config.auth.baseUrl).toBeUndefined();
+  });
 });

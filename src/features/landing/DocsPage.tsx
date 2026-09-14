@@ -12,6 +12,16 @@ const CONFIG_VARIABLES = [
   { name: 'DOCUMENT_STORE', fallback: 'file', descriptionKey: 'docs.config.variables.documentStore' },
   { name: 'DATABASE_URL', fallback: '—', descriptionKey: 'docs.config.variables.databaseUrl' },
   { name: 'BLOB_DIR', fallback: './data/blobs', descriptionKey: 'docs.config.variables.blobDir' },
+  {
+    name: 'MAX_DOCUMENTS_PER_USER',
+    fallback: '100',
+    descriptionKey: 'docs.config.variables.maxDocumentsPerUser',
+  },
+  {
+    name: 'MAX_STORAGE_BYTES_PER_USER',
+    fallback: '104857600',
+    descriptionKey: 'docs.config.variables.maxStoragePerUser',
+  },
   { name: 'AUTH_MODE', fallback: 'off', descriptionKey: 'docs.config.variables.authMode' },
   { name: 'AUTH_PASSPHRASE_HASH', fallback: '—', descriptionKey: 'docs.config.variables.authPassphraseHash' },
   { name: 'AUTH_PASSPHRASE', fallback: '—', descriptionKey: 'docs.config.variables.authPassphrase' },

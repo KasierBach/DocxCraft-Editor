@@ -1,73 +1,124 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router';
 
-import { readAuthSession } from '../../lib/documentApi';
-import { AuthGateContext, type AppPage } from './AuthGateContext';
+import { readAuthSession, type AuthProvider, type AuthSessionUser } from '../../lib/documentApi';
+import { DocumentsPage } from '../library/DocumentsPage';
+import { SettingsPage } from '../settings/SettingsPage';
 import { ChangelogPage } from '../landing/ChangelogPage';
 import { DocsPage } from '../landing/DocsPage';
 import { LandingPage } from '../landing/LandingPage';
-import { LoginScreen } from './LoginScreen';
 import { PrivacyPolicy } from '../landing/PrivacyPolicy';
-import { SetupScreen } from './SetupScreen';
 import { TermsOfUse } from '../landing/TermsOfUse';
+import { AuthGateContext, type AppPage } from './AuthGateContext';
+import { LoginScreen } from './LoginScreen';
+import { SetupScreen } from './SetupScreen';
 
 type AuthGateProps = {
   children: ReactNode;
 };
 
+/** URL for each gate page; the gate is driven entirely by the current path. */
+const GATE_PATHS = {
+  app: '/app',
+  library: '/documents',
+  settings: '/settings',
+  landing: '/',
+  setup: '/setup',
+  signin: '/login',
+  privacy: '/privacy',
+  terms: '/terms',
+  docs: '/docs',
+  changelog: '/changelog',
+} as const;
+
 type GateView =
-  | { kind: 'checking' }
-  | { kind: 'app' }
-  | { kind: 'landing'; needsSetup: boolean }
-  | { kind: 'setup' }
-  | { kind: 'signin' }
-  | { kind: 'privacy' }
-  | { kind: 'terms' }
-  | { kind: 'docs' }
-  | { kind: 'changelog' };
+  | 'app'
+  | 'library'
+  | 'settings'
+  | 'landing'
+  | 'setup'
+  | 'signin'
+  | 'privacy'
+  | 'terms'
+  | 'docs'
+  | 'changelog';
+
+function viewForPath(pathname: string): GateView {
+  switch (pathname) {
+    case GATE_PATHS.app:
+      return 'app';
+    case GATE_PATHS.library:
+      return 'library';
+    case GATE_PATHS.settings:
+      return 'settings';
+    case GATE_PATHS.setup:
+      return 'setup';
+    case GATE_PATHS.signin:
+      return 'signin';
+    case GATE_PATHS.privacy:
+      return 'privacy';
+    case GATE_PATHS.terms:
+      return 'terms';
+    case GATE_PATHS.docs:
+      return 'docs';
+    case GATE_PATHS.changelog:
+      return 'changelog';
+    default:
+      return 'landing';
+  }
+}
 
 /**
- * Owns the unauthenticated experience: landing page, first-run instance
- * claiming, and sign-in. Renders the app only once a session exists (or auth
- * is disabled). A failed session check (API offline) falls through to the
- * app, which surfaces its own offline state.
+ * Owns the unauthenticated experience (passphrase gate) and routes the public
+ * pages by URL: landing, docs, changelog, policies, sign-in, the documents
+ * library, and the editor itself. A failed session check (API offline) falls
+ * through to the app, which surfaces its own offline state.
  *
- * Once the app is running, the same pages open as an overlay on top of it so
- * the editor, the open document, and unsaved edits are never unmounted.
+ * From inside the app, reference pages still open as an overlay so the editor,
+ * the open document, and unsaved edits are never unmounted.
  */
 export function AuthGate({ children }: AuthGateProps) {
-  const [view, setView] = useState<GateView>({ kind: 'checking' });
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isChecking, setIsChecking] = useState(true);
   const [isAuthGated, setIsAuthGated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [user, setUser] = useState<AuthSessionUser | null>(null);
+  const [providers, setProviders] = useState<AuthProvider[]>([]);
   const [overlayPage, setOverlayPage] = useState<AppPage | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    let isCancelled = false;
+  const loadSession = useCallback(() => {
+    let cancelled = false;
 
     void readAuthSession()
       .then((session) => {
-        if (isCancelled) return;
+        if (cancelled) return;
         setIsAuthGated(session.authRequired);
-        if (!session.authRequired || session.authenticated) {
-          setView({ kind: 'app' });
-        } else if (session.needsSetup) {
-          setView({ kind: 'landing', needsSetup: true });
-        } else {
-          setView({ kind: 'landing', needsSetup: false });
-        }
+        setNeedsSetup(session.needsSetup);
+        setAuthenticated(!session.authRequired || session.authenticated);
+        setUser(session.user ?? null);
+        setProviders(session.providers ?? []);
       })
       .catch(() => {
-        if (!isCancelled) {
-          setView({ kind: 'app' });
-        }
+        if (!cancelled) setAuthenticated(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsChecking(false);
       });
 
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
   }, []);
 
+  useEffect(() => loadSession(), [loadSession]);
+
   const openPage = useCallback((page: AppPage) => setOverlayPage(page), []);
   const closePage = useCallback(() => setOverlayPage(null), []);
+  const openLibrary = useCallback(() => navigate(GATE_PATHS.library), [navigate]);
+  const openSettings = useCallback(() => navigate(GATE_PATHS.settings), [navigate]);
 
   // Escape closes the overlay and stops there, so editor drawers and menus
   // behind it keep their own Escape handling untouched. Focus moves into the
@@ -92,9 +143,10 @@ export function AuthGate({ children }: AuthGateProps) {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [overlayPage]);
 
+  const isAnonymous = user?.isAnonymous ?? false;
   const contextValue = useMemo(
-    () => ({ isAuthGated, openPage, closePage }),
-    [closePage, isAuthGated, openPage],
+    () => ({ isAuthGated, openPage, closePage, openLibrary, openSettings, providers, isAnonymous }),
+    [closePage, isAnonymous, isAuthGated, openLibrary, openPage, openSettings, providers],
   );
 
   const overlay = overlayPage ? (
@@ -123,46 +175,56 @@ export function AuthGate({ children }: AuthGateProps) {
     </div>
   ) : null;
 
-  const appView = (
-    <AuthGateContext.Provider value={contextValue}>
-      {children}
-      {overlay}
-    </AuthGateContext.Provider>
-  );
+  if (isChecking) {
+    return <div className="login-screen" aria-hidden="true" />;
+  }
 
-  switch (view.kind) {
-    case 'checking':
-      return <div className="login-screen" aria-hidden="true" />;
-    case 'app':
-      return appView;
-    case 'setup':
-      return <SetupScreen onClaimed={() => setView({ kind: 'app' })} />;
+  if (isAuthGated && !authenticated) {
+    const reload = () => {
+      setIsChecking(true);
+      loadSession();
+    };
+
+    return needsSetup ? (
+      <SetupScreen onClaimed={reload} />
+    ) : (
+      <LoginScreen onAuthenticated={reload} onBack={() => navigate(GATE_PATHS.landing)} />
+    );
+  }
+
+  const view = viewForPath(location.pathname);
+
+  if (view === 'app' || view === 'library' || view === 'settings') {
+    return (
+      <AuthGateContext.Provider value={contextValue}>
+        {view === 'app' ? children : view === 'library' ? <DocumentsPage /> : <SettingsPage />}
+        {overlay}
+      </AuthGateContext.Provider>
+    );
+  }
+
+  switch (view) {
     case 'signin':
-      return (
-        <LoginScreen
-          onAuthenticated={() => setView({ kind: 'app' })}
-          onBack={() => setView({ kind: 'landing', needsSetup: false })}
-        />
-      );
+    case 'setup':
+      return <Navigate to={GATE_PATHS.app} replace />;
     case 'privacy':
-      return <PrivacyPolicy onBack={() => setView({ kind: 'landing', needsSetup: false })} />;
+      return <PrivacyPolicy onBack={() => navigate(GATE_PATHS.landing)} />;
     case 'terms':
-      return <TermsOfUse onBack={() => setView({ kind: 'landing', needsSetup: false })} />;
+      return <TermsOfUse onBack={() => navigate(GATE_PATHS.landing)} />;
     case 'docs':
-      return <DocsPage onBack={() => setView({ kind: 'landing', needsSetup: false })} />;
+      return <DocsPage onBack={() => navigate(GATE_PATHS.landing)} />;
     case 'changelog':
-      return <ChangelogPage onBack={() => setView({ kind: 'landing', needsSetup: false })} />;
+      return <ChangelogPage onBack={() => navigate(GATE_PATHS.landing)} />;
     case 'landing':
+    default:
       return (
         <LandingPage
-          needsSetup={view.needsSetup}
-          onPrimaryAction={() =>
-            setView(view.needsSetup ? { kind: 'setup' } : { kind: 'signin' })
-          }
-          onShowDocs={() => setView({ kind: 'docs' })}
-          onShowChangelog={() => setView({ kind: 'changelog' })}
-          onShowPrivacy={() => setView({ kind: 'privacy' })}
-          onShowTerms={() => setView({ kind: 'terms' })}
+          needsSetup={needsSetup}
+          onPrimaryAction={() => navigate(needsSetup ? GATE_PATHS.setup : GATE_PATHS.signin)}
+          onShowDocs={() => navigate(GATE_PATHS.docs)}
+          onShowChangelog={() => navigate(GATE_PATHS.changelog)}
+          onShowPrivacy={() => navigate(GATE_PATHS.privacy)}
+          onShowTerms={() => navigate(GATE_PATHS.terms)}
         />
       );
   }

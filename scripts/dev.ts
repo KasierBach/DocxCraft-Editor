@@ -1,7 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 
 import { API_VERSION } from '../server/app.ts';
+import { loadEnvFileIfPresent } from '../server/loadEnv.ts';
 import { createSpawnSpec, getApiStatus } from './devLauncher.ts';
+
+// Pick up .env (if any) before applying dev defaults.
+loadEnvFileIfPresent();
 
 // Dev defaults to the full gated experience (landing page + first-run setup).
 // Use `npm run dev:plain` or AUTH_MODE=off for an authless editor.

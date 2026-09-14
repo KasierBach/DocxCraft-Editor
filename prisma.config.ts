@@ -1,4 +1,12 @@
+import { existsSync } from 'node:fs';
+
 import { defineConfig } from 'prisma/config';
+
+// Prisma 7's env() does not read .env files, so load it explicitly (built-in
+// Node loader, no dependency). Real environment variables take precedence.
+if (existsSync('.env')) {
+  process.loadEnvFile('.env');
+}
 
 /**
  * Prisma 7 centralizes the CLI configuration here (the datasource URL is no
