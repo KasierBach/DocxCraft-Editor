@@ -321,7 +321,7 @@
   font-size: 0.75rem;
 }
 
-/* --- Documents dashboard --- */
+/* ─── Documents dashboard ─── */
 .documents-page {
   max-width: 960px;
   margin: 0 auto;
@@ -361,7 +361,7 @@
   gap: 12px;
 }
 
-/* --- Settings page --- */
+/* ─── Settings page ─── */
 .settings-page {
   max-width: 720px;
   margin: 0 auto;

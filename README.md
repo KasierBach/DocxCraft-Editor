@@ -276,9 +276,9 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 
 The hosted build (Postgres + OAuth accounts) needs operational pieces the self-host image does not:
 
-- **Edge/WAF** — put Cloudflare (free plan) in front of Caddy for WAF, bot management, DDoS absorption, and CDN caching. Keep Caddy for TLS.
-- **Uptime + errors** — monitor `GET /api/health` and add error tracking (e.g. Sentry) via the edge or a log drain.
-- **Backups** — take logical dumps regularly and rehearse a restore:
+- **Edge/WAF** â€” put Cloudflare (free plan) in front of Caddy for WAF, bot management, DDoS absorption, and CDN caching. Keep Caddy for TLS.
+- **Uptime + errors** â€” monitor `GET /api/health` and add error tracking (e.g. Sentry) via the edge or a log drain.
+- **Backups** â€” take logical dumps regularly and rehearse a restore:
 
   ```sh
   docker compose -f docker-compose.dev.yml exec -T postgres \
@@ -288,4 +288,4 @@ The hosted build (Postgres + OAuth accounts) needs operational pieces the self-h
   ```
 
   Enable versioning and a lifecycle policy on the blob bucket as well.
-- **Migrations** — run `npm run db:migrate` (Prisma migrate deploy) as a deploy step before starting the new app version.
+- **Migrations** â€” run `npm run db:migrate` (Prisma migrate deploy) as a deploy step before starting the new app version.
