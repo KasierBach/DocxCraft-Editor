@@ -1,0 +1,22 @@
+# Local development dependencies only. The app itself runs via `npm run dev`.
+# Start with: docker compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: docxcraft
+      POSTGRES_PASSWORD: docxcraft
+      POSTGRES_DB: docxcraft
+    ports:
+      # 5433 avoids clashing with a Postgres already bound to 5432 on the host.
+      - "5433:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docxcraft"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-dev-data:
