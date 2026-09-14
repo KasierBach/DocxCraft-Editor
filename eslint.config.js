@@ -38,6 +38,10 @@ export default tseslint.config(
         },
     },
     {
+        // Prisma-generated client code is not ours to lint.
+        ignores: ['server/generated/**'],
+    },
+    {
         // Test helpers and mocks are not part of the HMR surface.
         files: ['src/test/**', '**/*.test.{ts,tsx}'],
         rules: {

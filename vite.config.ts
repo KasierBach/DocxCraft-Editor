@@ -37,6 +37,8 @@ export default defineConfig({
         // Translation catalogs are data (message tables), not logic.
         'src/i18n/locales/**',
         'src/i18n/editor/**',
+        // Prisma-generated client.
+        'server/generated/**',
       ],
       thresholds: { lines: 74, functions: 73, statements: 74, branches: 64 },
     },
