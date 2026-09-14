@@ -1,7 +1,8 @@
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { DOCX_EXTENSION, createDuplicateName, ensureDocxName } from './documentNaming.ts';
 import type {
   CreateDocumentStoreOptions,
   DocumentStorePort,
@@ -16,7 +17,7 @@ import type {
 } from './types.ts';
 
 const INDEX_FILENAME = 'index.json';
-const FILE_EXTENSION = '.docx';
+const FILE_EXTENSION = DOCX_EXTENSION;
 const DEFAULT_MAX_VERSIONS_PER_DOCUMENT = 100;
 
 type StoredDocumentSummary = Omit<SavedDocumentSummary, 'revision'> & {
@@ -43,15 +44,6 @@ type DocumentIndex = {
   versions: SavedDocumentVersionSummary[];
 };
 
-function ensureDocxName(name: string | undefined) {
-  const trimmed = `${name ?? ''}`.trim();
-  if (!trimmed) {
-    return `Untitled${FILE_EXTENSION}`;
-  }
-
-  return trimmed.toLowerCase().endsWith(FILE_EXTENSION) ? trimmed : `${trimmed}${FILE_EXTENSION}`;
-}
-
 function createTimestamp() {
   return new Date().toISOString();
 }
@@ -65,17 +57,6 @@ function byCreatedAtDescending(
   right: SavedDocumentVersionSummary,
 ) {
   return right.createdAt.localeCompare(left.createdAt);
-}
-
-function createDuplicateName(name: string) {
-  const trimmed = name.trim();
-  const extension = FILE_EXTENSION;
-
-  if (trimmed.toLowerCase().endsWith(extension)) {
-    return `${trimmed.slice(0, -extension.length)} Copy${extension}`;
-  }
-
-  return `${trimmed} Copy${extension}`;
 }
 
 export class FileDocumentStore implements DocumentStorePort {

@@ -1,11 +1,11 @@
-import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { buildDocumentApiApp } from './app.ts';
 import { hashPassphrase } from './auth.ts';
 import { createFileAuthStateStore, defaultAuthStateFilePath, type AuthStateStore } from './authStore.ts';
-import { createDocumentStore } from './documentStore.ts';
+import { resolveAppConfig } from './config.ts';
 import { createServerLoggerOptions } from './logger.ts';
+import { createDocumentStoreFromConfig } from './storeFactory.ts';
 
 export const DEFAULT_PORT = 4175;
 
@@ -73,9 +73,9 @@ export async function startDocumentApiServer({
   port?: number;
   host?: string;
 } = {}) {
-  const dataDirectory = process.env.DATA_DIR ?? path.join(process.cwd(), 'data', 'documents');
-  const store = createDocumentStore({ rootDirectory: dataDirectory });
-  const { authStateStore, allowAuthClaim } = resolveAuthState(process.env, dataDirectory);
+  const config = resolveAppConfig(process.env);
+  const store = createDocumentStoreFromConfig(config);
+  const { authStateStore, allowAuthClaim } = resolveAuthState(process.env, config.dataDir);
   const app = buildDocumentApiApp({
     store,
     corsOrigin: readCorsOrigin(),

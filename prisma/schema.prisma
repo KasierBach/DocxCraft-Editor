@@ -1,0 +1,112 @@
+// Prisma schema for the hosted product. Prisma Migrate owns the DDL; the
+// self-host `file` store keeps its own on-disk layout and is unaffected.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../server/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String?
+  emailVerified Boolean   @default(false) @map("email_verified")
+  name          String?
+  avatarUrl     String?   @map("avatar_url")
+  isAnonymous   Boolean   @default(false) @map("is_anonymous")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  oauthAccounts OAuthAccount[]
+  sessions      Session[]
+  documents     Document[]
+  auditEvents   AuditEvent[]
+
+  @@unique([email])
+  @@map("users")
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAgent String?  @map("user_agent")
+  ip        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Document {
+  id              String    @id @default(uuid()) @db.Uuid
+  ownerId         String?   @map("owner_id") @db.Uuid
+  name            String
+  latestVersionId String?   @unique @map("latest_version_id") @db.Uuid
+  sizeInBytes     BigInt    @map("size_in_bytes")
+  versionCount    Int       @default(0) @map("version_count")
+  revision        Int       @default(1)
+  createdAt       DateTime  @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @map("updated_at") @db.Timestamptz(6)
+  lastOpenedAt    DateTime? @map("last_opened_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  owner         User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  latestVersion DocumentVersion?  @relation("DocumentLatestVersion", fields: [latestVersionId], references: [id], onDelete: SetNull)
+  versions      DocumentVersion[] @relation("DocumentVersions")
+
+  @@index([ownerId, updatedAt(sort: Desc)])
+  @@index([updatedAt(sort: Desc)])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  storageKey  String   @map("storage_key")
+  name        String
+  sizeInBytes BigInt   @map("size_in_bytes")
+  createdAt   DateTime @map("created_at") @db.Timestamptz(6)
+
+  document Document  @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
+  latestOf Document? @relation("DocumentLatestVersion")
+
+  @@index([documentId, createdAt(sort: Desc)])
+  @@map("document_versions")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  documentId  String?  @map("document_id") @db.Uuid
+  ip          String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("audit_events")
+}
