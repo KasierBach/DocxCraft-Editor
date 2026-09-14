@@ -78,7 +78,7 @@ test.describe('responsive layout', () => {
         width: viewportCase.width,
         height: viewportCase.height,
       });
-      await page.goto('/');
+      await page.goto('/app');
       await page.waitForLoadState('networkidle');
       // The auth gate resolves the session before mounting the app shell.
       await page.locator('.app-shell').waitFor({ state: 'visible' });
@@ -97,7 +97,7 @@ test.describe('responsive layout', () => {
 
   test('opens sidebars in flow on desktop by default', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
-    await page.goto('/');
+    await page.goto('/app');
     await page.waitForLoadState('networkidle');
 
     await expect(
@@ -115,7 +115,7 @@ test.describe('responsive layout', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/app');
     await page.waitForLoadState('networkidle');
 
     await expect(
@@ -152,7 +152,7 @@ test.describe('responsive layout', () => {
 
   test('drawer close button closes the right drawer on phones', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/app');
     await page.waitForLoadState('networkidle');
 
     await page.locator('header.topbar').getByRole('button', { name: 'Show document details' }).click();
@@ -166,7 +166,7 @@ test.describe('responsive layout', () => {
 
   test('status bar controls stay clickable at phone sizes', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
+    await page.goto('/app');
     await page.waitForLoadState('networkidle');
 
     const shortcutDialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
@@ -186,7 +186,7 @@ test.describe('responsive layout', () => {
 
     for (const size of cases) {
       await page.setViewportSize(size);
-      await page.goto('/');
+      await page.goto('/app');
       await page.waitForLoadState('networkidle');
       await page.locator('.app-shell').waitFor({ state: 'visible' });
 

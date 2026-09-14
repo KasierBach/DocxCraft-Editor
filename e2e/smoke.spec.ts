@@ -47,7 +47,7 @@ test('editor loads the sample workspace and core overlays work', async ({ page }
     if (message.type() === 'error') errors.push(message.text());
   });
 
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'DOCX Workspace' })).toBeVisible();
   await expect(page.getByTitle('Built-in sample.docx')).toBeVisible();
   await expect(page.getByText('Online')).toBeVisible();
@@ -73,7 +73,7 @@ test('editor loads the sample workspace and core overlays work', async ({ page }
 });
 
 test('editor has no critical or serious accessibility violations', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const results = await new AxeBuilder({ page })
     .exclude('.editor-panel')
     .disableRules(['color-contrast'])

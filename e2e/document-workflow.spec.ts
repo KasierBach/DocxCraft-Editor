@@ -37,7 +37,7 @@ test('open a saved document, duplicate it, and reopen after reload', async ({ pa
     const created = await createDocument(request, 'E2E Save Flow.docx', 'E2E Save Flow');
 
     try {
-        await page.goto('/');
+        await page.goto('/app');
         await page.getByRole('button', { name: 'Open E2E Save Flow.docx' }).click();
         await expect(page.getByRole('textbox', { name: 'Document name' })).toHaveValue(
             'E2E Save Flow.docx',
@@ -111,7 +111,7 @@ test('theme toggle switches surfaces and persists across reloads', async ({ page
         'Desktop Chromium owns the full interaction path.',
     );
 
-    await page.goto('/');
+    await page.goto('/app');
     const shell = page.locator('.app-shell');
     await expect(shell).toBeVisible();
 

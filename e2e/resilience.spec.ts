@@ -13,7 +13,7 @@ test.describe('resilience', () => {
   }) => {
     await page.route('**/api/**', (route) => route.abort());
 
-    await page.goto('/');
+    await page.goto('/app');
     await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
     await expect(page.locator('.status-badge--api')).toHaveText(/offline/i, { timeout: 20_000 });
@@ -21,7 +21,7 @@ test.describe('resilience', () => {
   });
 
   test('surfaces an error toast when a save fails', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/app');
     await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
     // Reads keep working so the app is fully loaded; only writes fail.
@@ -36,7 +36,7 @@ test.describe('resilience', () => {
   });
 
   test('opens a saved document from a deep link', async ({ page, request }) => {
-    await page.goto('/');
+    await page.goto('/app');
     await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
     await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -49,7 +49,7 @@ test.describe('resilience', () => {
     expect(saved, 'the saved document is in the library').toBeTruthy();
 
     try {
-      await page.goto(`/?documentId=${saved.id}`);
+      await page.goto(`/app?source=saved&documentId=${saved.id}`);
       await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
       await expect(page.locator('.document-name-input')).toHaveValue('Built-in sample.docx', {
