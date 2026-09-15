@@ -3,12 +3,16 @@ export const changelogEn = {
   title: 'Changelog',
   intro: 'Every release, documented. The full commit history lives on GitHub.',
   releases: {
-    unreleased: {
-      label: 'Since v0.1.0',
+    v020: {
+      label: 'Hosted release',
       groups: {
         added: {
           name: 'Added',
           items: {
+            accounts:
+              'Guest workspaces, and sign-in with Google or GitHub that merges a guest’s documents into the account',
+            library:
+              'A documents library and a settings page with data export and account deletion',
             menuLinks:
               'Open the home page, documentation, and changelog from the editor menu or command palette',
           },
@@ -16,6 +20,10 @@ export const changelogEn = {
         changed: {
           name: 'Changed',
           items: {
+            hostedStorage:
+              'Documents can now live in Postgres with per-user ownership, quotas, and an audit log',
+            landing:
+              'Reworked the landing page for the hosted build, keeping the self-hosting path for developers',
             reorganized:
               'Reorganized the UI into feature folders and moved unit tests into __tests__ directories',
             dockerClaim:
@@ -25,6 +33,8 @@ export const changelogEn = {
         internal: {
           name: 'Internal',
           items: {
+            migrations:
+              'Prisma migrations and a migration step in the deploy compose, plus integration tests against a real Postgres',
             smokeTest:
               'The published Docker image is smoke-tested in CI before it is released',
           },
@@ -78,12 +88,16 @@ export const changelogVi: ChangelogMessages = {
   title: 'Nhật ký thay đổi',
   intro: 'Mọi bản phát hành đều được ghi lại. Toàn bộ lịch sử commit có trên GitHub.',
   releases: {
-    unreleased: {
-      label: 'Kể từ v0.1.0',
+    v020: {
+      label: 'Bản phát hành hosted',
       groups: {
         added: {
           name: 'Đã thêm',
           items: {
+            accounts:
+              'Không gian khách, và đăng nhập bằng Google hoặc GitHub để gộp tài liệu của khách vào tài khoản',
+            library:
+              'Thư viện tài liệu và trang cài đặt có xuất dữ liệu và xóa tài khoản',
             menuLinks:
               'Mở trang chủ, tài liệu hướng dẫn và nhật ký thay đổi từ menu trình soạn thảo hoặc bảng lệnh',
           },
@@ -91,6 +105,10 @@ export const changelogVi: ChangelogMessages = {
         changed: {
           name: 'Đã thay đổi',
           items: {
+            hostedStorage:
+              'Tài liệu có thể lưu trong Postgres với quyền sở hữu theo người dùng, hạn mức và nhật ký kiểm toán',
+            landing:
+              'Làm lại trang chủ cho bản hosted, vẫn giữ hướng tự vận hành cho lập trình viên',
             reorganized:
               'Tổ chức lại giao diện thành các thư mục tính năng và chuyển các bài kiểm thử đơn vị vào thư mục __tests__',
             dockerClaim:
@@ -100,6 +118,8 @@ export const changelogVi: ChangelogMessages = {
         internal: {
           name: 'Nội bộ',
           items: {
+            migrations:
+              'Migration của Prisma và bước chạy migration trong compose triển khai, kèm kiểm thử tích hợp với Postgres thật',
             smokeTest:
               'Ảnh Docker đã phát hành được kiểm thử nhanh trong CI trước khi phát hành',
           },

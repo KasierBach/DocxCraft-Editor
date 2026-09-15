@@ -5,22 +5,22 @@ export const legalEn = {
     lastUpdated: 'Last updated:',
     shortVersion: {
       title: 'The short version',
-      body: 'This editor stores your documents on this server and collects nothing else. There is no analytics, no telemetry, no advertising, and no third-party tracking. The operator of this server is the data controller for the documents you store here.',
+      body: 'This editor stores your documents in your workspace — a database plus file/object storage on a hosted instance, or the disk you run it on when self-hosted. There is no analytics, no telemetry, no advertising, and no third-party tracking. When accounts are enabled, signing in also stores the profile your provider returns (name, email, avatar); the operator of this instance is the data controller.',
     },
     whatIsStored: {
       title: 'What is stored',
       items: [
         {
           label: 'Documents.',
-          body: 'The .docx files you open or save, and up to 100 version snapshots per document, kept in this server’s local storage.',
+          body: 'The .docx files you open or save, plus version snapshots (100 per document by default, configurable), kept in your workspace’s storage.',
         },
         {
-          label: 'Account security data.',
-          body: 'A salted, hashed passphrase (scrypt). The passphrase itself is never stored in readable form and cannot be recovered.',
+          label: 'Account data.',
+          body: 'On hosted instances with accounts enabled: the name, email address, and avatar URL your sign-in provider returns, and an opaque session token stored only as a hash. On passphrase instances: a salted, hashed passphrase (scrypt), never stored in readable form and not recoverable.',
         },
         {
           label: 'Session cookie.',
-          body: 'A single HTTP-only cookie that keeps you signed in for up to 7 days. It contains a signed expiry timestamp and no personal data.',
+          body: 'A single HTTP-only session cookie that keeps you signed in for up to 30 days (configurable). It holds an opaque token, not personal data.',
         },
         {
           label: 'Recovery drafts.',
@@ -30,11 +30,11 @@ export const legalEn = {
     },
     notCollected: {
       title: 'What is not collected',
-      body: 'No names, email addresses, phone numbers, payment details, location data, or behavioural analytics. The server logs contain technical request metadata (timestamps, status codes, request IDs) used for troubleshooting and are kept by the operator only.',
+      body: 'No phone numbers, payment details, location data, or behavioural analytics. A signed-in account stores only the name, email, and avatar your provider returns; passphrase instances store no personal data at all. Server logs contain technical request metadata (timestamps, status codes, request IDs) used for troubleshooting.',
     },
     sharingDeletion: {
       title: 'Sharing and deletion',
-      body: 'Your documents are never shared with, sold to, or sent to any third party. Deleting a document in the editor removes it and its version history from the server. Contact the operator of this instance for anything else.',
+      body: 'Your documents are never shared with, sold to, or sent to any third party. Deleting a document removes it and its version history; where accounts are enabled you can also export or delete your whole account from Settings. Contact the operator of this instance for anything else.',
     },
     operatorResponsibility: {
       title: 'Your responsibility as the operator',
@@ -52,7 +52,7 @@ export const legalEn = {
     },
     account: {
       title: 'Your account',
-      body: 'Access is protected by a passphrase. You are responsible for keeping it secret and for all activity performed under your session. Because the passphrase is stored only as a hash, it cannot be recovered or reset by the operator without resetting the instance.',
+      body: 'Access is protected by a passphrase (self-hosted) or by signing in with Google or GitHub (hosted). You are responsible for keeping your credentials secret and for all activity performed under your session. A stored passphrase cannot be recovered by the operator; a hosted account can be signed out, exported, or deleted from Settings.',
     },
     documents: {
       title: 'Your documents',
@@ -79,22 +79,22 @@ export const legalVi: LegalMessages = {
     lastUpdated: 'Cập nhật lần cuối:',
     shortVersion: {
       title: 'Tóm tắt ngắn gọn',
-      body: 'Trình soạn thảo này lưu tài liệu của bạn trên máy chủ này và không thu thập gì khác. Không có phân tích, không có đo từ xa, không có quảng cáo và không có theo dõi của bên thứ ba. Người vận hành máy chủ này là đơn vị kiểm soát dữ liệu đối với các tài liệu bạn lưu tại đây.',
+      body: 'Trình soạn thảo này lưu tài liệu trong không gian làm việc của bạn — cơ sở dữ liệu kèm lưu trữ tệp/đối tượng trên bản hosted, hoặc đĩa bạn chạy khi tự vận hành. Không có phân tích, đo từ xa, quảng cáo hay theo dõi của bên thứ ba. Khi bật tài khoản, việc đăng nhập cũng lưu hồ sơ do nhà cung cấp trả về (tên, email, ảnh đại diện); người vận hành phiên bản này là đơn vị kiểm soát dữ liệu.',
     },
     whatIsStored: {
       title: 'Những gì được lưu trữ',
       items: [
         {
           label: 'Tài liệu.',
-          body: 'Các tệp .docx bạn mở hoặc lưu, cùng tối đa 100 ảnh chụp phiên bản cho mỗi tài liệu, được giữ trong bộ nhớ cục bộ của máy chủ này.',
+          body: 'Các tệp .docx bạn mở hoặc lưu, cùng ảnh chụp phiên bản (mặc định 100 cho mỗi tài liệu, có thể cấu hình), được giữ trong lưu trữ của không gian làm việc.',
         },
         {
-          label: 'Dữ liệu bảo mật tài khoản.',
-          body: 'Cụm mật khẩu đã được thêm muối và băm (scrypt). Bản thân cụm mật khẩu không bao giờ được lưu ở dạng đọc được và không thể khôi phục.',
+          label: 'Dữ liệu tài khoản.',
+          body: 'Trên bản hosted có bật tài khoản: tên, địa chỉ email và ảnh đại diện do nhà cung cấp đăng nhập trả về, cùng mã phiên chỉ lưu dưới dạng băm. Trên bản dùng mật khẩu: cụm mật khẩu đã thêm muối và băm (scrypt), không bao giờ lưu ở dạng đọc được và không thể khôi phục.',
         },
         {
           label: 'Cookie phiên.',
-          body: 'Một cookie HTTP-only duy nhất giúp bạn duy trì đăng nhập trong tối đa 7 ngày. Cookie chứa dấu thời gian hết hạn đã ký và không chứa dữ liệu cá nhân.',
+          body: 'Một cookie phiên HTTP-only duy nhất giúp bạn duy trì đăng nhập tối đa 30 ngày (có thể cấu hình). Cookie chứa mã không lộ nội dung, không chứa dữ liệu cá nhân.',
         },
         {
           label: 'Bản nháp khôi phục.',
@@ -104,11 +104,11 @@ export const legalVi: LegalMessages = {
     },
     notCollected: {
       title: 'Những gì không được thu thập',
-      body: 'Không thu thập tên, địa chỉ email, số điện thoại, chi tiết thanh toán, dữ liệu vị trí hay phân tích hành vi. Nhật ký máy chủ chứa siêu dữ liệu yêu cầu kỹ thuật (dấu thời gian, mã trạng thái, ID yêu cầu) dùng để khắc phục sự cố và chỉ do người vận hành lưu giữ.',
+      body: 'Không thu thập số điện thoại, chi tiết thanh toán, dữ liệu vị trí hay phân tích hành vi. Tài khoản đã đăng nhập chỉ lưu tên, email và ảnh đại diện do nhà cung cấp trả về; bản dùng mật khẩu không lưu dữ liệu cá nhân nào. Nhật ký máy chủ chứa siêu dữ liệu yêu cầu kỹ thuật (dấu thời gian, mã trạng thái, ID yêu cầu) dùng để khắc phục sự cố.',
     },
     sharingDeletion: {
       title: 'Chia sẻ và xóa',
-      body: 'Tài liệu của bạn không bao giờ được chia sẻ, bán hoặc gửi cho bất kỳ bên thứ ba nào. Xóa một tài liệu trong trình soạn thảo sẽ xóa tài liệu đó và lịch sử phiên bản của nó khỏi máy chủ. Hãy liên hệ người vận hành phiên bản này cho mọi vấn đề khác.',
+      body: 'Tài liệu của bạn không bao giờ được chia sẻ, bán hoặc gửi cho bất kỳ bên thứ ba nào. Xóa một tài liệu sẽ xóa cả tài liệu và lịch sử phiên bản; khi bật tài khoản, bạn cũng có thể xuất hoặc xóa toàn bộ tài khoản trong phần Cài đặt. Hãy liên hệ người vận hành phiên bản này cho mọi vấn đề khác.',
     },
     operatorResponsibility: {
       title: 'Trách nhiệm của bạn với tư cách người vận hành',
@@ -126,7 +126,7 @@ export const legalVi: LegalMessages = {
     },
     account: {
       title: 'Tài khoản của bạn',
-      body: 'Quyền truy cập được bảo vệ bằng một cụm mật khẩu. Bạn có trách nhiệm giữ bí mật cụm mật khẩu và chịu trách nhiệm cho mọi hoạt động được thực hiện dưới phiên của bạn. Vì cụm mật khẩu chỉ được lưu dưới dạng băm, người vận hành không thể khôi phục hay đặt lại nó mà không đặt lại phiên bản.',
+      body: 'Quyền truy cập được bảo vệ bằng cụm mật khẩu (tự vận hành) hoặc bằng đăng nhập Google/GitHub (hosted). Bạn có trách nhiệm giữ bí mật thông tin đăng nhập và chịu trách nhiệm cho mọi hoạt động dưới phiên của bạn. Cụm mật khẩu đã lưu không thể được người vận hành khôi phục; tài khoản hosted có thể đăng xuất, xuất dữ liệu hoặc xóa trong phần Cài đặt.',
     },
     documents: {
       title: 'Tài liệu của bạn',

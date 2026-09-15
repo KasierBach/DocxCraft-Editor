@@ -4,7 +4,7 @@ type PrivacyPolicyProps = {
   onBack: () => void;
 };
 
-const LAST_UPDATED = '2026-09-12';
+const LAST_UPDATED = '2026-09-15';
 
 export function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
   const { t } = useTranslation();

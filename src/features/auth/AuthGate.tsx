@@ -162,6 +162,8 @@ export function AuthGate({ children }: AuthGateProps) {
         <LandingPage
           needsSetup={false}
           onPrimaryAction={closePage}
+          onStartEditing={closePage}
+          signInProviders={providers}
           onShowDocs={() => setOverlayPage('docs')}
           onShowChangelog={() => setOverlayPage('changelog')}
           onShowPrivacy={() => setOverlayPage('privacy')}
@@ -221,6 +223,8 @@ export function AuthGate({ children }: AuthGateProps) {
         <LandingPage
           needsSetup={needsSetup}
           onPrimaryAction={() => navigate(needsSetup ? GATE_PATHS.setup : GATE_PATHS.signin)}
+          onStartEditing={() => navigate(GATE_PATHS.app)}
+          signInProviders={providers}
           onShowDocs={() => navigate(GATE_PATHS.docs)}
           onShowChangelog={() => navigate(GATE_PATHS.changelog)}
           onShowPrivacy={() => navigate(GATE_PATHS.privacy)}

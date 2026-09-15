@@ -4,7 +4,7 @@ type TermsOfUseProps = {
   onBack: () => void;
 };
 
-const LAST_UPDATED = '2026-09-12';
+const LAST_UPDATED = '2026-09-15';
 
 export function TermsOfUse({ onBack }: TermsOfUseProps) {
   const { t } = useTranslation();

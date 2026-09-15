@@ -9,23 +9,23 @@ type Translate = (key: string) => string;
 function buildReleases(t: Translate) {
   return [
     {
-      version: 'Unreleased',
-      label: t('changelog.releases.unreleased.label'),
+      version: 'v0.2.0',
+      label: t('changelog.releases.v020.label'),
       groups: [
         {
-          name: t('changelog.releases.unreleased.groups.added.name'),
-          items: [t('changelog.releases.unreleased.groups.added.items.menuLinks')],
+          name: t('changelog.releases.v020.groups.added.name'),
+          items: [t('changelog.releases.v020.groups.added.items.menuLinks')],
         },
         {
-          name: t('changelog.releases.unreleased.groups.changed.name'),
+          name: t('changelog.releases.v020.groups.changed.name'),
           items: [
-            t('changelog.releases.unreleased.groups.changed.items.reorganized'),
-            t('changelog.releases.unreleased.groups.changed.items.dockerClaim'),
+            t('changelog.releases.v020.groups.changed.items.reorganized'),
+            t('changelog.releases.v020.groups.changed.items.dockerClaim'),
           ],
         },
         {
-          name: t('changelog.releases.unreleased.groups.internal.name'),
-          items: [t('changelog.releases.unreleased.groups.internal.items.smokeTest')],
+          name: t('changelog.releases.v020.groups.internal.name'),
+          items: [t('changelog.releases.v020.groups.internal.items.smokeTest')],
         },
       ],
     },

@@ -9,6 +9,8 @@ function renderLanding() {
   const props = {
     needsSetup: true,
     onPrimaryAction: vi.fn(),
+    onStartEditing: vi.fn(),
+    signInProviders: [],
     onShowDocs: vi.fn(),
     onShowChangelog: vi.fn(),
     onShowPrivacy: vi.fn(),

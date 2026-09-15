@@ -7,26 +7,37 @@ import { useTranslation } from '../../i18n';
 type LandingPageProps = {
   needsSetup: boolean;
   onPrimaryAction: () => void;
+  /** Opens the editor (guest or signed-in) from the hosted call to action. */
+  onStartEditing: () => void;
+  /** Sign-in providers the server exposes; empty on self-hosted instances. */
+  signInProviders?: Array<{ id: string; label: string }>;
   onShowDocs: () => void;
   onShowChangelog: () => void;
   onShowPrivacy: () => void;
   onShowTerms: () => void;
 };
 
+/** Decorative scroll strip: facts the page does not otherwise state. */
 const MARQUEE_KEYS = [
-  'landing.marquee.nativeDocx',
-  'landing.marquee.versionHistory',
-  'landing.marquee.anchorMap',
-  'landing.marquee.crashRecovery',
-  'landing.marquee.commandPalette',
-  'landing.marquee.darkMode',
-  'landing.marquee.offlineFirst',
-  'landing.marquee.selfHosted',
-  'landing.marquee.mitLicensed',
-  'landing.marquee.noTelemetry',
+  'landing.marquee.noSignup',
+  'landing.marquee.sync',
+  'landing.marquee.languages',
+  'landing.marquee.palette',
+  'landing.marquee.deepLinks',
+  'landing.marquee.storage',
+  'landing.marquee.docker',
+  'landing.marquee.hostedOrSelfHosted',
 ];
 
-const FEATURES = [
+/** Mock kinds stay open so the keyboard mock can be reused if a feature returns. */
+type FeatureMockKind = 'file' | 'outline' | 'timeline' | 'pulse' | 'keys' | 'sync' | null;
+
+const FEATURES: ReadonlyArray<{
+  index: string;
+  titleKey: string;
+  copyKey: string;
+  mock: FeatureMockKind;
+}> = [
   {
     index: '01',
     titleKey: 'landing.features.nativeTitle',
@@ -53,52 +64,15 @@ const FEATURES = [
   },
   {
     index: '05',
-    titleKey: 'landing.features.keyboardTitle',
-    copyKey: 'landing.features.keyboardCopy',
-    mock: 'keys',
+    titleKey: 'landing.features.exportTitle',
+    copyKey: 'landing.features.exportCopy',
+    mock: 'file',
   },
   {
     index: '06',
-    titleKey: 'landing.features.privacyTitle',
-    copyKey: 'landing.features.privacyCopy',
-    mock: null,
-  },
-] as const;
-
-const STEPS = [
-  {
-    index: '01',
-    titleKey: 'landing.how.step1Title',
-    copyKey: 'landing.how.step1Copy',
-  },
-  {
-    index: '02',
-    titleKey: 'landing.how.step2Title',
-    copyKey: 'landing.how.step2Copy',
-  },
-  {
-    index: '03',
-    titleKey: 'landing.how.step3Title',
-    copyKey: 'landing.how.step3Copy',
-  },
-];
-
-const PERSONAS = [
-  {
-    labelKey: 'landing.personas.contractsLabel',
-    copyKey: 'landing.personas.contractsCopy',
-  },
-  {
-    labelKey: 'landing.personas.researchLabel',
-    copyKey: 'landing.personas.researchCopy',
-  },
-  {
-    labelKey: 'landing.personas.internalLabel',
-    copyKey: 'landing.personas.internalCopy',
-  },
-  {
-    labelKey: 'landing.personas.selfHostLabel',
-    copyKey: 'landing.personas.selfHostCopy',
+    titleKey: 'landing.features.accountsTitle',
+    copyKey: 'landing.features.accountsCopy',
+    mock: 'sync',
   },
 ];
 
@@ -170,16 +144,13 @@ const FAQ_ITEMS = [
   { questionKey: 'landing.faq.q1', answerKey: 'landing.faq.a1' },
   { questionKey: 'landing.faq.q2', answerKey: 'landing.faq.a2' },
   { questionKey: 'landing.faq.q3', answerKey: 'landing.faq.a3' },
-  { questionKey: 'landing.faq.q4', answerKey: 'landing.faq.a4' },
-  { questionKey: 'landing.faq.q5', answerKey: 'landing.faq.a5' },
   { questionKey: 'landing.faq.q6', answerKey: 'landing.faq.a6' },
   { questionKey: 'landing.faq.q7', answerKey: 'landing.faq.a7' },
-  { questionKey: 'landing.faq.q8', answerKey: 'landing.faq.a8' },
 ];
 
 const NAV_SECTIONS = [
   { id: 'features', labelKey: 'landing.nav.features' },
-  { id: 'how-it-works', labelKey: 'landing.nav.howItWorks' },
+  { id: 'self-host', labelKey: 'landing.nav.selfHost' },
 ];
 
 function prefersReducedMotion() {
@@ -396,6 +367,17 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
     );
   }
 
+  if (kind === 'sync') {
+    return (
+      <div className="landing-mock landing-mock--sync" aria-hidden="true">
+        <span className="landing-mock__node landing-mock__node--active" />
+        <span className="landing-mock__sync-line" />
+        <span className="landing-mock__node" />
+        <span className="landing-mock__tag">{t('landing.mock.syncTag')}</span>
+      </div>
+    );
+  }
+
   if (kind === 'keys') {
     return (
       <div className="landing-mock landing-mock--keys" aria-hidden="true">
@@ -423,6 +405,8 @@ function FeatureMock({ kind }: { kind: (typeof FEATURES)[number]['mock'] }) {
 export function LandingPage({
   needsSetup,
   onPrimaryAction,
+  onStartEditing,
+  signInProviders = [],
   onShowDocs,
   onShowChangelog,
   onShowPrivacy,
@@ -482,9 +466,9 @@ export function LandingPage({
           <button
             type="button"
             className="landing-button landing-button--small landing-button--primary"
-            onClick={onPrimaryAction}
+            onClick={needsSetup ? onPrimaryAction : onStartEditing}
           >
-            {needsSetup ? t('landing.nav.getStarted') : t('landing.nav.signIn')}
+            {t('landing.nav.getStarted')}
           </button>
         </div>
       </nav>
@@ -527,28 +511,33 @@ export function LandingPage({
           <button
             type="button"
             className="landing-button landing-button--primary"
-            onClick={onPrimaryAction}
+            onClick={needsSetup ? onPrimaryAction : onStartEditing}
           >
-            {needsSetup
-              ? t('landing.hero.getStartedSetup')
-              : t('landing.hero.signInWorkspace')}
+            {needsSetup ? t('landing.hero.getStartedSetup') : t('landing.hero.startEditing')}
           </button>
           <button type="button" className="landing-button" onClick={() => scrollToSection('features')}>
             {t('landing.hero.seeWhatInside')}
           </button>
         </div>
 
+        {!needsSetup && signInProviders.length > 0 && (
+          <div className="landing-hero__signin">
+            <span className="landing-hero__signin-label">{t('landing.hero.signInLabel')}</span>
+            {signInProviders.map((provider) => (
+              <a
+                key={provider.id}
+                className="landing-button landing-button--small"
+                href={`/api/auth/${provider.id}/start`}
+              >
+                {provider.label}
+              </a>
+            ))}
+          </div>
+        )}
+
         <p className={`landing-hero__autosave ${isDone ? 'landing-hero__autosave--visible' : ''}`}>
           {t('landing.hero.autosaved')}
         </p>
-
-        <div className="landing-hero__install">
-          <span className="landing-hero__install-label">{t('landing.hero.installLabel')}</span>
-          <CopyableCommand code={INSTALL_COMMAND} wrap />
-          <button type="button" className="landing-hero__install-link" onClick={onShowDocs}>
-            {t('landing.hero.setupGuide')}
-          </button>
-        </div>
 
         <div className="landing-hero__shot-wrap">
           <div className="landing-shot-tilt" ref={tiltRef}>
@@ -585,7 +574,7 @@ export function LandingPage({
                 target="_blank"
                 rel="noreferrer"
               >
-                150+
+                288
               </a>
             </dt>
             <dd className="landing-stats__label">{t('landing.hero.statsTestsLabel')}</dd>
@@ -717,43 +706,20 @@ export function LandingPage({
         </div>
       </section>
 
-      <section className="landing-section" aria-label={t('landing.personas.sectionLabel')}>
+      <section className="landing-section" id="self-host" aria-label={t('landing.selfHost.sectionLabel')}>
         <Reveal>
-          <span className="landing-section__eyebrow">{t('landing.personas.eyebrow')}</span>
+          <span className="landing-section__eyebrow">{t('landing.selfHost.eyebrow')}</span>
           <h2 className="landing-section__title">
-            <span className="landing-marker">{t('landing.personas.title')}</span>
+            <span className="landing-marker">{t('landing.selfHost.title')}</span>
           </h2>
+          <p className="landing-section__copy">{t('landing.selfHost.copy')}</p>
         </Reveal>
-        <div className="landing-personas">
-          {PERSONAS.map((persona, index) => (
-            <Reveal key={persona.labelKey} delayMs={index * 80}>
-              <article className="landing-persona">
-                <h3 className="landing-persona__label">{t(persona.labelKey)}</h3>
-                <p className="landing-persona__copy">{t(persona.copyKey)}</p>
-              </article>
-            </Reveal>
-          ))}
+        <div className="landing-selfhost">
+          <CopyableCommand code={INSTALL_COMMAND} wrap />
+          <button type="button" className="landing-selfhost__link" onClick={onShowDocs}>
+            {t('landing.selfHost.setupGuide')}
+          </button>
         </div>
-      </section>
-
-      <section className="landing-section" id="how-it-works" aria-label={t('landing.how.sectionLabel')}>
-        <Reveal>
-          <span className="landing-section__eyebrow">{t('landing.how.eyebrow')}</span>
-          <h2 className="landing-section__title">
-            <span className="landing-marker">{t('landing.how.title')}</span>
-          </h2>
-        </Reveal>
-        <ol className="landing-steps">
-          {STEPS.map((step, index) => (
-            <Reveal key={step.index} delayMs={index * 100} className="landing-steps__wrap">
-              <li className="landing-steps__item">
-                <span className="landing-steps__index">{step.index}</span>
-                <h3 className="landing-steps__title">{t(step.titleKey)}</h3>
-                <p className="landing-steps__copy">{t(step.copyKey)}</p>
-              </li>
-            </Reveal>
-          ))}
-        </ol>
       </section>
 
       <section className="landing-section" id="compare" aria-label={t('landing.compare.sectionLabel')}>
