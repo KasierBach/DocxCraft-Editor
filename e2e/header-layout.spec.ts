@@ -29,6 +29,19 @@ for (const width of [...WIDE, ...NARROW]) {
       };
       const nameInput = document.querySelector('.document-name-input');
       const tagline = document.querySelector('.topbar .eyebrow');
+
+      // Crumbs must never be squeezed into each other: only the active one may
+      // shrink, and it truncates instead of overlapping its neighbours.
+      const crumbs = Array.from(
+        document.querySelectorAll('.topbar .breadcrumbs__item'),
+      ).filter((element) => element.getBoundingClientRect().width > 0);
+      let crumbOverlaps = 0;
+      for (let index = 1; index < crumbs.length; index += 1) {
+        const previous = crumbs[index - 1].getBoundingClientRect();
+        const current = crumbs[index].getBoundingClientRect();
+        if (current.left < previous.right - 1) crumbOverlaps += 1;
+      }
+
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
         identity: box('.topbar__identity'),
@@ -39,6 +52,7 @@ for (const width of [...WIDE, ...NARROW]) {
         brand: box('.brand'),
         nameWidth: nameInput?.getBoundingClientRect().width ?? -1,
         taglineVisible: (tagline?.getBoundingClientRect().height ?? 0) > 0,
+        crumbOverlaps,
       };
     });
 
@@ -53,6 +67,7 @@ for (const width of [...WIDE, ...NARROW]) {
 
     expect(metrics.overflow, 'no horizontal overflow').toBeLessThanOrEqual(1);
     expect(metrics.breadcrumbs.height, 'breadcrumb stays on one line').toBeLessThan(26);
+    expect(metrics.crumbOverlaps, 'breadcrumb crumbs never overlap').toBe(0);
     expect(metrics.nameWidth, 'document name input is capped').toBeLessThanOrEqual(341);
 
     // Phone widths stack the bar, so the one-line expectations only apply above.

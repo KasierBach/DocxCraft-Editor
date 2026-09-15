@@ -525,6 +525,22 @@
   max-width: 150px;
 }
 
+/* Room for the full path only on a wide bar; on a tighter one the file name is
+   what matters, so the parent crumbs step aside instead of being squeezed into
+   each other. */
+@media (min-width: 1600px) {
+  .topbar .breadcrumbs {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1599px) {
+  .topbar .breadcrumbs__item:not(.breadcrumbs__item--active),
+  .topbar .breadcrumbs__separator {
+    display: none;
+  }
+}
+
 /* Keep the bar on one row at laptop widths: below this the MODE caption and the
    toolbar Sign in button step aside (the guest banner and the More actions menu
    both still offer sign-in), which is enough to pay for the brand tagline. */

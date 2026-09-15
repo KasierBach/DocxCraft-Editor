@@ -20,7 +20,14 @@
 .breadcrumbs__item {
   display: flex;
   align-items: center;
+  /* Crumbs keep their width; only the active one shrinks and truncates. If an
+     item is allowed to shrink below its text, the words overlap each other. */
+  flex-shrink: 0;
+}
+
+.breadcrumbs__item--active {
   min-width: 0;
+  flex-shrink: 1;
 }
 
 .breadcrumbs__link {
@@ -32,6 +39,7 @@
   background: none;
   border: none;
   padding: 0;
+  white-space: nowrap;
 }
 
 .breadcrumbs__separator {
