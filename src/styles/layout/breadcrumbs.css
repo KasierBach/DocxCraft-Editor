@@ -1,6 +1,8 @@
 .breadcrumbs {
   padding: 0;
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .breadcrumbs__list {
@@ -10,12 +12,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  /* Never wrap: a wrapped crumb grows the header until the toolbar drops a row. */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .breadcrumbs__item {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .breadcrumbs__link {
@@ -43,4 +48,8 @@
   background: none;
   border: none;
   padding: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
