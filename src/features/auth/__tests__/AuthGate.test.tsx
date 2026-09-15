@@ -129,6 +129,26 @@ describe('AuthGate', () => {
     expect(await screen.findByTestId('library')).toBeInTheDocument();
   });
 
+  it('shows the hosted sign-in page at /login when providers exist', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: false,
+      needsSetup: false,
+      authenticated: false,
+      providers: [{ id: 'google', label: 'Google' }],
+      user: { id: 'g1', email: null, name: null, avatarUrl: null, isAnonymous: true },
+    });
+
+    renderGate('/login');
+
+    expect(await screen.findByRole('link', { name: /continue with google/i })).toHaveAttribute(
+      'href',
+      '/api/auth/google/start',
+    );
+    expect(
+      screen.getByRole('button', { name: /keep editing as a guest/i }),
+    ).toBeInTheDocument();
+  });
+
   it('opens reference pages over the running app and closes them with Escape', async () => {
     vi.mocked(readAuthSession).mockResolvedValue({
       authRequired: true,

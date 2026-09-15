@@ -405,3 +405,50 @@
   align-items: center;
   margin-top: 10px;
 }
+
+/* ─── Hosted sign-in providers ─── */
+.signin-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 4px 0 16px;
+}
+
+.signin-providers__button {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ─── Guest workspace banner ─── */
+.guest-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: var(--nb-border) solid var(--nb-black);
+  background: var(--nb-accent);
+  color: var(--nb-black);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.guest-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.guest-banner__action {
+  white-space: nowrap;
+}
+
+.guest-banner__dismiss {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}

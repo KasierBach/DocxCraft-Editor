@@ -12,7 +12,7 @@ import { useAuthGate } from '../auth/AuthGateContext';
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAnonymous } = useAuthGate();
+  const { isAnonymous, providers } = useAuthGate();
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -62,7 +62,22 @@ export function SettingsPage() {
         {email && !isAnonymous ? (
           <p className="panel-copy">{t('settings.signedInAs', { email })}</p>
         ) : (
-          <p className="panel-copy">{t('settings.anonymousNotice')}</p>
+          <>
+            <p className="panel-copy">{t('settings.anonymousNotice')}</p>
+            {providers.length > 0 && (
+              <div className="signin-providers">
+                {providers.map((provider) => (
+                  <a
+                    key={provider.id}
+                    className="action-button signin-providers__button"
+                    href={`/api/auth/${provider.id}/start`}
+                  >
+                    {t('auth.continueWith', { provider: provider.label })}
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
         )}
         <div className="settings-section__actions">
           <button type="button" className="action-button" onClick={() => void handleSignOut()}>

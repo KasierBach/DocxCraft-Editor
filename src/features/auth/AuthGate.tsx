@@ -11,6 +11,7 @@ import { PrivacyPolicy } from '../landing/PrivacyPolicy';
 import { TermsOfUse } from '../landing/TermsOfUse';
 import { AuthGateContext, type AppPage } from './AuthGateContext';
 import { LoginScreen } from './LoginScreen';
+import { SignInPage } from './SignInPage';
 import { SetupScreen } from './SetupScreen';
 
 type AuthGateProps = {
@@ -25,6 +26,7 @@ const GATE_PATHS = {
   landing: '/',
   setup: '/setup',
   signin: '/login',
+  signup: '/signup',
   privacy: '/privacy',
   terms: '/terms',
   docs: '/docs',
@@ -54,6 +56,8 @@ function viewForPath(pathname: string): GateView {
     case GATE_PATHS.setup:
       return 'setup';
     case GATE_PATHS.signin:
+      return 'signin';
+    case GATE_PATHS.signup:
       return 'signin';
     case GATE_PATHS.privacy:
       return 'privacy';
@@ -119,6 +123,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const closePage = useCallback(() => setOverlayPage(null), []);
   const openLibrary = useCallback(() => navigate(GATE_PATHS.library), [navigate]);
   const openSettings = useCallback(() => navigate(GATE_PATHS.settings), [navigate]);
+  const openSignIn = useCallback(() => navigate(GATE_PATHS.signin), [navigate]);
 
   // Escape closes the overlay and stops there, so editor drawers and menus
   // behind it keep their own Escape handling untouched. Focus moves into the
@@ -145,8 +150,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
   const isAnonymous = user?.isAnonymous ?? false;
   const contextValue = useMemo(
-    () => ({ isAuthGated, openPage, closePage, openLibrary, openSettings, providers, isAnonymous }),
-    [closePage, isAnonymous, isAuthGated, openLibrary, openPage, openSettings, providers],
+    () => ({ isAuthGated, openPage, closePage, openLibrary, openSettings, openSignIn, providers, isAnonymous }),
+    [closePage, isAnonymous, isAuthGated, openLibrary, openPage, openSettings, openSignIn, providers],
   );
 
   const overlay = overlayPage ? (
@@ -207,6 +212,11 @@ export function AuthGate({ children }: AuthGateProps) {
 
   switch (view) {
     case 'signin':
+      return providers.length > 0 ? (
+        <SignInPage providers={providers} onContinueAsGuest={() => navigate(GATE_PATHS.app)} />
+      ) : (
+        <Navigate to={GATE_PATHS.app} replace />
+      );
     case 'setup':
       return <Navigate to={GATE_PATHS.app} replace />;
     case 'privacy':

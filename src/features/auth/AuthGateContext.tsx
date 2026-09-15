@@ -16,6 +16,8 @@ export type AuthGateContextValue = {
   openLibrary: () => void;
   /** Navigates to account settings. */
   openSettings: () => void;
+  /** Navigates to the hosted sign-in page. */
+  openSignIn: () => void;
   /** Sign-in providers the server has configured. */
   providers: AuthProvider[];
   /** True while the visitor is on a guest workspace (hosted mode). */
@@ -28,6 +30,7 @@ export const AuthGateContext = createContext<AuthGateContextValue>({
   closePage: () => undefined,
   openLibrary: () => undefined,
   openSettings: () => undefined,
+  openSignIn: () => undefined,
   providers: [],
   isAnonymous: false,
 });

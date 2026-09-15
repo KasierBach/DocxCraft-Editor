@@ -36,6 +36,7 @@ type HeaderProps = {
   onShowHome?: () => void;
   onShowLibrary?: () => void;
   onShowSettings?: () => void;
+  onShowSignIn?: () => void;
   signInProviders?: Array<{ id: string; label: string }>;
   isAnonymous?: boolean;
 };
@@ -93,6 +94,7 @@ function HeaderComponent({
   onShowHome,
   onShowLibrary,
   onShowSettings,
+  onShowSignIn,
   signInProviders,
   isAnonymous = false,
 }: HeaderProps) {
@@ -414,6 +416,12 @@ function HeaderComponent({
           >
             {t('header.refreshMap')}
           </button>
+
+          {isAnonymous && signInProviders && signInProviders.length > 0 && onShowSignIn && (
+            <button type="button" className="action-button" onClick={onShowSignIn}>
+              {t('auth.signInAction')}
+            </button>
+          )}
 
           <div
             ref={utilityMenuRef}

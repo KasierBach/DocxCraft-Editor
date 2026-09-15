@@ -11,6 +11,7 @@ import { CommandPalette } from './components/ui/CommandPalette';
 import { ShortcutHelpModal } from './components/ui/ShortcutHelpModal';
 import { ToastViewport } from './components/ToastViewport';
 import { FirstRunOnboarding } from './features/landing/FirstRunOnboarding';
+import { GuestBanner } from './features/auth/GuestBanner';
 import { logout } from './lib/documentApi';
 import { useAuthGate } from './features/auth/AuthGateContext';
 import { createDemoDocument } from './demoDocument';
@@ -125,7 +126,8 @@ export default function App() {
   const refreshTimerRef = useRef<number | null>(null);
   const ignoreContentChangeUntilRef = useRef(0);
   const lastSelectionStateRef = useRef<SelectionState | null>(null);
-  const { isAuthGated, openPage, openLibrary, openSettings, providers, isAnonymous } = useAuthGate();
+  const { isAuthGated, openPage, openLibrary, openSettings, openSignIn, providers, isAnonymous } =
+    useAuthGate();
   const { language, t } = useTranslation();
 
   // Signing out clears the session cookie; a reload re-runs the auth gate,
@@ -1091,9 +1093,12 @@ export default function App() {
         onShowHome={() => openPage('landing')}
         onShowLibrary={openLibrary}
         onShowSettings={openSettings}
+        onShowSignIn={openSignIn}
         signInProviders={providers}
         isAnonymous={isAnonymous}
       />
+
+      {isAnonymous && <GuestBanner providers={providers} onSignIn={openSignIn} />}
 
       {(showSidebar || showInfo) && (
         <div
