@@ -125,6 +125,8 @@ describe('Header action menus', () => {
 
     await user.click(moreButton);
     expect(screen.getByText(/^help$/i, { selector: 'h4' })).toBeInTheDocument();
+    // Refresh Map lives in the menu now that the toolbar stays a single row.
+    expect(screen.getByRole('menuitem', { name: /refresh map/i })).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: /^documentation$/i }));
     expect(onShowDocs).toHaveBeenCalledTimes(1);
 

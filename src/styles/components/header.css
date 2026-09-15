@@ -294,7 +294,7 @@
   background: var(--nb-warning-bg) !important;
 }
 
-@media (max-width: 1760px) {
+@media (max-width: 1340px) {
   .topbar {
     align-items: flex-start;
   }
@@ -473,4 +473,34 @@
 
 .toolbar-dropdown__button--active {
   background: var(--nb-grey-100);
+}
+
+/* The toolbar is the widest block in the header (~875px), so its controls are
+   sized for the bar itself. Without this the header needs ~1700px and wraps to
+   a second row on ordinary laptop windows. */
+.topbar .action-button {
+  padding: 4px 9px;
+  font-size: 0.74rem;
+}
+
+.topbar .mode-picker-group__title {
+  font-size: 0.55rem;
+}
+
+.topbar .mode-picker__option {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}
+
+/* The pencil is decorative; the radiogroup already carries its own label. */
+.topbar .mode-picker__icon {
+  display: none;
+}
+
+.topbar__identity {
+  gap: 8px;
+}
+
+.toolbar__actions {
+  gap: 4px;
 }

@@ -409,14 +409,6 @@ function HeaderComponent({
             )}
           </div>
 
-          <button
-            type="button"
-            className="action-button action-button--refresh"
-            onClick={onRefresh}
-          >
-            {t('header.refreshMap')}
-          </button>
-
           {isAnonymous && signInProviders && signInProviders.length > 0 && onShowSignIn && (
             <button type="button" className="action-button" onClick={onShowSignIn}>
               {t('auth.signInAction')}
@@ -490,6 +482,17 @@ function HeaderComponent({
                   disabled={!canReload}
                 >
                   {t('header.reloadCurrent')}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="action-button toolbar-dropdown__button"
+                  onClick={() => {
+                    closeMenus();
+                    onRefresh();
+                  }}
+                >
+                  {t('header.refreshMap')}
                 </button>
                 {onShowLibrary && (
                   <button

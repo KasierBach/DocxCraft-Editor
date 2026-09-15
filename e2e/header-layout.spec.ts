@@ -8,11 +8,11 @@ test.beforeEach(() => {
 });
 
 // Below this width the header deliberately becomes two rows (identity, then
-// toolbar). Above it everything must fit on one row — the identity needs ~800px
-// and the toolbar ~875px, so a single row requires roughly 1720px.
-const SINGLE_ROW_WIDTH = 1760;
-const WIDE = [1920, 1800, SINGLE_ROW_WIDTH + 1];
-const NARROW = [SINGLE_ROW_WIDTH, 1600, 1440, 1366, 1280, 1024, 900, 768, 430, 320];
+// toolbar). Above it everything fits on one row: the identity needs ~800px and
+// the compact toolbar ~555px, so a single row needs roughly 1370px.
+const SINGLE_ROW_WIDTH = 1340;
+const WIDE = [1920, 1600, 1512, 1440, 1366];
+const NARROW = [SINGLE_ROW_WIDTH, 1280, 1024, 900, 768, 430, 320];
 
 for (const width of [...WIDE, ...NARROW]) {
   test(`header at ${width}px`, async ({ page }) => {
