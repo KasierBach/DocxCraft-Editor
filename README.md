@@ -288,4 +288,5 @@ The hosted build (Postgres + OAuth accounts) needs operational pieces the self-h
   ```
 
   Enable versioning and a lifecycle policy on the blob bucket as well.
-- **Migrations** — run `npm run db:migrate` (Prisma migrate deploy) as a deploy step before starting the new app version.
+- **Migrations** — `docker compose -f deploy/docker-compose.yml up -d` runs a one-off `migrate` service (`prisma migrate deploy`) before the app starts, so the schema is applied on every deploy. It builds the repository's build stage, because the runtime image ships without the Prisma CLI.
+- **Blob storage** — the hosted build keeps `.docx` blobs in `BLOB_DIR` on the `docxcraft-data` volume. Back that volume up alongside the database, or swap in OCI Object Storage.
