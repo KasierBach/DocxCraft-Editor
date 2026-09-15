@@ -88,7 +88,7 @@
 .document-name-input {
   flex: 1 1 160px;
   min-width: 120px;
-  max-width: 420px;
+  max-width: 340px;
   font-size: 0.96rem;
   font-weight: 800;
   color: var(--nb-black);
@@ -495,6 +495,18 @@
 /* The pencil is decorative; the radiogroup already carries its own label. */
 .topbar .mode-picker__icon {
   display: none;
+}
+
+/* One line each. The tagline chip stacked the brand into two rows and the MODE
+   caption stacked the picker, so neither lined up with the action buttons. */
+.topbar .eyebrow {
+  display: none;
+}
+
+.topbar .mode-picker-group {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 
 .topbar__identity {

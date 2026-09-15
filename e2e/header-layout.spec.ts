@@ -8,8 +8,8 @@ test.beforeEach(() => {
 });
 
 // Below this width the header deliberately becomes two rows (identity, then
-// toolbar). Above it everything fits on one row: the identity needs ~800px and
-// the compact toolbar ~555px, so a single row needs roughly 1370px.
+// toolbar). Above it everything fits on one row, and the mode picker lines up
+// with the action buttons because both are single-line blocks.
 const SINGLE_ROW_WIDTH = 1340;
 const WIDE = [1920, 1600, 1512, 1440, 1366];
 const NARROW = [SINGLE_ROW_WIDTH, 1280, 1024, 900, 768, 430, 320];
@@ -21,40 +21,64 @@ for (const width of [...WIDE, ...NARROW]) {
     await page.waitForSelector('.topbar');
 
     const metrics = await page.evaluate(() => {
-      const identity = document.querySelector('.topbar__identity');
-      const toolbar = document.querySelector('.toolbar');
-      const actions = document.querySelector('.toolbar__actions');
-      const breadcrumbs = document.querySelector('.breadcrumbs');
+      const box = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        return { top: rect.top, height: rect.height, center: rect.top + rect.height / 2 };
+      };
       const nameInput = document.querySelector('.document-name-input');
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
-        identityTop: identity?.getBoundingClientRect().top ?? -1,
-        toolbarTop: toolbar?.getBoundingClientRect().top ?? -1,
-        actionsHeight: actions?.getBoundingClientRect().height ?? -1,
-        breadcrumbHeight: breadcrumbs?.getBoundingClientRect().height ?? -1,
+        identity: box('.topbar__identity'),
+        toolbar: box('.toolbar'),
+        modePicker: box('.mode-picker'),
+        actions: box('.toolbar__actions'),
+        breadcrumbs: box('.breadcrumbs'),
+        brand: box('.brand'),
         nameWidth: nameInput?.getBoundingClientRect().width ?? -1,
       };
     });
 
-    expect(metrics.overflow, 'no horizontal overflow').toBeLessThanOrEqual(1);
-    expect(metrics.breadcrumbHeight, 'breadcrumb stays on one line').toBeLessThan(26);
-    expect(metrics.nameWidth, 'document name input is capped').toBeLessThanOrEqual(421);
+    expect(metrics.identity, 'header identity present').not.toBeNull();
+    expect(metrics.toolbar, 'header toolbar present').not.toBeNull();
+    expect(metrics.modePicker, 'mode picker present').not.toBeNull();
+    expect(metrics.actions, 'toolbar actions present').not.toBeNull();
+    expect(metrics.brand, 'brand present').not.toBeNull();
+    expect(metrics.breadcrumbs, 'breadcrumbs present').not.toBeNull();
+    if (!metrics.identity || !metrics.toolbar || !metrics.modePicker || !metrics.actions) return;
+    if (!metrics.brand || !metrics.breadcrumbs) return;
 
-    // Below ~1024px the action buttons are expected to wrap.
+    expect(metrics.overflow, 'no horizontal overflow').toBeLessThanOrEqual(1);
+    expect(metrics.breadcrumbs.height, 'breadcrumb stays on one line').toBeLessThan(26);
+    expect(metrics.nameWidth, 'document name input is capped').toBeLessThanOrEqual(341);
+
+    // Phone widths stack the bar, so the one-line expectations only apply above.
+    if (width >= 768) {
+      // The brand must be a single line; a stacked tagline used to break this.
+      expect(metrics.brand.height, 'brand is one line').toBeLessThanOrEqual(44);
+    }
+
     if (width >= 1024) {
-      expect(metrics.actionsHeight, 'toolbar actions stay on one line').toBeLessThanOrEqual(60);
+      // The mode picker and the action buttons must share a vertical centre, or
+      // the bar reads as misaligned.
+      expect(
+        Math.abs(metrics.modePicker.center - metrics.actions.center),
+        'mode picker lines up with the action buttons',
+      ).toBeLessThanOrEqual(2);
+      expect(metrics.actions.height, 'toolbar actions stay on one line').toBeLessThanOrEqual(60);
     }
 
     if (WIDE.includes(width)) {
       expect(
-        Math.abs(metrics.toolbarTop - metrics.identityTop),
+        Math.abs(metrics.toolbar.center - metrics.identity.center),
         'toolbar shares the identity row',
       ).toBeLessThanOrEqual(2);
     } else {
       expect(
-        metrics.toolbarTop,
-        'toolbar drops to its own row',
-      ).toBeGreaterThan(metrics.identityTop + 8);
+        metrics.toolbar.center,
+        'toolbar drops below the identity row',
+      ).toBeGreaterThan(metrics.identity.center + 8);
     }
   });
 }
