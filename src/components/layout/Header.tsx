@@ -410,7 +410,7 @@ function HeaderComponent({
           </div>
 
           {isAnonymous && signInProviders && signInProviders.length > 0 && onShowSignIn && (
-            <button type="button" className="action-button" onClick={onShowSignIn}>
+            <button type="button" className="action-button toolbar__signin" onClick={onShowSignIn}>
               {t('auth.signInAction')}
             </button>
           )}

@@ -8,11 +8,11 @@ test.beforeEach(() => {
 });
 
 // Below this width the header deliberately becomes two rows (identity, then
-// toolbar). Above it everything fits on one row, and the mode picker lines up
-// with the action buttons because both are single-line blocks.
-const SINGLE_ROW_WIDTH = 1340;
-const WIDE = [1920, 1600, 1512, 1440, 1366];
-const NARROW = [SINGLE_ROW_WIDTH, 1280, 1024, 900, 768, 430, 320];
+// toolbar). Above it everything fits on one row: the brand tagline is inline and
+// the mode picker shares the action row's vertical centre.
+const SINGLE_ROW_WIDTH = 1420;
+const WIDE = [1920, 1600, 1512, 1440];
+const NARROW = [SINGLE_ROW_WIDTH, 1366, 1280, 1024, 900, 768, 430, 320];
 
 for (const width of [...WIDE, ...NARROW]) {
   test(`header at ${width}px`, async ({ page }) => {
@@ -28,6 +28,7 @@ for (const width of [...WIDE, ...NARROW]) {
         return { top: rect.top, height: rect.height, center: rect.top + rect.height / 2 };
       };
       const nameInput = document.querySelector('.document-name-input');
+      const tagline = document.querySelector('.topbar .eyebrow');
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
         identity: box('.topbar__identity'),
@@ -37,6 +38,7 @@ for (const width of [...WIDE, ...NARROW]) {
         breadcrumbs: box('.breadcrumbs'),
         brand: box('.brand'),
         nameWidth: nameInput?.getBoundingClientRect().width ?? -1,
+        taglineVisible: (tagline?.getBoundingClientRect().height ?? 0) > 0,
       };
     });
 
@@ -74,6 +76,8 @@ for (const width of [...WIDE, ...NARROW]) {
         Math.abs(metrics.toolbar.center - metrics.identity.center),
         'toolbar shares the identity row',
       ).toBeLessThanOrEqual(2);
+      // The brand tagline is inline on the single-row bar.
+      expect(metrics.taglineVisible, 'brand tagline is shown').toBe(true);
     } else {
       expect(
         metrics.toolbar.center,

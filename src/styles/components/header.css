@@ -86,9 +86,9 @@
 }
 
 .document-name-input {
-  flex: 1 1 160px;
-  min-width: 120px;
-  max-width: 340px;
+  flex: 1 1 120px;
+  min-width: 90px;
+  max-width: 300px;
   font-size: 0.96rem;
   font-weight: 800;
   color: var(--nb-black);
@@ -294,7 +294,7 @@
   background: var(--nb-warning-bg) !important;
 }
 
-@media (max-width: 1340px) {
+@media (max-width: 1420px) {
   .topbar {
     align-items: flex-start;
   }
@@ -373,6 +373,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.92rem;
+  }
+
+  /* The brand row (controls + logo + badge) is the widest part of the identity
+     on a phone; cap the title row so it cannot push the header past the
+     viewport. The logo truncates, the status badge stays. */
+  .brand__title-row {
+    min-width: 0;
+    max-width: 130px;
   }
 
   .document-info {
@@ -497,16 +505,37 @@
   display: none;
 }
 
-/* One line each. The tagline chip stacked the brand into two rows and the MODE
-   caption stacked the picker, so neither lined up with the action buttons. */
-.topbar .eyebrow {
-  display: none;
+/* One line each: the tagline chip sits inline beside the logo and the MODE
+   caption sits inline with the picker, so both share the bar's vertical centre
+   instead of stacking into two-row blocks. */
+.topbar .brand__text {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 }
 
 .topbar .mode-picker-group {
   flex-direction: row;
   align-items: center;
   gap: 6px;
+}
+
+/* Long paths truncate rather than widening the identity block. */
+.topbar .breadcrumbs {
+  max-width: 150px;
+}
+
+/* Keep the bar on one row at laptop widths: below this the MODE caption and the
+   toolbar Sign in button step aside (the guest banner and the More actions menu
+   both still offer sign-in), which is enough to pay for the brand tagline. */
+@media (max-width: 1599px) {
+  .topbar .mode-picker-group__title {
+    display: none;
+  }
+
+  .topbar .toolbar__signin {
+    display: none;
+  }
 }
 
 .topbar__identity {

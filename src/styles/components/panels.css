@@ -424,7 +424,8 @@
 .guest-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   padding: 8px 12px;
   border-bottom: var(--nb-border) solid var(--nb-black);
   background: var(--nb-accent);
