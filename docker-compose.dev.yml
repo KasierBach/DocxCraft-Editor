@@ -18,5 +18,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # Dedicated throwaway database for the integration test suite
+  # (server/__tests__/*.test.ts truncate their tables on every run).
+  # Start with: npm run db:test:up
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: docxcraft
+      POSTGRES_PASSWORD: docxcraft
+      POSTGRES_DB: docxcraft_test
+    ports:
+      # 5434 avoids clashing with the dev Postgres above.
+      - "5434:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docxcraft -d docxcraft_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-dev-data:
+  postgres-test-data:
+

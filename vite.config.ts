@@ -40,7 +40,10 @@ export default defineConfig({
         // Prisma-generated client.
         'server/generated/**',
       ],
-      thresholds: { lines: 74, functions: 73, statements: 74, branches: 64 },
+      thresholds: { lines: 78, functions: 74, statements: 76, branches: 67 },
+      // Without this a failing suite suppresses the report entirely, so CI
+      // shows no numbers to act on.
+      reportOnFailure: true,
     },
   },
 });

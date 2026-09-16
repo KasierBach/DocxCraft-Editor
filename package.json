@@ -16,6 +16,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
+    "db:test:up": "docker compose -f docker-compose.dev.yml up -d --wait postgres-test",
     "hash-passphrase": "tsx scripts/hash-passphrase.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
