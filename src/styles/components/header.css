@@ -505,15 +505,8 @@
   display: none;
 }
 
-/* One line each: the tagline chip sits inline beside the logo and the MODE
-   caption sits inline with the picker, so both share the bar's vertical centre
-   instead of stacking into two-row blocks. */
-.topbar .brand__text {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
-
+/* The tagline chip stacks below the logo (base column layout). Only the MODE
+   caption sits inline with the picker, so it shares the bar's vertical centre. */
 .topbar .mode-picker-group {
   flex-direction: row;
   align-items: center;

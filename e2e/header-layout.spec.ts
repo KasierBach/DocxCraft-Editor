@@ -8,8 +8,8 @@ test.beforeEach(() => {
 });
 
 // Below this width the header deliberately becomes two rows (identity, then
-// toolbar). Above it everything fits on one row: the brand tagline is inline and
-// the mode picker shares the action row's vertical centre.
+// toolbar). Above it everything fits on one row: the brand tagline stacks under
+// the logo and the mode picker shares the action row's vertical centre.
 const SINGLE_ROW_WIDTH = 1420;
 const WIDE = [1920, 1600, 1512, 1440];
 const NARROW = [SINGLE_ROW_WIDTH, 1366, 1280, 1024, 900, 768, 430, 320];
@@ -72,7 +72,8 @@ for (const width of [...WIDE, ...NARROW]) {
 
     // Phone widths stack the bar, so the one-line expectations only apply above.
     if (width >= 768) {
-      // The brand must be a single line; a stacked tagline used to break this.
+      // The brand stays compact: the logo row plus the stacked tagline chip
+      // must not exceed 44px, or the bar reads as two misaligned rows.
       expect(metrics.brand.height, 'brand is one line').toBeLessThanOrEqual(44);
     }
 
@@ -91,7 +92,7 @@ for (const width of [...WIDE, ...NARROW]) {
         Math.abs(metrics.toolbar.center - metrics.identity.center),
         'toolbar shares the identity row',
       ).toBeLessThanOrEqual(2);
-      // The brand tagline is inline on the single-row bar.
+      // The brand tagline chip is visible on the single-row bar.
       expect(metrics.taglineVisible, 'brand tagline is shown').toBe(true);
     } else {
       expect(
