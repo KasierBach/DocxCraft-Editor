@@ -82,7 +82,8 @@
     "react-dom": "^19.2.6",
     "react-router": "^7.18.3",
     "tsx": "^4.22.3",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.15"
   },
   "overrides": {
     "deepmerge-ts": "8.0.2",

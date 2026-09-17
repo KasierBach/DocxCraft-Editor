@@ -1,4 +1,19 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeEach } from 'vitest';
+
+import { resetAppStore } from '../store/appStore';
+
+// The persisted app store is a module singleton, so without this a remembered
+// document or drawer layout would leak from one test into the next.
+beforeEach(() => {
+  resetAppStore();
+  // Same reason: the open reference page is remembered in sessionStorage. The
+  // server and script suites run in the node environment, where there is no
+  // window, so this has to be guarded rather than assumed.
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.clear();
+  }
+});
 
 // jsdom does not implement matchMedia; provide a minimal stub used by hooks
 // such as useTheme to detect the preferred color scheme.

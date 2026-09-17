@@ -6,6 +6,7 @@ import App from '../App';
 import type { SavedDocumentSummary } from '../lib/documentApi';
 import type { RecoverySnapshot } from '../lib/recoveryStore';
 import { downloadBufferAsDocx } from '../lib/download';
+import { useAppStore } from '../store/appStore';
 import { mockState } from '../test/editorMock';
 
 vi.mock('@eigenpal/docx-editor-react', async () => {
@@ -278,6 +279,51 @@ describe('App handler and deep-link flows', () => {
     expect(await screen.findByText(/deep link open failed\./i)).toBeInTheDocument();
     expect(await screen.findByText(/document not found/i)).toBeInTheDocument();
     expect(docxEditorRenderLog.every((entry) => entry.documentBuffer === undefined)).toBe(true);
+  });
+
+  it('reopens the remembered document when the URL carries no deep link', async () => {
+    const buffer = new ArrayBuffer(8);
+    openSavedDocument.mockResolvedValue({
+      id: 'doc-77',
+      name: 'Remembered.docx',
+      buffer,
+    });
+    // What a refresh looks like: the store still holds the open document while
+    // the URL has no deep link left (the URL is rewritten to source=sample).
+    useAppStore.getState().setOpenDocument({
+      kind: 'saved-document',
+      documentId: 'doc-77',
+      name: 'Remembered.docx',
+    });
+    window.history.replaceState(null, '', '/app');
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(openSavedDocument).toHaveBeenCalledWith('doc-77');
+    });
+
+    const renderedBuffers = docxEditorRenderLog
+      .map((entry) => entry.documentBuffer)
+      .filter((entry): entry is ArrayBuffer => entry instanceof ArrayBuffer);
+    expect(renderedBuffers).toContain(buffer);
+  });
+
+  it('forgets a remembered document that can no longer be opened', async () => {
+    openSavedDocument.mockRejectedValue(new Error('Document not found'));
+    useAppStore.getState().setOpenDocument({
+      kind: 'saved-document',
+      documentId: 'doc-gone',
+      name: 'Gone.docx',
+    });
+    window.history.replaceState(null, '', '/app');
+
+    render(<App />);
+
+    expect(await screen.findByText(/deep link open failed\./i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(useAppStore.getState().openDocument).toBeNull();
+    });
   });
 
   it('restores a local-file recovery snapshot from the right sidebar', async () => {

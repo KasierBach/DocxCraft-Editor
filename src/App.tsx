@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { DocxEditor, type DocxEditorRef, type EditorMode } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import type { Document } from '@eigenpal/docx-editor-core';
 import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 
@@ -27,6 +27,7 @@ import { useTranslation } from './i18n';
 import { editorVi } from './i18n/editor/vi';
 import { collectAnchorTargets, type AnchorTarget, type PageContent } from './lib/anchors';
 import { buildDeepLinkSearch, readDeepLink } from './lib/deepLink';
+import { resetAppStore, useAppStore } from './store/appStore';
 import { downloadBufferAsDocx } from './lib/download';
 import { convertToMarkdown, downloadMarkdown } from './lib/exportUtils';
 import { COMPACT_LAYOUT_MEDIA_QUERY } from './lib/layoutConstants';
@@ -138,6 +139,9 @@ export default function App() {
     } catch {
       // The reload re-checks the session regardless of the logout result.
     }
+    // Drop the remembered document and layout so the next person on this
+    // machine does not reopen the previous user's work.
+    resetAppStore();
     window.location.reload();
   }, []);
 
@@ -148,6 +152,9 @@ export default function App() {
   const flashHighlightCancelRef = useRef<(() => void) | null>(null);
 
   const initialDeepLink = useMemo(() => readDeepLink(window.location.search), []);
+  // Read once: persist() hydrates synchronously from localStorage, so the store
+  // already holds the previous session's document during the first render.
+  const initialOpenDocument = useMemo(() => useAppStore.getState().openDocument, []);
   const [source, setSource] = useState<EditorSource>(() => createSampleSource());
   const [editorKey, setEditorKey] = useState(0);
   const [pendingDeepLinkParaId, setPendingDeepLinkParaId] = useState<string | null>(
@@ -156,11 +163,15 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<number | null>(1);
   const [statusMessage, setStatusMessage] = useState('Ready.');
   const [isDirty, setIsDirty] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(() => !prefersCompactLayout());
-  const [showInfo, setShowInfo] = useState(() => !prefersCompactLayout());
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [editorMode, setEditorMode] = useState<EditorMode>('editing');
+  const showSidebar = useAppStore((state) => state.showSidebar);
+  const setShowSidebar = useAppStore((state) => state.setShowSidebar);
+  const showInfo = useAppStore((state) => state.showInfo);
+  const setShowInfo = useAppStore((state) => state.setShowInfo);
+  const editorMode = useAppStore((state) => state.editorMode);
+  const setEditorMode = useAppStore((state) => state.setEditorMode);
+  const setOpenDocument = useAppStore((state) => state.setOpenDocument);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const hasHandledInitialDeepLink = useRef(false);
@@ -451,17 +462,20 @@ export default function App() {
 
   useEffect(() => {
     let isCancelled = false;
-    const deepLinkDocumentId = initialDeepLink.documentId;
+    const deepLinkDocumentId =
+      initialDeepLink.source === 'saved' ? initialDeepLink.documentId : null;
+    // A refresh has no deep link, so fall back to the document this browser had
+    // open. Guards run deep link first: an explicit link always wins.
+    const rememberedDocumentId =
+      initialOpenDocument?.kind === 'saved-document' ? initialOpenDocument.documentId : null;
+    const documentIdToOpen = deepLinkDocumentId ?? rememberedDocumentId;
 
-    if (
-      !hasHandledInitialDeepLink.current &&
-      initialDeepLink.source === 'saved' &&
-      deepLinkDocumentId
-    ) {
+    if (!hasHandledInitialDeepLink.current && documentIdToOpen) {
       hasHandledInitialDeepLink.current = true;
+      const fromDeepLink = Boolean(deepLinkDocumentId);
       void (async () => {
         try {
-          const openedDocument = await openSavedDocument(deepLinkDocumentId);
+          const openedDocument = await openSavedDocument(documentIdToOpen);
           if (isCancelled) {
             return;
           }
@@ -476,9 +490,17 @@ export default function App() {
           setStatusMessage(t('app.openedFromDeepLink', { name: openedDocument.name }));
           pushToast('info', t('app.openedFromDeepLink', { name: openedDocument.name }));
           setLastSavedAt(new Date().toISOString());
+          initialRestorePendingRef.current = false;
         } catch (error) {
           if (isCancelled) {
             return;
+          }
+
+          initialRestorePendingRef.current = false;
+          // A remembered document that no longer exists (or is no longer
+          // readable) must not produce this toast on every future load.
+          if (!fromDeepLink) {
+            setOpenDocument(null);
           }
 
           const message = error instanceof Error ? error.message : 'Deep link open failed.';
@@ -523,6 +545,35 @@ export default function App() {
     };
   }, [anchors, pendingDeepLinkParaId, setActiveParaId]);
 
+  const sourceDocumentId = isSavedSource(source) ? source.documentId : null;
+  // True until the remembered document has been reopened (or given up on). The
+  // editor holds the default sample in the meantime, and recording that would
+  // clobber the very value we are restoring.
+  const initialRestorePendingRef = useRef(
+    Boolean(initialOpenDocument?.kind === 'saved-document' && initialOpenDocument.documentId),
+  );
+
+  useEffect(() => {
+    if (initialRestorePendingRef.current) {
+      return;
+    }
+
+    setOpenDocument({
+      kind: source.kind,
+      documentId: sourceDocumentId,
+      name: source.name,
+    });
+  }, [setOpenDocument, source.kind, source.name, sourceDocumentId]);
+
+  useEffect(() => {
+    // Mount only: a stored layout comes from whatever window it was saved on, so
+    // a phone must not reopen the desktop drawers.
+    if (prefersCompactLayout()) {
+      setShowSidebar(false);
+      setShowInfo(false);
+    }
+  }, [setShowInfo, setShowSidebar]);
+
   useEffect(() => {
     const nextSearch = buildDeepLinkSearch({
       source:
@@ -561,7 +612,7 @@ export default function App() {
     if (opening && prefersCompactLayout()) {
       setShowInfo(false);
     }
-  }, [showSidebar]);
+  }, [setShowInfo, setShowSidebar, showSidebar]);
 
   const handleToggleInfo = useCallback(() => {
     const opening = !showInfo;
@@ -569,20 +620,20 @@ export default function App() {
     if (opening && prefersCompactLayout()) {
       setShowSidebar(false);
     }
-  }, [showInfo]);
+  }, [setShowInfo, setShowSidebar, showInfo]);
 
   const closeDrawers = useCallback(() => {
     setShowSidebar(false);
     setShowInfo(false);
-  }, []);
+  }, [setShowInfo, setShowSidebar]);
 
   const closeSidebar = useCallback(() => {
     setShowSidebar(false);
-  }, []);
+  }, [setShowSidebar]);
 
   const closeInfo = useCallback(() => {
     setShowInfo(false);
-  }, []);
+  }, [setShowInfo]);
 
   // Escape closes open drawers on compact (drawer) layouts without touching
   // dialogs such as the command palette or the shortcut help modal.
