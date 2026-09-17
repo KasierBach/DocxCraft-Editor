@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTranslation } from '../../i18n';
@@ -9,6 +10,9 @@ import { useAuthGate } from '../auth/AuthGateContext';
 type ProfileHeaderProps = {
   documents: SavedDocumentSummary[];
 };
+
+/** Same-origin: the provider photo is proxied so the browser can load it. */
+const ACCOUNT_AVATAR_PATH = '/api/account/avatar';
 
 const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ['year', 365 * 24 * 60 * 60 * 1000],
@@ -59,6 +63,7 @@ function newestUpdate(documents: SavedDocumentSummary[]) {
 export function ProfileHeader({ documents }: ProfileHeaderProps) {
   const { t, language } = useTranslation();
   const { providers } = useAuthGate();
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: readAuthSession });
   const recoveryQuery = useQuery({ queryKey: ['account', 'recovery'], queryFn: readRecoverySnapshot });
 
@@ -69,8 +74,13 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
     <section className="profile-header">
       <div className="profile-header__identity">
         <div className="profile-avatar" aria-hidden="true">
-          {user?.avatarUrl ? (
-            <img className="profile-avatar__image" src={user.avatarUrl} alt="" />
+          {user?.avatarUrl && !avatarFailed ? (
+            <img
+              className="profile-avatar__image"
+              src={ACCOUNT_AVATAR_PATH}
+              alt=""
+              onError={() => setAvatarFailed(true)}
+            />
           ) : (
             initialsFor(user?.name, user?.email)
           )}

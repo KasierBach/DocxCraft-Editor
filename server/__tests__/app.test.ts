@@ -839,11 +839,9 @@ describe('buildDocumentApiApp', () => {
         expect(policy).toContain("default-src 'self'");
         expect(policy).toContain("script-src 'self'");
         expect(policy).toContain("frame-ancestors 'none'");
-        // Google and GitHub avatars are remote images; a narrow img-src that
-        // omits these hosts blocks them and the avatar silently degrades.
-        expect(policy).toContain('img-src');
-        expect(policy).toContain('https://avatars.githubusercontent.com');
-        expect(policy).toContain('https://*.googleusercontent.com');
+        // Provider avatars are proxied through our own origin, so img-src needs
+        // no remote hosts and stays as tight as possible.
+        expect(policy).toContain("img-src 'self' data: blob:");
       } finally {
         await app.close();
       }

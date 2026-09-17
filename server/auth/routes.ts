@@ -231,6 +231,33 @@ export function registerAccountDataRoutes(app: FastifyInstance, options: Account
 }
 
 const DISPLAY_NAME_MAX_LENGTH = 80;
+const AVATAR_TIMEOUT_MS = 5000;
+
+/**
+ * Only the provider avatar hosts are ever fetched, so a tampered `avatarUrl`
+ * cannot turn the avatar route into a request for an arbitrary address.
+ */
+const AVATAR_HOST_PATTERNS: RegExp[] = [
+  /^avatars\.githubusercontent\.com$/,
+  /^lh[0-9]\.googleusercontent\.com$/,
+];
+
+function readProviderAvatarUrl(avatarUrl: string | null) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  try {
+    const target = new URL(avatarUrl);
+    const allowed =
+      target.protocol === 'https:' &&
+      AVATAR_HOST_PATTERNS.some((pattern) => pattern.test(target.hostname));
+
+    return allowed ? target : null;
+  } catch {
+    return null;
+  }
+}
 
 const BROWSER_PATTERNS: Array<[RegExp, string]> = [
   // Order matters: Edge and Chrome both claim Chrome, and Chrome claims Safari.
@@ -340,8 +367,7 @@ export function registerAccountProfileRoutes(app: FastifyInstance, options: Acco
     return reply.code(204).send();
   });
 
-  app.get('/api/account/activity', async (request, reply) => {
-    const session = await requireSession(request, reply, options);
+  app.get('/api/account/activity', async (request, reply) => {    const session = await requireSession(request, reply, options);
     if (!session) return reply;
 
     const query = request.query as { cursor?: string; limit?: string };
@@ -364,5 +390,36 @@ export function registerAccountProfileRoutes(app: FastifyInstance, options: Acco
     // The actor filter is applied inside listForActor, the only place allowed
     // to read this table for a user.
     return options.audit.listForActor({ actorUserId: session.user.id, cursor, limit });
+  });
+
+  /**
+   * Serves the caller's provider avatar from our own origin. Google answers
+   * browser hotlinks to `lh3.googleusercontent.com` with a 429 HTML page, which
+   * Chromium's ORB then refuses to render as an image, so the browser cannot
+   * load the photo directly.
+   */
+  app.get('/api/account/avatar', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const avatarUrl = session.user.avatarUrl;
+    const target = readProviderAvatarUrl(avatarUrl);
+    if (!target) {
+      return reply.code(404).send({ message: 'No provider avatar is available.' });
+    }
+
+    const upstream = await fetch(target, { signal: AbortSignal.timeout(AVATAR_TIMEOUT_MS) }).catch(
+      () => null,
+    );
+    const contentType = upstream?.headers.get('content-type') ?? '';
+    if (!upstream?.ok || !contentType.startsWith('image/')) {
+      return reply.code(404).send({ message: 'No provider avatar is available.' });
+    }
+
+    reply.header('content-type', contentType);
+    // Private so a shared cache never serves one user's photo to another, and
+    // long-lived so the provider is hit once a day, not once a page view.
+    reply.header('cache-control', 'private, max-age=86400');
+    return reply.send(Buffer.from(await upstream.arrayBuffer()));
   });
 }

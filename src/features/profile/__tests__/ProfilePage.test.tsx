@@ -118,9 +118,11 @@ describe('ProfilePage', () => {
     );
 
     expect(await screen.findByText('Alice Baker')).toBeInTheDocument();
+    // Proxied through our own origin: Google answers browser hotlinks with a
+    // 429 HTML page, which the browser then refuses to render as an image.
     expect(container.querySelector('.profile-avatar__image')).toHaveAttribute(
       'src',
-      'https://example.com/avatar.png',
+      '/api/account/avatar',
     );
     expect(screen.getByText('Google')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();

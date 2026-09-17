@@ -44,9 +44,7 @@ const CSP_DIRECTIVES = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // Provider avatars are remote images. Without their hosts here the browser
-  // blocks them and the avatar silently falls back to initials.
-  "img-src 'self' data: blob: https://avatars.githubusercontent.com https://*.googleusercontent.com",
+  "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
   "worker-src 'self' blob:",
