@@ -5,6 +5,9 @@ node_modules
 .codegraph/
 test-results/
 
+# Brainstorming mockups (local scratch, not for version control)
+.superpowers/
+
 # Build output
 dist
 dist-ssr
