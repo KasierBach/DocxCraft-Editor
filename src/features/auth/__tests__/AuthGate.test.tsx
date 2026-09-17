@@ -171,4 +171,54 @@ describe('AuthGate', () => {
     expect(screen.queryByTestId('docs')).not.toBeInTheDocument();
     expect(screen.getByTestId('probe')).toBeInTheDocument();
   });
+
+  it('reopens the reference page the reader was on after a reload', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: true,
+      needsSetup: false,
+      authenticated: true,
+    });
+    // What a reload looks like: the overlay is not in the URL, so the session
+    // remembers which reference page was open over the app.
+    window.sessionStorage.setItem('docxcraft:open-page', 'docs');
+
+    renderGate();
+    await screen.findByTestId('probe');
+
+    expect(screen.getByTestId('docs')).toBeInTheDocument();
+    // The app still stays mounted underneath the reopened overlay.
+    expect(screen.getByTestId('probe')).toBeInTheDocument();
+  });
+
+  it('remembers the open reference page and forgets it once closed', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: true,
+      needsSetup: false,
+      authenticated: true,
+    });
+    const user = userEvent.setup();
+
+    renderGate();
+    await screen.findByTestId('probe');
+
+    await user.click(screen.getByRole('button', { name: /open docs/i }));
+    expect(window.sessionStorage.getItem('docxcraft:open-page')).toBe('docs');
+
+    await user.keyboard('{Escape}');
+    expect(window.sessionStorage.getItem('docxcraft:open-page')).toBeNull();
+  });
+
+  it('does not reopen a reference page in a fresh session', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: true,
+      needsSetup: false,
+      authenticated: true,
+    });
+    window.sessionStorage.clear();
+
+    renderGate();
+    await screen.findByTestId('probe');
+
+    expect(screen.queryByTestId('docs')).not.toBeInTheDocument();
+  });
 });

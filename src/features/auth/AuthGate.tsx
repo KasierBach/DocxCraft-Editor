@@ -18,6 +18,37 @@ type AuthGateProps = {
   children: ReactNode;
 };
 
+/**
+ * Reference pages open as an overlay over the editor, so the overlay is not in
+ * the URL. Remembering it for the browser session means a reload lands back on
+ * the page the reader was on instead of revealing the editor underneath.
+ */
+const OVERLAY_STORAGE_KEY = 'docxcraft:open-page';
+
+const OVERLAY_PAGES: readonly AppPage[] = ['landing', 'docs', 'changelog', 'privacy', 'terms'];
+
+function readStoredOverlayPage(): AppPage | null {
+  try {
+    const stored = window.sessionStorage.getItem(OVERLAY_STORAGE_KEY);
+    return OVERLAY_PAGES.includes(stored as AppPage) ? (stored as AppPage) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeOverlayPage(page: AppPage | null) {
+  try {
+    if (page) {
+      window.sessionStorage.setItem(OVERLAY_STORAGE_KEY, page);
+      return;
+    }
+
+    window.sessionStorage.removeItem(OVERLAY_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable; the overlay still works for this page view.
+  }
+}
+
 /** URL for each gate page; the gate is driven entirely by the current path. */
 const GATE_PATHS = {
   app: '/app',
@@ -90,7 +121,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
-  const [overlayPage, setOverlayPage] = useState<AppPage | null>(null);
+  const [overlayPage, setOverlayPage] = useState<AppPage | null>(readStoredOverlayPage);
   const overlayRef = useRef<HTMLDivElement | null>(null);
 
   const loadSession = useCallback(() => {
@@ -119,8 +150,14 @@ export function AuthGate({ children }: AuthGateProps) {
 
   useEffect(() => loadSession(), [loadSession]);
 
-  const openPage = useCallback((page: AppPage) => setOverlayPage(page), []);
-  const closePage = useCallback(() => setOverlayPage(null), []);
+  const openPage = useCallback((page: AppPage) => {
+    storeOverlayPage(page);
+    setOverlayPage(page);
+  }, []);
+  const closePage = useCallback(() => {
+    storeOverlayPage(null);
+    setOverlayPage(null);
+  }, []);
   const openLibrary = useCallback(() => navigate(GATE_PATHS.library), [navigate]);
   const openSettings = useCallback(() => navigate(GATE_PATHS.settings), [navigate]);
   const openSignIn = useCallback(() => navigate(GATE_PATHS.signin), [navigate]);
@@ -141,12 +178,12 @@ export function AuthGate({ children }: AuthGateProps) {
       }
 
       event.stopPropagation();
-      setOverlayPage(null);
+      closePage();
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [overlayPage]);
+  }, [closePage, overlayPage]);
 
   const isAnonymous = user?.isAnonymous ?? false;
   const contextValue = useMemo(
