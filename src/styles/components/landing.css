@@ -154,15 +154,19 @@
 
 /* ─── Hero ─── */
 
+/* The hero's vertical rhythm is capped by viewport height as well as width.
+   1080px tall is the baseline: every cap below is reached there, so 1080p (and
+   taller) renders the original hero, while shorter windows compress instead of
+   leaving only a sliver of the product shot at the fold. */
 .landing-hero {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: clamp(12px, 1.9vh, 20px);
   max-width: 1160px;
   margin: 0 auto;
-  padding: clamp(36px, 5vw, 64px) 24px 28px;
+  padding: clamp(28px, min(5vw, 6vh), 64px) 24px 28px;
   text-align: center;
 }
 
@@ -200,7 +204,9 @@
   margin: 0;
   min-height: 3.4em;
   font-family: var(--nb-font-display);
-  font-size: clamp(2.6rem, 7vw, 5rem);
+  /* Height-capped like the hero padding: full 5rem from 1080px tall up, smaller
+     on shorter windows (min-height is em-based, so the reserved box follows). */
+  font-size: clamp(2.6rem, min(7vw, 7.5vh), 5rem);
   font-weight: 900;
   line-height: 1.02;
   letter-spacing: -0.015em;
@@ -343,8 +349,11 @@
 /* ─── Screenshot with 3D tilt ─── */
 
 .landing-hero__shot-wrap {
-  width: 100%;
-  margin-top: 26px;
+  /* The shot is the widest thing in the hero, so it is height-capped as well:
+     90vh wide keeps the 16:9 frame plus chrome to roughly 50vh tall, and it
+     stays full-width on tall monitors where 90vh exceeds the hero column. */
+  width: min(100%, 90vh);
+  margin-top: clamp(14px, 2.5vh, 26px);
   perspective: 1400px;
 }
 
@@ -513,17 +522,20 @@
 
 /* ─── Sections ─── */
 
+/* Section rhythm follows the hero rule: each cap is reached at 1080px tall, so
+   1080p renders the original spacing and shorter windows compress. */
+
 .landing-section {
   max-width: 1160px;
   margin: 0 auto;
-  padding: clamp(44px, 5.2vw, 72px) 24px 16px;
+  padding: clamp(44px, min(5.2vw, 6.7vh), 72px) 24px 16px;
   scroll-margin-top: 76px;
 }
 
 .landing-section__title {
   margin: 0 0 12px;
   font-family: var(--nb-font-display);
-  font-size: clamp(1.9rem, 3.8vw, 2.9rem);
+  font-size: clamp(1.9rem, min(3.8vw, 4.3vh), 2.9rem);
   font-weight: 900;
   letter-spacing: -0.01em;
 }
@@ -840,12 +852,14 @@
 .landing-cta {
   max-width: 1160px;
   margin: 0 auto;
-  padding: clamp(44px, 6vw, 84px) 24px;
+  padding: clamp(44px, min(6vw, 7.8vh), 84px) 24px;
   text-align: center;
-}.landing-cta__title {
+}
+
+.landing-cta__title {
   margin: 0 0 30px;
   font-family: var(--nb-font-display);
-  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  font-size: clamp(2.4rem, min(6vw, 6.6vh), 4.4rem);
   font-weight: 900;
   letter-spacing: -0.015em;
 }
