@@ -24,6 +24,9 @@ vi.mock('../../landing/ChangelogPage', () => ({ ChangelogPage: () => <div /> }))
 vi.mock('../../library/DocumentsPage', () => ({
   DocumentsPage: () => <div data-testid="library" />,
 }));
+vi.mock('../../profile/ProfilePage', () => ({
+  ProfilePage: () => <div data-testid="profile" />,
+}));
 
 import { readAuthSession } from '../../../lib/documentApi';
 
@@ -127,6 +130,18 @@ describe('AuthGate', () => {
     renderGate('/documents');
 
     expect(await screen.findByTestId('library')).toBeInTheDocument();
+  });
+
+  it('renders the profile page at /settings and its sections', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: false,
+      needsSetup: false,
+      authenticated: true,
+    });
+
+    renderGate('/settings/security');
+
+    expect(await screen.findByTestId('profile')).toBeInTheDocument();
   });
 
   it('shows the hosted sign-in page at /login when providers exist', async () => {

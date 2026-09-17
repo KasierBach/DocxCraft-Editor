@@ -45,7 +45,7 @@ function createContentUrl(documentId: string, options?: ReadDocumentOptions) {
   return `${DOCUMENTS_API_PATH}/${documentId}/content${query ? `?${query}` : ''}`;
 }
 
-async function readErrorMessage(response: Response) {
+export async function readErrorMessage(response: Response) {
   const fallback = `Request failed with status ${response.status}.`;
 
   try {

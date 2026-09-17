@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 
 import { readAuthSession, type AuthProvider, type AuthSessionUser } from '../../lib/documentApi';
 import { DocumentsPage } from '../library/DocumentsPage';
-import { SettingsPage } from '../settings/SettingsPage';
+import { ProfilePage } from '../profile/ProfilePage';
 import { ChangelogPage } from '../landing/ChangelogPage';
 import { DocsPage } from '../landing/DocsPage';
 import { LandingPage } from '../landing/LandingPage';
@@ -77,13 +77,16 @@ type GateView =
   | 'changelog';
 
 function viewForPath(pathname: string): GateView {
+  // `/settings` and every `/settings/<section>` share the profile page.
+  if (pathname === GATE_PATHS.settings || pathname.startsWith(`${GATE_PATHS.settings}/`)) {
+    return 'settings';
+  }
+
   switch (pathname) {
     case GATE_PATHS.app:
       return 'app';
     case GATE_PATHS.library:
       return 'library';
-    case GATE_PATHS.settings:
-      return 'settings';
     case GATE_PATHS.setup:
       return 'setup';
     case GATE_PATHS.signin:
@@ -241,7 +244,18 @@ export function AuthGate({ children }: AuthGateProps) {
   if (view === 'app' || view === 'library' || view === 'settings') {
     return (
       <AuthGateContext.Provider value={contextValue}>
-        {view === 'app' ? children : view === 'library' ? <DocumentsPage /> : <SettingsPage />}
+        {view === 'app' ? (
+          children
+        ) : view === 'library' ? (
+          <DocumentsPage />
+        ) : (
+          // A nested Routes gives the profile rail real `:section` params from
+          // the URL without moving the rest of the gate onto route elements.
+          <Routes>
+            <Route path={GATE_PATHS.settings} element={<ProfilePage />} />
+            <Route path={`${GATE_PATHS.settings}/:section`} element={<ProfilePage />} />
+          </Routes>
+        )}
         {overlay}
       </AuthGateContext.Provider>
     );

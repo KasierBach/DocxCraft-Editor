@@ -1,0 +1,128 @@
+import { screen } from '@testing-library/react';
+import { Route, Routes } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { renderProfile } from '../../../test/profileHarness';
+import { ProfilePage } from '../ProfilePage';
+
+vi.mock('../../../lib/documentApi', () => ({
+  readAuthSession: vi.fn(),
+  listDocuments: vi.fn(),
+  exportAccount: vi.fn(),
+  deleteAccount: vi.fn(),
+}));
+vi.mock('../../../lib/accountApi', () => ({
+  updateDisplayName: vi.fn(),
+  listSessions: vi.fn(),
+  revokeSession: vi.fn(),
+  revokeOtherSessions: vi.fn(),
+  listActivity: vi.fn(),
+}));
+vi.mock('../../../lib/download', () => ({ triggerBlobDownload: vi.fn() }));
+vi.mock('../../../lib/navigation', () => ({ hardNavigate: vi.fn() }));
+vi.mock('../../../lib/recoveryStore', () => ({
+  readRecoverySnapshot: vi.fn(),
+  clearRecoverySnapshot: vi.fn(),
+}));
+
+import { listActivity, listSessions } from '../../../lib/accountApi';
+import { listDocuments, readAuthSession } from '../../../lib/documentApi';
+import { readRecoverySnapshot } from '../../../lib/recoveryStore';
+
+function renderPage(route: string) {
+  return renderProfile(
+    <Routes>
+      <Route path="/settings" element={<ProfilePage />} />
+      <Route path="/settings/:section" element={<ProfilePage />} />
+    </Routes>,
+    { route },
+  );
+}
+
+describe('ProfilePage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: false,
+      needsSetup: false,
+      authenticated: true,
+      user: {
+        id: 'u1',
+        email: 'alice@example.com',
+        name: 'Alice Baker',
+        avatarUrl: null,
+        isAnonymous: false,
+      },
+    });
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(listSessions).mockResolvedValue([]);
+    vi.mocked(listActivity).mockResolvedValue({ events: [], nextCursor: null });
+    vi.mocked(readRecoverySnapshot).mockResolvedValue(null);
+  });
+
+  it('falls back to the profile section at /settings', async () => {
+    renderPage('/settings');
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Profile' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Profile' })).toHaveClass(
+      'profile-rail__link--active',
+    );
+  });
+
+  it('renders the section named in the URL', async () => {
+    renderPage('/settings/security');
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Signed-in devices' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Security' })).toHaveClass(
+      'profile-rail__link--active',
+    );
+  });
+
+  it('falls back to the profile section for an unknown section', async () => {
+    renderPage('/settings/unknown');
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Profile' })).toBeInTheDocument();
+  });
+
+  it('summarises the workspace in the header', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue({
+      authRequired: false,
+      needsSetup: false,
+      authenticated: true,
+      user: {
+        id: 'u1',
+        email: 'alice@example.com',
+        name: 'Alice Baker',
+        avatarUrl: 'https://example.com/avatar.png',
+        isAnonymous: false,
+      },
+    });
+    vi.mocked(listDocuments).mockResolvedValue([
+      {
+        id: 'd1',
+        name: 'Report.docx',
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-16T00:00:00.000Z',
+        sizeInBytes: 2048,
+        lastOpenedAt: null,
+        versionCount: 3,
+      },
+    ]);
+
+    const { container } = renderProfile(
+      <Routes>
+        <Route path="/settings" element={<ProfilePage />} />
+        <Route path="/settings/:section" element={<ProfilePage />} />
+      </Routes>,
+      { route: '/settings/profile', providers: [{ id: 'google', label: 'Google' }] },
+    );
+
+    expect(await screen.findByText('Alice Baker')).toBeInTheDocument();
+    expect(container.querySelector('.profile-avatar__image')).toHaveAttribute(
+      'src',
+      'https://example.com/avatar.png',
+    );
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+  });
+});
