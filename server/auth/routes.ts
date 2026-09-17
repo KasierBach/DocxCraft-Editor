@@ -1,7 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { AccountService, OAuthProfile } from '../accountService.ts';
-import type { AuditService } from '../audit.ts';
+import {
+  ACTIVITY_DEFAULT_LIMIT,
+  ACTIVITY_MAX_LIMIT,
+  type AuditService,
+} from '../audit.ts';
 import { clearCookie, readCookies, serializeCookie } from '../cookies.ts';
 import { SESSION_COOKIE_NAME, type SessionService, type SessionUser } from '../session.ts';
 import type { OAuthProvider, OAuthProviderId } from './providers.ts';
@@ -223,5 +227,142 @@ export function registerAccountDataRoutes(app: FastifyInstance, options: Account
     await options.accounts.deleteAccount(session.user.id);
     reply.header('set-cookie', clearCookie(SESSION_COOKIE_NAME));
     return reply.code(204).send();
+  });
+}
+
+const DISPLAY_NAME_MAX_LENGTH = 80;
+
+const BROWSER_PATTERNS: Array<[RegExp, string]> = [
+  // Order matters: Edge and Chrome both claim Chrome, and Chrome claims Safari.
+  [/Edg\//, 'Edge'],
+  [/OPR\//, 'Opera'],
+  [/Firefox\//, 'Firefox'],
+  [/Chrome\//, 'Chrome'],
+  [/Safari\//, 'Safari'],
+];
+
+const PLATFORM_PATTERNS: Array<[RegExp, string]> = [
+  [/Windows/, 'Windows'],
+  [/Android/, 'Android'],
+  [/iPhone|iPad/, 'iOS'],
+  [/Mac OS X|Macintosh/, 'macOS'],
+  [/Linux/, 'Linux'],
+];
+
+/** Short label for a session row, e.g. "Chrome on Windows". */
+// ponytail: regex sniff, swap for ua-parser only if the labels start lying.
+function describeDevice(userAgent: string | null) {
+  if (!userAgent) {
+    return 'Unknown device';
+  }
+
+  const browser = BROWSER_PATTERNS.find(([pattern]) => pattern.test(userAgent))?.[1];
+  const platform = PLATFORM_PATTERNS.find(([pattern]) => pattern.test(userAgent))?.[1];
+
+  if (!browser) {
+    return platform ? `Unknown browser on ${platform}` : 'Unknown device';
+  }
+
+  return platform ? `${browser} on ${platform}` : browser;
+}
+
+/** Profile editing and session management for the current account. */
+export function registerAccountProfileRoutes(app: FastifyInstance, options: AccountsOptions) {
+  app.patch('/api/account', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const body = (request.body ?? {}) as { displayName?: unknown };
+    const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+    if (!displayName || displayName.length > DISPLAY_NAME_MAX_LENGTH) {
+      return reply.code(400).send({
+        message: `A display name of 1 to ${DISPLAY_NAME_MAX_LENGTH} characters is required.`,
+      });
+    }
+
+    const updated = await options.accounts.updateDisplayName(session.user.id, displayName);
+    await options.audit?.record({
+      action: 'account.profile_update',
+      actorUserId: session.user.id,
+      ip: request.ip,
+    });
+
+    return toPublicUser(updated);
+  });
+
+  app.get('/api/account/sessions', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const cookies = readCookies(request.headers.cookie);
+    const rows = await options.sessions.listSessions(
+      session.user.id,
+      cookies[SESSION_COOKIE_NAME],
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString(),
+      ip: row.ip,
+      device: describeDevice(row.userAgent),
+      isCurrent: row.isCurrent,
+    }));
+  });
+
+  /**
+   * Sign out everywhere else. Registered before the `:sessionId` route so a
+   * bare collection request cannot be read as an id.
+   */
+  app.delete('/api/account/sessions', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const cookies = readCookies(request.headers.cookie);
+    const revoked = await options.sessions.revokeAllExcept(
+      session.user.id,
+      cookies[SESSION_COOKIE_NAME],
+    );
+
+    return { revoked };
+  });
+
+  app.delete('/api/account/sessions/:sessionId', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const { sessionId } = request.params as { sessionId: string };
+    const revoked = await options.sessions.revokeOne(session.user.id, sessionId);
+    if (!revoked) {
+      return reply.code(404).send({ message: 'That session does not exist.' });
+    }
+
+    return reply.code(204).send();
+  });
+
+  app.get('/api/account/activity', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const query = request.query as { cursor?: string; limit?: string };
+    const limit = query.limit === undefined ? ACTIVITY_DEFAULT_LIMIT : Number(query.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > ACTIVITY_MAX_LIMIT) {
+      return reply.code(400).send({
+        message: `limit must be between 1 and ${ACTIVITY_MAX_LIMIT}.`,
+      });
+    }
+
+    const cursor = query.cursor?.trim() || null;
+    if (cursor && Number.isNaN(Date.parse(cursor))) {
+      return reply.code(400).send({ message: 'cursor must be an ISO timestamp.' });
+    }
+
+    if (!options.audit) {
+      return { events: [], nextCursor: null };
+    }
+
+    // The actor filter is applied inside listForActor, the only place allowed
+    // to read this table for a user.
+    return options.audit.listForActor({ actorUserId: session.user.id, cursor, limit });
   });
 }

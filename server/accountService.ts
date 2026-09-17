@@ -117,6 +117,17 @@ export class AccountService {
     });
   }
 
+  /**
+   * Sets the display name. A provider sign-in may overwrite it later:
+   * `refreshProfile` writes `name` from the OAuth profile on every sign-in.
+   */
+  async updateDisplayName(userId: string, displayName: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { name: displayName },
+    });
+  }
+
   /** Metadata-only export of the account and its documents (no blob contents). */
   async exportAccount(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });

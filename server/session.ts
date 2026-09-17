@@ -99,4 +99,46 @@ export class SessionService {
   async revokeAllForUser(userId: string) {
     await this.prisma.session.deleteMany({ where: { userId } });
   }
+
+  /**
+   * Revokes every session for the user except the caller's own, so "sign out
+   * everywhere else" does not sign the caller out too. Returns the count.
+   */
+  async revokeAllExcept(userId: string, keepToken: string | null | undefined) {
+    if (!keepToken) return 0;
+
+    const { count } = await this.prisma.session.deleteMany({
+      where: { userId, tokenHash: { not: hashSessionToken(keepToken) } },
+    });
+
+    return count;
+  }
+
+  /**
+   * Revokes one session the caller owns. Ownership is part of the delete
+   * predicate, so another user's id is indistinguishable from a missing one.
+   */
+  async revokeOne(userId: string, sessionId: string) {
+    const { count } = await this.prisma.session.deleteMany({ where: { id: sessionId, userId } });
+    return count > 0;
+  }
+
+  /** The caller's sessions, newest first. `tokenHash` never leaves this method. */
+  async listSessions(userId: string, currentToken: string | null | undefined) {
+    const rows = await this.prisma.session.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const currentHash = currentToken ? hashSessionToken(currentToken) : null;
+
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      expiresAt: row.expiresAt,
+      userAgent: row.userAgent,
+      ip: row.ip,
+      isCurrent: currentHash !== null && row.tokenHash === currentHash,
+    }));
+  }
 }

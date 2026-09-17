@@ -14,6 +14,7 @@ import type { AuthStateStore } from './authStore.ts';
 import {
   handleHostedSession,
   registerAccountDataRoutes,
+  registerAccountProfileRoutes,
   registerAccountRoutes,
   type AccountsOptions,
 } from './auth/routes.ts';
@@ -389,8 +390,9 @@ export function buildDocumentApiApp({
     }
 
     if (accounts) {
-      registerAccountRoutes(scope, accounts);
-      registerAccountDataRoutes(scope, accounts);
+  registerAccountRoutes(scope, accounts);
+  registerAccountDataRoutes(scope, accounts);
+  registerAccountProfileRoutes(scope, accounts);
     }
 
     registerDocumentRoutes(scope, store, accounts, quotas);
