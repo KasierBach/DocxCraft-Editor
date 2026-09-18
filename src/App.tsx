@@ -546,6 +546,12 @@ export default function App() {
   }, [anchors, pendingDeepLinkParaId, setActiveParaId]);
 
   const sourceDocumentId = isSavedSource(source) ? source.documentId : null;
+  /** Deep-link `source` value for whatever is actually open in the editor. */
+  const sourceKindForUrl = isSavedSource(source)
+    ? 'saved'
+    : source.kind === 'sample'
+      ? 'sample'
+      : null;
   // True until the remembered document has been reopened (or given up on). The
   // editor holds the default sample in the meantime, and recording that would
   // clobber the very value we are restoring.
@@ -575,14 +581,13 @@ export default function App() {
   }, [setShowInfo, setShowSidebar]);
 
   useEffect(() => {
+    // Derived from the editor's own source, not from the library's
+    // currentDocumentId: the deep-link restore sets `source` without setting the
+    // library draft, so mixing the two rewrote a saved document's link as
+    // `source=sample` and the next refresh reopened the sample instead.
     const nextSearch = buildDeepLinkSearch({
-      source:
-        source.kind === 'saved-document' && currentDocumentId
-          ? 'saved'
-          : source.kind === 'sample'
-            ? 'sample'
-            : null,
-      documentId: source.kind === 'saved-document' ? currentDocumentId : null,
+      source: sourceKindForUrl,
+      documentId: sourceDocumentId,
       paraId: activeParaId,
     });
 
@@ -590,7 +595,7 @@ export default function App() {
       const nextUrl = `${window.location.pathname}${nextSearch}`;
       window.history.replaceState(null, '', nextUrl);
     }
-  }, [activeParaId, currentDocumentId, source.kind]);
+  }, [activeParaId, sourceDocumentId, sourceKindForUrl]);
 
   const handleDocumentNameChange = useCallback(
     (name: string) => {

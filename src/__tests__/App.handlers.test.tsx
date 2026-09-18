@@ -270,6 +270,25 @@ describe('App handler and deep-link flows', () => {
     expect(renderedBuffers).toContain(buffer);
   });
 
+  it('keeps a restored document in the URL so the next refresh reopens it', async () => {
+    openSavedDocument.mockResolvedValue({
+      id: 'doc-42',
+      name: 'Deep Linked.docx',
+      buffer: new ArrayBuffer(8),
+    });
+
+    window.history.replaceState(null, '', '/?source=saved&documentId=doc-42');
+    render(<App />);
+
+    // The URL sync used to derive `source` from the library's currentDocumentId,
+    // which the restore path never sets, so it rewrote this to source=sample and
+    // the following refresh dropped the document.
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get('source')).toBe('saved');
+    });
+    expect(new URLSearchParams(window.location.search).get('documentId')).toBe('doc-42');
+  });
+
   it('surfaces an error toast when the deep link document cannot be opened', async () => {
     openSavedDocument.mockRejectedValue(new Error('Document not found'));
 
