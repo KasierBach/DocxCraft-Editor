@@ -41,5 +41,7 @@ test('a guest sees the upgrade prompts', async ({ page }) => {
   await page.goto('/settings/profile');
 
   await expect(page.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
-  await expect(page.getByText('Guest')).toBeVisible();
+  // exact: `getByText` matches substrings case-insensitively, so a plain 'Guest'
+  // also matches this test's own `guest-1` account id and trips strict mode.
+  await expect(page.getByText('Guest', { exact: true })).toBeVisible();
 });
