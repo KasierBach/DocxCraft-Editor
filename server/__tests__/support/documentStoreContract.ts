@@ -4,6 +4,7 @@ import { DocumentConflictError, DocumentNotFoundError } from '../../documentStor
 import type { DocumentStorePort } from '../../types.ts';
 
 const MISSING_ID = '00000000-0000-0000-0000-000000000000';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function bytes(values: number[]) {
   return Uint8Array.from(values);
@@ -15,6 +16,8 @@ function tick() {
 
 export type StoreHarness = {
   createStore(options?: { maxVersionsPerDocument?: number }): Promise<DocumentStorePort>;
+  /** Rewrites a trashed document's `deletedAt` so retention can be exercised without waiting. */
+  backdateDeletion(documentId: string, deletedAt: Date): Promise<void>;
   /** Returns the store to an empty state between tests. */
   reset(): Promise<void>;
   dispose(): Promise<void>;
@@ -225,6 +228,32 @@ export function describeDocumentStoreContract(name: string, setup: () => Promise
         DocumentNotFoundError,
       );
       await expect(store.purgeDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.verifyIntegrity()).resolves.toBeUndefined();
+    });
+
+    it('purges only trash older than the retention cutoff', async () => {
+      const store = await harness.createStore();
+      const expired = await store.saveNewDocument({ name: 'Expired', buffer: bytes([1]) });
+      const recent = await store.saveNewDocument({ name: 'Recent', buffer: bytes([2]) });
+      const live = await store.saveNewDocument({ name: 'Live', buffer: bytes([3]) });
+
+      await store.deleteDocument(expired.id);
+      await store.deleteDocument(recent.id);
+      const cutoff = new Date(Date.now() - 30 * DAY_MS);
+      await harness.backdateDeletion(expired.id, new Date(cutoff.getTime() - DAY_MS));
+
+      const removed = await store.purgeExpiredDocuments(cutoff);
+
+      expect(removed).toBe(1);
+      expect(await store.purgeExpiredDocuments(cutoff)).toBe(0);
+      expect((await store.listDeletedDocuments()).map((document) => document.id)).toEqual([
+        recent.id,
+      ]);
+      expect((await store.listDocuments()).map((document) => document.id)).toEqual([live.id]);
+      await expect(store.readDocument(expired.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.restoreDocument(expired.id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
       await expect(store.verifyIntegrity()).resolves.toBeUndefined();
     });
 

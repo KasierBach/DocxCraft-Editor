@@ -265,6 +265,23 @@ export class PostgresDocumentStore implements DocumentStorePort {
     await this.blobs.deletePrefix(documentPrefix(id));
   }
 
+  async purgeExpiredDocuments(deletedBefore: Date) {
+    const expired = await this.prisma.document.findMany({
+      where: { deletedAt: { not: null, lt: deletedBefore }, ...this.ownerFilter },
+      select: { id: true },
+    });
+    if (expired.length === 0) return 0;
+
+    const expiredIds = expired.map((document) => document.id);
+    await this.prisma.document.deleteMany({
+      where: { id: { in: expiredIds }, ...this.ownerFilter },
+    });
+    for (const expiredId of expiredIds) {
+      await this.blobs.deletePrefix(documentPrefix(expiredId));
+    }
+    return expiredIds.length;
+  }
+
   async duplicateDocument(id: string) {
     const record = await this.readDocumentRecord(id);
     return this.saveNewDocument({

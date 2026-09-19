@@ -268,6 +268,31 @@ export class FileDocumentStore implements DocumentStorePort {
     });
   }
 
+  async purgeExpiredDocuments(deletedBefore: Date) {
+    return this.runExclusive(async () => {
+      const index = await this.readIndex();
+      const cutoff = deletedBefore.getTime();
+      // A missing `deletedAt` loads as null, so legacy live entries are never matched.
+      const expiredIds = new Set(
+        index.documents
+          .filter(
+            (document) =>
+              document.deletedAt !== null && Date.parse(document.deletedAt) < cutoff,
+          )
+          .map((document) => document.id),
+      );
+      if (expiredIds.size === 0) return 0;
+
+      index.documents = index.documents.filter((document) => !expiredIds.has(document.id));
+      index.versions = index.versions.filter((version) => !expiredIds.has(version.documentId));
+      await this.writeIndex(index);
+      for (const expiredId of expiredIds) {
+        await rm(this.documentDirectoryPath(expiredId), { recursive: true, force: true });
+      }
+      return expiredIds.size;
+    });
+  }
+
   async duplicateDocument(id: string) {
     return this.runExclusive(async () => {
       const index = await this.readIndex();

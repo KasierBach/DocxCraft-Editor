@@ -36,6 +36,9 @@ import {
 
 export const API_VERSION = '2026-05-25-fastify-ts';
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
+export const TRASH_RETENTION_DAYS = 30;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // The app renders OOXML-derived DOM client-side, so the CSP is the backstop
 // for any rendering-layer flaw. Styles must stay inline-allowed because React
@@ -508,7 +511,12 @@ function registerDocumentRoutes(
 
   app.get('/api/documents/trash', async (request, reply) => {
     const scope = await resolveScope(request, reply);
-    return scope ? scope.store.listDeletedDocuments() : reply;
+    if (!scope) return reply;
+    // Lazy sweep on read: expiry needs no scheduler, cron or extra
+    // infrastructure, which is what a self-hoster can actually run.
+    const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * MS_PER_DAY);
+    await scope.store.purgeExpiredDocuments(cutoff);
+    return scope.store.listDeletedDocuments();
   });
 
   app.get('/api/documents/:documentId/versions', async (request, reply) => {

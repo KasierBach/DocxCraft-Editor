@@ -52,6 +52,8 @@ export interface DocumentStorePort {
   deleteDocument(id: string): Promise<void>;
   restoreDocument(id: string): Promise<SavedDocumentSummary>;
   purgeDocument(id: string): Promise<void>;
+  /** Permanently removes trashed documents deleted before `deletedBefore`; returns the count. */
+  purgeExpiredDocuments(deletedBefore: Date): Promise<number>;
   readDocument(id: string, options?: ReadDocumentOptions): Promise<Uint8Array>;
   readDocumentRecord(id: string, options?: ReadDocumentOptions): Promise<SavedDocumentRecord>;
   readDocumentVersionRecord(

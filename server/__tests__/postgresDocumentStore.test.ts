@@ -38,6 +38,9 @@ describe.skipIf(!hasDatabase)('PostgresDocumentStore (integration)', () => {
 
     return {
       createStore: async (options) => new PostgresDocumentStore({ prisma, blobs, ...options }),
+      backdateDeletion: async (documentId, deletedAt) => {
+        await prisma.document.update({ where: { id: documentId }, data: { deletedAt } });
+      },
       reset: async () => {
         await prisma.$executeRawUnsafe(TRUNCATE);
         await rm(blobRoot, { recursive: true, force: true });

@@ -127,6 +127,29 @@ describe('createDocumentStore', () => {
     ]);
   });
 
+  it('never purges a legacy index entry with no deletedAt field', async () => {
+    const dataDir = await createTempDir();
+    const store = createDocumentStore({ dataDir });
+    const created = await store.saveNewDocument({
+      name: 'Legacy Live.docx',
+      buffer: Buffer.from('legacy'),
+    });
+
+    const indexPath = join(dataDir, 'index.json');
+    const index = JSON.parse(await readFile(indexPath, 'utf-8')) as {
+      documents: Array<Record<string, unknown>>;
+    };
+    for (const document of index.documents) delete document.deletedAt;
+    await writeFile(indexPath, JSON.stringify(index, null, 2));
+
+    const removed = await store.purgeExpiredDocuments(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+    expect(removed).toBe(0);
+    expect((await store.listDocuments()).map((document) => document.id)).toEqual([created.id]);
+    expect(await store.listDeletedDocuments()).toEqual([]);
+    expect(Buffer.from(await store.readDocument(created.id))).toEqual(Buffer.from('legacy'));
+  });
+
   it('serializes concurrent writes without losing documents', async () => {
     const store = createDocumentStore({ dataDir: await createTempDir() });
 
