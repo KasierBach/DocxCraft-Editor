@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme, type Theme } from '../../../hooks/useTheme';
 import { useTranslation, type Language } from '../../../i18n';
-import { updateDisplayName } from '../../../lib/accountApi';
+import { AccountApiError, disconnectProvider, listProviders, updateDisplayName } from '../../../lib/accountApi';
 import { readAuthSession } from '../../../lib/documentApi';
 import { useAppStore, type EditorMode } from '../../../store/appStore';
 import { useAuthGate } from '../../auth/AuthGateContext';
@@ -20,14 +20,17 @@ export function ProfileSection() {
   const { isAnonymous, providers } = useAuthGate();
   const queryClient = useQueryClient();
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: readAuthSession });
+  const providersQuery = useQuery({ queryKey: ['account', 'providers'], queryFn: listProviders });
   const { theme, setTheme } = useTheme();
   const editorMode = useAppStore((state) => state.editorMode);
   const setEditorMode = useAppStore((state) => state.setEditorMode);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
   const user = sessionQuery.data?.user;
   const isSignedIn = !isAnonymous;
+  const linkedProviderIds = new Set((providersQuery.data ?? []).map((provider) => provider.id));
 
   const nameMutation = useMutation({
     mutationFn: (displayName: string) => updateDisplayName(displayName),
@@ -36,6 +39,21 @@ export function ProfileSection() {
       void queryClient.invalidateQueries({ queryKey: ['session'] });
     },
     onError: (error: Error) => setNameError(error.message),
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: (providerId: string) => disconnectProvider(providerId),
+    onSuccess: () => {
+      setProviderError(null);
+      void queryClient.invalidateQueries({ queryKey: ['account', 'providers'] });
+    },
+    onError: (error: Error) => {
+      setProviderError(
+        error instanceof AccountApiError && error.status === 409
+          ? t('profile.disconnectLastProvider')
+          : error.message,
+      );
+    },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -140,17 +158,51 @@ export function ProfileSection() {
       {isSignedIn && providers.length > 0 && (
         <section className="profile-section">
           <h3>{t('profile.providers')}</h3>
-          <div className="profile-actions">
-            {providers.map((provider) => (
-              <a
-                key={provider.id}
-                className="action-button"
-                href={`/api/auth/${provider.id}/start`}
-              >
-                {t('profile.connectProvider', { provider: provider.label })}
-              </a>
-            ))}
-          </div>
+          <ul className="profile-provider-list">
+            {providers.map((provider) => {
+              const isLinked = linkedProviderIds.has(provider.id);
+              const isDisconnecting =
+                disconnectMutation.isPending && disconnectMutation.variables === provider.id;
+
+              return (
+                <li key={provider.id} className="profile-provider">
+                  <span className="profile-provider__name">
+                    {provider.label}
+                    {isLinked && (
+                      <span className="profile-chip profile-chip--linked">
+                        {t('profile.providerConnected')}
+                      </span>
+                    )}
+                  </span>
+                  {isLinked ? (
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => disconnectMutation.mutate(provider.id)}
+                      disabled={disconnectMutation.isPending}
+                    >
+                      {isDisconnecting
+                        ? t('profile.disconnecting')
+                        : t('profile.disconnectProvider', { provider: provider.label })}
+                    </button>
+                  ) : (
+                    <a className="action-button" href={`/api/auth/${provider.id}/start`}>
+                      {t('profile.connectProvider', { provider: provider.label })}
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {providerError ? (
+            <p className="profile-error" role="alert">
+              {providerError}
+            </p>
+          ) : disconnectMutation.isSuccess ? (
+            <p className="profile-status" role="status">
+              {t('profile.providerDisconnected')}
+            </p>
+          ) : null}
         </section>
       )}
 

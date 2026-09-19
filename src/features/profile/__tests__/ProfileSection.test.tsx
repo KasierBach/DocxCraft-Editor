@@ -5,10 +5,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderProfile } from '../../../test/profileHarness';
 import { ProfileSection } from '../sections/ProfileSection';
 
-vi.mock('../../../lib/accountApi', () => ({ updateDisplayName: vi.fn() }));
+vi.mock('../../../lib/accountApi', () => {
+  class AccountApiError extends Error {
+    status: number;
+
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  }
+
+  return {
+    updateDisplayName: vi.fn(),
+    listProviders: vi.fn(),
+    disconnectProvider: vi.fn(),
+    AccountApiError,
+  };
+});
 vi.mock('../../../lib/documentApi', () => ({ readAuthSession: vi.fn() }));
 
-import { updateDisplayName } from '../../../lib/accountApi';
+import {
+  AccountApiError,
+  disconnectProvider,
+  listProviders,
+  updateDisplayName,
+} from '../../../lib/accountApi';
 import { readAuthSession } from '../../../lib/documentApi';
 
 const signedInSession = {
@@ -21,12 +42,14 @@ const signedInSession = {
     name: 'Alice Baker',
     avatarUrl: null,
     isAnonymous: false,
+    createdAt: '2026-01-02T03:04:05.000Z',
   },
 };
 
 describe('ProfileSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(listProviders).mockResolvedValue([]);
   });
 
   it('shows the editable display name for signed-in users', async () => {
@@ -41,7 +64,14 @@ describe('ProfileSection', () => {
   it('shows the upgrade prompt instead of the form for guests', async () => {
     vi.mocked(readAuthSession).mockResolvedValue({
       ...signedInSession,
-      user: { id: 'g1', email: null, name: null, avatarUrl: null, isAnonymous: true },
+      user: {
+        id: 'g1',
+        email: null,
+        name: null,
+        avatarUrl: null,
+        isAnonymous: true,
+        createdAt: '2026-01-02T03:04:05.000Z',
+      },
     });
 
     renderProfile(<ProfileSection />, {
@@ -90,5 +120,38 @@ describe('ProfileSection', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/1 to 80 characters/i);
     expect(input).toHaveValue('A name the server rejects');
+  });
+
+  it('marks a linked provider and disconnects it', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue(signedInSession);
+    vi.mocked(listProviders).mockResolvedValue([
+      { id: 'google', label: 'Google', linkedAt: '2026-01-02T03:04:05.000Z' },
+    ]);
+    vi.mocked(disconnectProvider).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    renderProfile(<ProfileSection />, { providers: [{ id: 'google', label: 'Google' }] });
+
+    expect(await screen.findByText('Connected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /disconnect google/i }));
+
+    await waitFor(() => expect(disconnectProvider).toHaveBeenCalledWith('google'));
+    expect(await screen.findByText(/provider disconnected/i)).toBeInTheDocument();
+  });
+
+  it('explains a refused disconnect of the last sign-in method', async () => {
+    vi.mocked(readAuthSession).mockResolvedValue(signedInSession);
+    vi.mocked(listProviders).mockResolvedValue([
+      { id: 'google', label: 'Google', linkedAt: '2026-01-02T03:04:05.000Z' },
+    ]);
+    vi.mocked(disconnectProvider).mockRejectedValue(new AccountApiError('conflict', 409));
+    const user = userEvent.setup();
+
+    renderProfile(<ProfileSection />, { providers: [{ id: 'google', label: 'Google' }] });
+
+    await user.click(await screen.findByRole('button', { name: /disconnect google/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/only sign-in method/i);
   });
 });

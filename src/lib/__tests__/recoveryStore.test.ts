@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearRecoverySnapshot,
+  listRecoverySnapshots,
   readRecoverySnapshot,
   saveRecoverySnapshot,
   type RecoverySnapshot,
@@ -64,6 +65,63 @@ describe('recoveryStore', () => {
     await saveRecoverySnapshot(snapshot({ documentId: 'doc-c', savedAt: '2026-05-25T11:00:00.000Z' }));
 
     expect((await readRecoverySnapshot())?.documentId).toBe('doc-b');
+  });
+
+  it('lists every draft, newest first, so a count is real', async () => {
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-a', savedAt: '2026-05-25T10:00:00.000Z' }));
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-b', savedAt: '2026-05-25T12:00:00.000Z' }));
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-c', savedAt: '2026-05-25T11:00:00.000Z' }));
+
+    const snapshots = await listRecoverySnapshots();
+    expect(snapshots.map((entry) => entry.documentId)).toEqual(['doc-b', 'doc-c', 'doc-a']);
+  });
+
+  it('loads a legacy single-slot entry and clears it', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    const bytes = new TextEncoder().encode('legacy-bytes');
+    window.localStorage.setItem(
+      'docx-editor/recovery-snapshot',
+      JSON.stringify({
+        sourceKind: 'local-file',
+        documentId: null,
+        documentName: 'Legacy.docx',
+        activeParaId: 'p-1',
+        savedAt: '2026-05-20T09:00:00.000Z',
+        bufferBase64: btoa('legacy-bytes'),
+      }),
+    );
+
+    const stored = await readRecoverySnapshot();
+    expect(stored?.documentName).toBe('Legacy.docx');
+    expect(stored?.activeParaId).toBe('p-1');
+    expect(Array.from(new Uint8Array(stored?.buffer ?? new ArrayBuffer(0)))).toEqual(
+      Array.from(bytes),
+    );
+    expect(await listRecoverySnapshots()).toHaveLength(1);
+
+    await clearRecoverySnapshot({ sourceKind: 'local-file', documentId: null, documentName: 'Legacy.docx' });
+    expect(window.localStorage.getItem('docx-editor/recovery-snapshot')).toBeNull();
+    expect(await readRecoverySnapshot()).toBeNull();
+  });
+
+  it('keeps a legacy entry separate from a newer per-document draft', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    window.localStorage.setItem(
+      'docx-editor/recovery-snapshot',
+      JSON.stringify({
+        sourceKind: 'sample',
+        documentId: null,
+        documentName: 'Legacy.docx',
+        activeParaId: null,
+        savedAt: '2026-05-20T09:00:00.000Z',
+        bufferBase64: btoa('legacy'),
+      }),
+    );
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-1', savedAt: '2026-05-25T11:00:00.000Z' }));
+
+    const snapshots = await listRecoverySnapshots();
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0]?.documentId).toBe('doc-1');
   });
 
   it('keys unsaved drafts by source kind and name', async () => {

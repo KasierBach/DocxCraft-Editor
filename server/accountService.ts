@@ -29,7 +29,7 @@ export class AccountService {
   /** Creates the anonymous user behind an instant, no-signup workspace. */
   async createGuest() {
     const user = await this.prisma.user.create({ data: { isAnonymous: true } });
-    return user.id;
+    return { id: user.id, createdAt: user.createdAt };
   }
 
   /**
@@ -125,6 +125,44 @@ export class AccountService {
     return this.prisma.user.update({
       where: { id: userId },
       data: { name: displayName },
+    });
+  }
+
+  /** The OAuth identities linked to the account, oldest first. */
+  async listLinkedProviders(userId: string) {
+    const rows = await this.prisma.oAuthAccount.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((row) => ({ provider: row.provider, linkedAt: row.createdAt }));
+  }
+
+  /**
+   * Unlinks one identity. Refusing the caller's last sign-in method keeps a
+   * non-anonymous account from being locked out; the check and the delete share
+   * a transaction so two concurrent disconnects cannot both pass it.
+   */
+  async disconnectProvider(
+    userId: string,
+    provider: string,
+    { isAnonymous }: { isAnonymous: boolean },
+  ): Promise<'disconnected' | 'not-linked' | 'last-method'> {
+    return this.prisma.$transaction(async (tx) => {
+      const linked = await tx.oAuthAccount.findMany({
+        where: { userId },
+        select: { provider: true },
+      });
+
+      if (!linked.some((entry) => entry.provider === provider)) {
+        return 'not-linked';
+      }
+      if (linked.length === 1 && !isAnonymous) {
+        return 'last-method';
+      }
+
+      await tx.oAuthAccount.deleteMany({ where: { userId, provider } });
+      return 'disconnected';
     });
   }
 

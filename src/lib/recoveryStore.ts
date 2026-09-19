@@ -21,6 +21,7 @@ const DATABASE_NAME = 'docx-editor';
 const STORE_NAME = 'recovery-snapshots';
 const DATABASE_VERSION = 1;
 const FALLBACK_STORAGE_KEY = 'docx-editor/recovery-snapshots';
+const LEGACY_FALLBACK_STORAGE_KEY = 'docx-editor/recovery-snapshot';
 const MAX_FALLBACK_SNAPSHOTS = 5;
 
 function snapshotKey(snapshot: Pick<RecoverySnapshot, 'sourceKind' | 'documentId' | 'documentName'>) {
@@ -29,8 +30,55 @@ function snapshotKey(snapshot: Pick<RecoverySnapshot, 'sourceKind' | 'documentId
     : `${snapshot.sourceKind}:${snapshot.documentName}`;
 }
 
-function latestSnapshot(snapshots: RecoverySnapshot[]) {
-  return snapshots.sort((left, right) => right.savedAt.localeCompare(left.savedAt))[0] ?? null;
+/** The pre-IndexedDB single-slot format: one object under a singular key. */
+type LegacyStoredSnapshot = {
+  sourceKind?: RecoverySourceKind;
+  documentId?: string | null;
+  documentName?: string;
+  activeParaId?: string | null;
+  savedAt?: string;
+  bufferBase64?: unknown;
+};
+
+function readLegacyEntry() {
+  try {
+    const raw = window.localStorage.getItem(LEGACY_FALLBACK_STORAGE_KEY);
+    if (!raw) return null;
+
+    const stored = JSON.parse(raw) as LegacyStoredSnapshot;
+    return stored && typeof stored.bufferBase64 === 'string' ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function readLegacySnapshotKey() {
+  const stored = readLegacyEntry();
+  if (!stored) return null;
+
+  return snapshotKey({
+    sourceKind: stored.sourceKind ?? 'local-file',
+    documentId: stored.documentId ?? null,
+    documentName: stored.documentName ?? 'Recovered document',
+  });
+}
+
+function readLegacyFallbackSnapshot(): RecoverySnapshot | null {
+  const stored = readLegacyEntry();
+  if (!stored) return null;
+
+  try {
+    return {
+      sourceKind: stored.sourceKind ?? 'local-file',
+      documentId: stored.documentId ?? null,
+      documentName: stored.documentName ?? 'Recovered document',
+      activeParaId: stored.activeParaId ?? null,
+      savedAt: stored.savedAt ?? new Date(0).toISOString(),
+      buffer: decodeArrayBuffer(stored.bufferBase64 as string),
+    };
+  } catch {
+    return null;
+  }
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
@@ -116,23 +164,20 @@ function openRecoveryDatabase() {
   });
 }
 
-export async function readRecoverySnapshot(): Promise<RecoverySnapshot | null> {
-  if (typeof window === 'undefined') return null;
+function readFallbackSnapshotList(): RecoverySnapshot[] {
+  return readFallbackSnapshots()
+    .map(({ bufferBase64, key: _key, ...snapshot }) => {
+      try {
+        return { ...snapshot, buffer: decodeArrayBuffer(bufferBase64) };
+      } catch {
+        // Skip corrupt or legacy entries instead of failing the whole read.
+        return null;
+      }
+    })
+    .filter((snapshot): snapshot is RecoverySnapshot => snapshot !== null);
+}
 
-  if (!canUseIndexedDb()) {
-    const snapshots = readFallbackSnapshots()
-      .map(({ bufferBase64, key: _key, ...snapshot }) => {
-        try {
-          return { ...snapshot, buffer: decodeArrayBuffer(bufferBase64) };
-        } catch {
-          // Skip corrupt or legacy entries instead of failing the whole read.
-          return null;
-        }
-      })
-      .filter((snapshot): snapshot is RecoverySnapshot => snapshot !== null);
-    return latestSnapshot(snapshots);
-  }
-
+async function readIndexedDbSnapshots(): Promise<RecoverySnapshot[]> {
   const database = await openRecoveryDatabase();
   try {
     const transaction = database.transaction(STORE_NAME, 'readonly');
@@ -140,10 +185,38 @@ export async function readRecoverySnapshot(): Promise<RecoverySnapshot | null> {
       transaction.objectStore(STORE_NAME).getAll(),
     );
     await transactionComplete(transaction);
-    return latestSnapshot(stored.map(({ key: _key, ...snapshot }) => snapshot));
+    return stored.map(({ key: _key, ...snapshot }) => snapshot);
   } finally {
     database.close();
   }
+}
+
+/**
+ * Every stored draft, newest first, keyed so one document's draft never shadows
+ * another's. A pre-IndexedDB single-slot entry still loads; a newer primary
+ * entry for the same key wins over it.
+ */
+async function readAllRecoverySnapshots(): Promise<RecoverySnapshot[]> {
+  if (typeof window === 'undefined') return [];
+
+  const primary = canUseIndexedDb() ? await readIndexedDbSnapshots() : readFallbackSnapshotList();
+  const legacy = readLegacyFallbackSnapshot();
+  const byKey = new Map<string, RecoverySnapshot>();
+
+  if (legacy) byKey.set(snapshotKey(legacy), legacy);
+  for (const snapshot of primary) byKey.set(snapshotKey(snapshot), snapshot);
+
+  return [...byKey.values()].sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+}
+
+/** Every recoverable draft in this browser, newest first. */
+export async function listRecoverySnapshots(): Promise<RecoverySnapshot[]> {
+  return readAllRecoverySnapshots();
+}
+
+export async function readRecoverySnapshot(): Promise<RecoverySnapshot | null> {
+  const snapshots = await readAllRecoverySnapshots();
+  return snapshots[0] ?? null;
 }
 
 export async function saveRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
@@ -171,6 +244,14 @@ export async function clearRecoverySnapshot(
   snapshot?: Pick<RecoverySnapshot, 'sourceKind' | 'documentId' | 'documentName'>,
 ): Promise<void> {
   if (typeof window === 'undefined') return;
+
+  if (!snapshot || readLegacySnapshotKey() === snapshotKey(snapshot)) {
+    try {
+      window.localStorage.removeItem(LEGACY_FALLBACK_STORAGE_KEY);
+    } catch {
+      // Storage can be unavailable; the primary store still clears.
+    }
+  }
 
   if (!canUseIndexedDb()) {
     if (!snapshot) {

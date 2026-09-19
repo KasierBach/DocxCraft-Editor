@@ -8,6 +8,13 @@ export type AccountUser = {
   name: string | null;
   avatarUrl: string | null;
   isAnonymous: boolean;
+  createdAt: string;
+};
+
+export type AccountProviderLink = {
+  id: string;
+  label: string;
+  linkedAt: string;
 };
 
 export type AccountSession = {
@@ -32,11 +39,22 @@ export type ActivityPage = {
   nextCursor: string | null;
 };
 
+/** Carries the HTTP status so callers can branch on a specific conflict. */
+export class AccountApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AccountApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${ACCOUNT_API_PATH}${path}`, withRequestTimeout(init));
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new AccountApiError(await readErrorMessage(response), response.status);
   }
 
   // Revocations answer 204 with no body.
@@ -57,6 +75,14 @@ export function updateDisplayName(displayName: string) {
 
 export function listSessions() {
   return request<AccountSession[]>('/sessions');
+}
+
+export function listProviders() {
+  return request<AccountProviderLink[]>('/providers');
+}
+
+export function disconnectProvider(providerId: string) {
+  return request<void>(`/providers/${encodeURIComponent(providerId)}`, { method: 'DELETE' });
 }
 
 export function revokeSession(sessionId: string) {

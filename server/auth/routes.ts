@@ -38,6 +38,7 @@ function toPublicUser(user: SessionUser) {
     name: user.name,
     avatarUrl: user.avatarUrl,
     isAnonymous: user.isAnonymous,
+    createdAt: user.createdAt.toISOString(),
   };
 }
 
@@ -75,8 +76,8 @@ export async function handleHostedSession(
     };
   }
 
-  const guestId = await options.accounts.createGuest();
-  const { token, expiresAt } = await options.sessions.createForUser(guestId, {
+  const guest = await options.accounts.createGuest();
+  const { token, expiresAt } = await options.sessions.createForUser(guest.id, {
     userAgent: request.headers['user-agent'] ?? null,
     ip: request.ip,
   });
@@ -92,7 +93,14 @@ export async function handleHostedSession(
     authRequired: false,
     needsSetup: false,
     authenticated: false,
-    user: { id: guestId, email: null, name: null, avatarUrl: null, isAnonymous: true },
+    user: {
+      id: guest.id,
+      email: null,
+      name: null,
+      avatarUrl: null,
+      isAnonymous: true,
+      createdAt: guest.createdAt.toISOString(),
+    },
     providers: providerList(options.providers),
   };
 }
@@ -295,6 +303,8 @@ function describeDevice(userAgent: string | null) {
 
 /** Profile editing and session management for the current account. */
 export function registerAccountProfileRoutes(app: FastifyInstance, options: AccountsOptions) {
+  const findProvider = (id: string) => options.providers.find((provider) => provider.id === id);
+
   app.patch('/api/account', async (request, reply) => {
     const session = await requireSession(request, reply, options);
     if (!session) return reply;
@@ -315,6 +325,55 @@ export function registerAccountProfileRoutes(app: FastifyInstance, options: Acco
     });
 
     return toPublicUser(updated);
+  });
+
+  /** The caller's linked OAuth identities, so the UI can tell them from merely configured ones. */
+  app.get('/api/account/providers', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const linked = await options.accounts.listLinkedProviders(session.user.id);
+
+    return linked.map((entry) => ({
+      id: entry.provider,
+      label: findProvider(entry.provider)?.label ?? entry.provider,
+      linkedAt: entry.linkedAt.toISOString(),
+    }));
+  });
+
+  /**
+   * Unlinks one identity. Provider-side token revocation is out of scope: this
+   * only removes the local link, leaving documents and the account intact.
+   */
+  app.delete('/api/account/providers/:provider', async (request, reply) => {
+    const session = await requireSession(request, reply, options);
+    if (!session) return reply;
+
+    const provider = findProvider((request.params as { provider: string }).provider);
+    if (!provider) {
+      return reply.code(404).send({ message: 'Unknown sign-in provider.' });
+    }
+
+    const result = await options.accounts.disconnectProvider(session.user.id, provider.id, {
+      isAnonymous: session.user.isAnonymous,
+    });
+
+    if (result === 'not-linked') {
+      return reply.code(404).send({ message: 'That provider is not linked to this account.' });
+    }
+    if (result === 'last-method') {
+      return reply
+        .code(409)
+        .send({ message: 'You cannot disconnect your only sign-in method.' });
+    }
+
+    await options.audit?.record({
+      action: 'account.provider_disconnect',
+      actorUserId: session.user.id,
+      ip: request.ip,
+    });
+
+    return reply.code(204).send();
   });
 
   app.get('/api/account/sessions', async (request, reply) => {

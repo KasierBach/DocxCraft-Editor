@@ -56,11 +56,12 @@ describe.skipIf(!hasDatabase)('AccountService (integration)', () => {
   }
 
   it('creates an anonymous guest', async () => {
-    const guestId = await accounts.createGuest();
+    const { id: guestId, createdAt } = await accounts.createGuest();
 
     const guest = await prisma.user.findUniqueOrThrow({ where: { id: guestId } });
     expect(guest.isAnonymous).toBe(true);
     expect(guest.email).toBeNull();
+    expect(createdAt).toEqual(guest.createdAt);
   });
 
   it('creates a user and linked account from an OAuth profile', async () => {
@@ -100,7 +101,7 @@ describe.skipIf(!hasDatabase)('AccountService (integration)', () => {
   });
 
   it('moves a guest’s documents to the account and removes the guest', async () => {
-    const guestId = await accounts.createGuest();
+    const { id: guestId } = await accounts.createGuest();
     await createDocument(guestId, 'Guest doc.docx');
     await prisma.session.create({
       data: { userId: guestId, tokenHash: 'guest-token', expiresAt: new Date(Date.now() + 60_000) },
@@ -123,5 +124,40 @@ describe.skipIf(!hasDatabase)('AccountService (integration)', () => {
 
     expect(await accounts.mergeGuestIntoUser(a.id, b.id)).toBe(0);
     expect(await prisma.user.count()).toBe(2);
+  });
+
+  it('lists linked providers and protects the last sign-in method', async () => {
+    const { userId } = await accounts.findOrCreateUserFromProfile(googleProfile());
+    await accounts.findOrCreateUserFromProfile(
+      googleProfile({ provider: 'github', providerAccountId: 'gh-1' }),
+    );
+
+    const linked = await accounts.listLinkedProviders(userId);
+    expect(linked.map((entry) => entry.provider)).toEqual(['google', 'github']);
+
+    expect(await accounts.disconnectProvider(userId, 'github', { isAnonymous: false })).toBe(
+      'disconnected',
+    );
+    expect(await accounts.disconnectProvider(userId, 'github', { isAnonymous: false })).toBe(
+      'not-linked',
+    );
+    expect(await accounts.disconnectProvider(userId, 'google', { isAnonymous: false })).toBe(
+      'last-method',
+    );
+    expect(
+      (await accounts.listLinkedProviders(userId)).map((entry) => entry.provider),
+    ).toEqual(['google']);
+  });
+
+  it('lets an anonymous guest unlink its only provider', async () => {
+    const { id: guestId } = await accounts.createGuest();
+    await prisma.oAuthAccount.create({
+      data: { userId: guestId, provider: 'google', providerAccountId: 'guest-google' },
+    });
+
+    expect(await accounts.disconnectProvider(guestId, 'google', { isAnonymous: true })).toBe(
+      'disconnected',
+    );
+    expect(await accounts.listLinkedProviders(guestId)).toEqual([]);
   });
 });

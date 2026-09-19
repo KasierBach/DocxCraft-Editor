@@ -17,17 +17,20 @@ vi.mock('../../../lib/accountApi', () => ({
   revokeSession: vi.fn(),
   revokeOtherSessions: vi.fn(),
   listActivity: vi.fn(),
+  listProviders: vi.fn(),
+  disconnectProvider: vi.fn(),
 }));
 vi.mock('../../../lib/download', () => ({ triggerBlobDownload: vi.fn() }));
 vi.mock('../../../lib/navigation', () => ({ hardNavigate: vi.fn() }));
 vi.mock('../../../lib/recoveryStore', () => ({
   readRecoverySnapshot: vi.fn(),
   clearRecoverySnapshot: vi.fn(),
+  listRecoverySnapshots: vi.fn(),
 }));
 
-import { listActivity, listSessions } from '../../../lib/accountApi';
+import { listActivity, listProviders, listSessions } from '../../../lib/accountApi';
 import { listDocuments, readAuthSession } from '../../../lib/documentApi';
-import { readRecoverySnapshot } from '../../../lib/recoveryStore';
+import { listRecoverySnapshots, readRecoverySnapshot } from '../../../lib/recoveryStore';
 
 function renderPage(route: string) {
   return renderProfile(
@@ -52,12 +55,15 @@ describe('ProfilePage', () => {
         name: 'Alice Baker',
         avatarUrl: null,
         isAnonymous: false,
+        createdAt: '2026-01-02T03:04:05.000Z',
       },
     });
     vi.mocked(listDocuments).mockResolvedValue([]);
     vi.mocked(listSessions).mockResolvedValue([]);
     vi.mocked(listActivity).mockResolvedValue({ events: [], nextCursor: null });
+    vi.mocked(listProviders).mockResolvedValue([]);
     vi.mocked(readRecoverySnapshot).mockResolvedValue(null);
+    vi.mocked(listRecoverySnapshots).mockResolvedValue([]);
   });
 
   it('falls back to the profile section at /settings', async () => {
@@ -95,6 +101,7 @@ describe('ProfilePage', () => {
         name: 'Alice Baker',
         avatarUrl: 'https://example.com/avatar.png',
         isAnonymous: false,
+        createdAt: '2026-01-02T03:04:05.000Z',
       },
     });
     vi.mocked(listDocuments).mockResolvedValue([
@@ -107,6 +114,27 @@ describe('ProfilePage', () => {
         lastOpenedAt: null,
         versionCount: 3,
         deletedAt: null,
+      },
+    ]);
+    vi.mocked(listProviders).mockResolvedValue([
+      { id: 'google', label: 'Google', linkedAt: '2026-01-02T03:04:05.000Z' },
+    ]);
+    vi.mocked(listRecoverySnapshots).mockResolvedValue([
+      {
+        sourceKind: 'saved-document',
+        documentId: 'd1',
+        documentName: 'Report.docx',
+        activeParaId: null,
+        savedAt: '2026-09-18T10:00:00.000Z',
+        buffer: new ArrayBuffer(0),
+      },
+      {
+        sourceKind: 'local-file',
+        documentId: null,
+        documentName: 'Draft.docx',
+        activeParaId: null,
+        savedAt: '2026-09-17T10:00:00.000Z',
+        buffer: new ArrayBuffer(0),
       },
     ]);
 
@@ -125,7 +153,10 @@ describe('ProfilePage', () => {
       'src',
       '/api/account/avatar',
     );
-    expect(screen.getByText('Google')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+    expect(screen.getByText(/joined/i)).toBeInTheDocument();
+    expect(container.querySelector('.profile-chip')).toHaveTextContent('Google');
+    expect(container.querySelector('.profile-chip')).toHaveClass('profile-chip--linked');
+    expect(screen.getByText('Unsaved drafts').parentElement).toHaveTextContent('Unsaved drafts2');
   });
 });

@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AccountService } from '../accountService.ts';
 import { buildDocumentApiApp } from '../app.ts';
+import type { OAuthProvider } from '../auth/providers.ts';
 import { ACTIVITY_DEFAULT_LIMIT, AuditService } from '../audit.ts';
 import { readCookies } from '../cookies.ts';
 import { createDocumentStore } from '../documentStore.ts';
@@ -26,6 +27,21 @@ const TRUNCATE =
 
 const CHROME_WINDOWS_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+function stubProvider(id: 'google' | 'github', label: string): OAuthProvider {
+  return {
+    id,
+    label,
+    async createAuthorization() {
+      throw new Error('not used in these tests');
+    },
+    async completeAuthorization() {
+      throw new Error('not used in these tests');
+    },
+  };
+}
+
+const PROVIDERS = [stubProvider('google', 'Google'), stubProvider('github', 'GitHub')];
 
 function readCookie(setCookie: string | string[] | undefined, name: string) {
   const headers = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
@@ -56,7 +72,7 @@ describe.skipIf(!hasDatabase)('account profile routes', () => {
       accounts: {
         accounts: new AccountService({ prisma }),
         sessions: sessionService,
-        providers: [],
+        providers: PROVIDERS,
         baseUrl: BASE_URL,
         audit: new AuditService({ prisma }),
       },
@@ -125,6 +141,8 @@ describe.skipIf(!hasDatabase)('account profile routes', () => {
       await app.inject({ method: 'DELETE', url: '/api/account/sessions' }),
       await app.inject({ method: 'DELETE', url: `/api/account/sessions/${randomUUID()}` }),
       await app.inject({ method: 'GET', url: '/api/account/activity' }),
+      await app.inject({ method: 'GET', url: '/api/account/providers' }),
+      await app.inject({ method: 'DELETE', url: '/api/account/providers/google' }),
     ];
 
     for (const response of responses) {
@@ -151,8 +169,16 @@ describe.skipIf(!hasDatabase)('account profile routes', () => {
         name: 'Alice',
         avatarUrl: null,
         isAnonymous: true,
+        createdAt: expect.any(String),
       });
-      expect(Object.keys(body).sort()).toEqual(['avatarUrl', 'email', 'id', 'isAnonymous', 'name']);
+      expect(Object.keys(body).sort()).toEqual([
+        'avatarUrl',
+        'createdAt',
+        'email',
+        'id',
+        'isAnonymous',
+        'name',
+      ]);
 
       const stored = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
       expect(stored.name).toBe('Alice');
@@ -208,6 +234,125 @@ describe.skipIf(!hasDatabase)('account profile routes', () => {
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as { name: string }).name).toBe(name);
+    });
+  });
+
+  describe('GET /api/account/providers', () => {
+    it('lists the linked providers with labels, not the configured ones', async () => {
+      const { cookie, userId } = await startSession();
+      await prisma.oAuthAccount.create({
+        data: { userId, provider: 'google', providerAccountId: 'g-1' },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/account/providers',
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([
+        { id: 'google', label: 'Google', linkedAt: expect.any(String) },
+      ]);
+    });
+
+    it('returns an empty list for a guest with no links', async () => {
+      const { cookie } = await startSession();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/account/providers',
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual([]);
+    });
+  });
+
+  describe('DELETE /api/account/providers/:provider', () => {
+    it('unlinks one identity and keeps the account and its documents', async () => {
+      const { cookie, userId } = await startSession();
+      await prisma.user.update({ where: { id: userId }, data: { isAnonymous: false } });
+      await prisma.oAuthAccount.createMany({
+        data: [
+          { userId, provider: 'google', providerAccountId: 'g-1' },
+          { userId, provider: 'github', providerAccountId: 'gh-1' },
+        ],
+      });
+      await prisma.document.create({
+        data: {
+          ownerId: userId,
+          name: 'Keep.docx',
+          sizeInBytes: 4,
+          versionCount: 0,
+          revision: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/account/providers/google',
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(204);
+      const remaining = await prisma.oAuthAccount.findMany({ where: { userId } });
+      expect(remaining.map((row) => row.provider)).toEqual(['github']);
+      expect(await prisma.user.findUnique({ where: { id: userId } })).not.toBeNull();
+      expect(await prisma.document.count({ where: { ownerId: userId } })).toBe(1);
+      expect(
+        await prisma.auditEvent.count({
+          where: { actorUserId: userId, action: 'account.provider_disconnect' },
+        }),
+      ).toBe(1);
+    });
+
+    it('refuses to unlink the last sign-in method with a conflict', async () => {
+      const { cookie, userId } = await startSession();
+      await prisma.user.update({ where: { id: userId }, data: { isAnonymous: false } });
+      await prisma.oAuthAccount.create({
+        data: { userId, provider: 'google', providerAccountId: 'g-solo' },
+      });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/account/providers/google',
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect((response.json() as { message: string }).message).toMatch(/only sign-in method/i);
+      expect(await prisma.oAuthAccount.count({ where: { userId } })).toBe(1);
+      expect(
+        await prisma.auditEvent.count({
+          where: { actorUserId: userId, action: 'account.provider_disconnect' },
+        }),
+      ).toBe(0);
+    });
+
+    it('404s for an unlinked provider and an unknown one', async () => {
+      const { cookie, userId } = await startSession();
+      await prisma.user.update({ where: { id: userId }, data: { isAnonymous: false } });
+      await prisma.oAuthAccount.create({
+        data: { userId, provider: 'google', providerAccountId: 'g-1' },
+      });
+
+      const unlinked = await app.inject({
+        method: 'DELETE',
+        url: '/api/account/providers/github',
+        headers: { cookie },
+      });
+      expect(unlinked.statusCode).toBe(404);
+
+      const unknown = await app.inject({
+        method: 'DELETE',
+        url: '/api/account/providers/facebook',
+        headers: { cookie },
+      });
+      expect(unknown.statusCode).toBe(404);
     });
   });
 

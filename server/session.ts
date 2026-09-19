@@ -11,6 +11,7 @@ export type SessionUser = {
   name: string | null;
   avatarUrl: string | null;
   isAnonymous: boolean;
+  createdAt: Date;
 };
 
 export type ResolvedSession = {
@@ -87,6 +88,7 @@ export class SessionService {
         name: session.user.name,
         avatarUrl: session.user.avatarUrl,
         isAnonymous: session.user.isAnonymous,
+        createdAt: session.user.createdAt,
       },
     };
   }

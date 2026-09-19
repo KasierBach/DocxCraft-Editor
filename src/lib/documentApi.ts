@@ -112,6 +112,7 @@ export type AuthSessionUser = {
   name: string | null;
   avatarUrl: string | null;
   isAnonymous: boolean;
+  createdAt: string;
 };
 
 export type AuthProvider = {

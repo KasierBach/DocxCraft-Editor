@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTranslation } from '../../i18n';
+import { listProviders } from '../../lib/accountApi';
 import { readAuthSession, type SavedDocumentSummary } from '../../lib/documentApi';
 import { formatBytes, formatRelativeTime } from '../../lib/format';
-import { readRecoverySnapshot } from '../../lib/recoveryStore';
+import { listRecoverySnapshots } from '../../lib/recoveryStore';
 import { useAuthGate } from '../auth/AuthGateContext';
 
 type ProfileHeaderProps = {
@@ -40,10 +41,16 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
   const { providers } = useAuthGate();
   const [avatarFailed, setAvatarFailed] = useState(false);
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: readAuthSession });
-  const recoveryQuery = useQuery({ queryKey: ['account', 'recovery'], queryFn: readRecoverySnapshot });
+  const recoveryQuery = useQuery({
+    queryKey: ['account', 'recovery', 'list'],
+    queryFn: listRecoverySnapshots,
+  });
+  const providersQuery = useQuery({ queryKey: ['account', 'providers'], queryFn: listProviders });
 
   const user = sessionQuery.data?.user;
   const lastEdited = newestUpdate(documents);
+  const joinedAt = user?.createdAt ? formatRelativeTime(user.createdAt, language) : null;
+  const linkedProviderIds = new Set((providersQuery.data ?? []).map((provider) => provider.id));
 
   return (
     <section className="profile-header">
@@ -69,10 +76,23 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
           <span className="profile-identity__meta">
             {user?.email ?? t('profile.noEmail')}
           </span>
+          {joinedAt && (
+            <span className="profile-identity__meta">
+              {t('profile.joined', { date: joinedAt })}
+            </span>
+          )}
           {providers.length > 0 && (
             <ul className="profile-chips">
               {providers.map((provider) => (
-                <li key={provider.id} className="profile-chip">
+                <li
+                  key={provider.id}
+                  className={`profile-chip${
+                    linkedProviderIds.has(provider.id) ? ' profile-chip--linked' : ''
+                  }`}
+                  title={
+                    linkedProviderIds.has(provider.id) ? t('profile.providerConnected') : undefined
+                  }
+                >
                   {provider.label}
                 </li>
               ))}
@@ -106,7 +126,7 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
         </div>
         <div className="profile-stat">
           <dt className="profile-stat__label">{t('profile.statDrafts')}</dt>
-          <dd className="profile-stat__value">{recoveryQuery.data ? 1 : 0}</dd>
+          <dd className="profile-stat__value">{recoveryQuery.data?.length ?? 0}</dd>
         </div>
       </dl>
     </section>

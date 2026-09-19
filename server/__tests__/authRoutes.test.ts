@@ -104,6 +104,7 @@ describe.skipIf(!hasDatabase)('auth routes (guest → sign-in)', () => {
     const firstBody = first.json();
     expect(firstBody.authenticated).toBe(false);
     expect(firstBody.user.isAnonymous).toBe(true);
+    expect(typeof firstBody.user.createdAt).toBe('string');
     expect(firstBody.providers).toEqual([{ id: 'github', label: 'Stub' }]);
 
     const guestCookie = readCookie(first.headers['set-cookie'], SESSION_COOKIE_NAME);
@@ -143,6 +144,7 @@ describe.skipIf(!hasDatabase)('auth routes (guest → sign-in)', () => {
     expect(secondBody.authenticated).toBe(true);
     expect(secondBody.user.isAnonymous).toBe(false);
     expect(secondBody.user.email).toBe('stub@example.com');
+    expect(typeof secondBody.user.createdAt).toBe('string');
 
     // 5. The guest was merged away; one real account remains.
     expect(await prisma.user.count({ where: { isAnonymous: true } })).toBe(0);

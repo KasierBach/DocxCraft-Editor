@@ -150,7 +150,14 @@ describe('AuthGate', () => {
       needsSetup: false,
       authenticated: false,
       providers: [{ id: 'google', label: 'Google' }],
-      user: { id: 'g1', email: null, name: null, avatarUrl: null, isAnonymous: true },
+      user: {
+        id: 'g1',
+        email: null,
+        name: null,
+        avatarUrl: null,
+        isAnonymous: true,
+        createdAt: '2026-01-02T03:04:05.000Z',
+      },
     });
 
     renderGate('/login');
