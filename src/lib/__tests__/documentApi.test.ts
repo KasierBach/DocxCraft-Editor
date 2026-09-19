@@ -22,6 +22,23 @@ describe('documentApi', () => {
     vi.restoreAllMocks();
   });
 
+  it('reports the status of a rejected save so a conflict is detectable without matching text', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Document was changed by another client.' }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      saveDocument({ id: 'doc-1', name: 'Proposal.docx', buffer: new ArrayBuffer(8), revision: 3 }),
+    ).rejects.toMatchObject({
+      name: 'DocumentApiError',
+      status: 409,
+      message: 'Document was changed by another client.',
+    });
+  });
+
   it('lists saved documents', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

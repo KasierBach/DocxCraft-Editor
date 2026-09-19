@@ -17,6 +17,7 @@ import { useAuthGate } from './features/auth/AuthGateContext';
 import { createDemoDocument } from './demoDocument';
 import { useAnchors } from './hooks/useAnchors';
 import { useApiStatus } from './hooks/useApiStatus';
+import { useAutosave } from './hooks/useAutosave';
 import { useDocumentCommands } from './hooks/useDocumentCommands';
 import { useTheme } from './hooks/useTheme';
 import { useDocumentLibrary } from './hooks/useDocumentLibrary';
@@ -709,6 +710,23 @@ export default function App() {
     [confirmDiscardChanges, loadEditorSource, pushToast, setCurrentDraft, t],
   );
 
+  /**
+   * Bookkeeping shared by a manual save and an autosave, so the two cannot
+   * drift. Deliberately silent: autosave calls it every few seconds.
+   */
+  const applySavedDocument = useCallback(
+    (savedDocument: { id: string; name: string }, buffer: ArrayBuffer) => {
+      if (source.kind !== 'saved-document') {
+        rememberSavedSource(savedDocument.id, savedDocument.name, buffer);
+      }
+
+      discardRecovery();
+      setIsDirty(false);
+      setLastSavedAt(new Date().toISOString());
+    },
+    [discardRecovery, rememberSavedSource, source.kind],
+  );
+
   const handleSaveDocument = useCallback(async () => {
     if (isSaving) return;
 
@@ -729,23 +747,44 @@ export default function App() {
       return;
     }
 
-    if (source.kind !== 'saved-document') {
-      rememberSavedSource(savedDocument.id, savedDocument.name, buffer);
-    }
-
-    discardRecovery();
-    setIsDirty(false);
-    setLastSavedAt(new Date().toISOString());
+    applySavedDocument(savedDocument, buffer);
   }, [
-    discardRecovery,
+    applySavedDocument,
     getEditorBuffer,
     isSaving,
     pushToast,
-    rememberSavedSource,
     runCommand,
     saveCurrentDocument,
     source.kind,
   t]);
+
+  /**
+   * Quiet autosave: no toast, because it fires every few seconds. Failures are
+   * reported through the status bar and the library's error state.
+   */
+  const handleAutosave = useCallback(async () => {
+    if (isSaving) return;
+
+    const buffer = await getEditorBuffer();
+    if (!buffer) return;
+
+    try {
+      const savedDocument = await saveCurrentDocument(buffer);
+      applySavedDocument(savedDocument, buffer);
+      setStatusMessage(t('app.savedChanges', { name: savedDocument.name }));
+    } catch {
+      setStatusMessage(t('app.saveFailed'));
+    }
+  }, [applySavedDocument, getEditorBuffer, isSaving, saveCurrentDocument, t]);
+
+  // Only an already-saved document autosaves: creating a document on the user's
+  // behalf from the sample or a local file would be a surprise, so their first
+  // save stays explicit and autosave takes over afterwards.
+  useAutosave({
+    enabled: source.kind === 'saved-document',
+    isDirty,
+    save: handleAutosave,
+  });
 
   const handleSaveAsDocument = useCallback(async () => {
     if (isSaving) return;

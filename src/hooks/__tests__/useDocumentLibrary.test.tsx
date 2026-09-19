@@ -63,6 +63,64 @@ describe('useDocumentLibrary', () => {
     expect(result.current.currentDocumentId).toBeNull();
   });
 
+  it('retries against the current revision when another client saved first', async () => {
+    const conflict = Object.assign(
+      new Error('Document was changed by another client. Reload before saving again.'),
+      { status: 409 },
+    );
+    api.readDocumentContent.mockResolvedValue(new ArrayBuffer(8));
+    api.saveDocument
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce({ ...EXISTING_DOCUMENT, revision: 4 });
+    // The other client's save bumped the stored revision to 4.
+    api.listDocuments.mockResolvedValue([{ ...EXISTING_DOCUMENT, revision: 4 }]);
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Proposal.docx', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([{ ...EXISTING_DOCUMENT, revision: 4 }]);
+    });
+
+    await act(async () => {
+      await result.current.openSavedDocument('doc-1');
+    });
+    await act(async () => {
+      await result.current.saveCurrentDocument(new ArrayBuffer(8));
+    });
+
+    expect(api.saveDocument).toHaveBeenCalledTimes(2);
+    // The retry must carry the revision the server actually holds, not the
+    // stale one that just conflicted, or it would conflict again.
+    expect(api.saveDocument.mock.calls[1]?.[0]).toMatchObject({ id: 'doc-1', revision: 4 });
+    expect(result.current.libraryError).toBeNull();
+  });
+
+  it('surfaces a non-conflict save failure without retrying', async () => {
+    api.readDocumentContent.mockResolvedValue(new ArrayBuffer(8));
+    api.saveDocument.mockRejectedValue(new Error('Quota exceeded.'));
+
+    const { result } = renderHook(() =>
+      useDocumentLibrary({ initialDocumentName: 'Proposal.docx', api }),
+    );
+    await waitFor(() => {
+      expect(result.current.savedDocuments).toEqual([EXISTING_DOCUMENT]);
+    });
+
+    await act(async () => {
+      await result.current.openSavedDocument('doc-1');
+    });
+
+    await act(async () => {
+      await expect(result.current.saveCurrentDocument(new ArrayBuffer(8))).rejects.toThrow(
+        'Quota exceeded.',
+      );
+    });
+
+    expect(api.saveDocument).toHaveBeenCalledTimes(1);
+    expect(result.current.libraryError).toBe('Quota exceeded.');
+  });
+
   it('rejects a save that starts while another save is in flight', async () => {
     const createdDocument: SavedDocumentSummary = {
       id: 'doc-2',

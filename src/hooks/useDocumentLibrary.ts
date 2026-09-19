@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { describeCommandError } from '../lib/errors';
+import { describeCommandError, isConflictError } from '../lib/errors';
 
 import {
   deleteDocument,
@@ -173,7 +173,29 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
           ...(isUpdate ? { id: documentIdForUpdate } : {}),
           ...(isUpdate && revision ? { revision } : {}),
         };
-        const savedDocument = await api.saveDocument(saveInput);
+        let savedDocument: SavedDocumentSummary;
+
+        try {
+          savedDocument = await api.saveDocument(saveInput);
+        } catch (error) {
+          // Another client saved first. Its content survives as a version, so
+          // retrying against the current revision keeps this newer buffer
+          // instead of bouncing the user back to reload.
+          if (!isUpdate || !isConflictError(error)) {
+            throw error;
+          }
+
+          const documents = await api.listDocuments();
+          setSavedDocuments(documents);
+          const freshRevision = documents.find(
+            (document) => document.id === documentIdForUpdate,
+          )?.revision;
+          if (!freshRevision) {
+            throw error;
+          }
+
+          savedDocument = await api.saveDocument({ ...saveInput, revision: freshRevision });
+        }
 
         setCurrentDocumentId(savedDocument.id);
         setCurrentDocumentRevision(savedDocument.revision ?? null);

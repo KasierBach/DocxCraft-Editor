@@ -26,3 +26,15 @@ export function describeCommandError(
 
   return error instanceof Error && error.message ? error.message : fallbackMessage;
 }
+
+/**
+ * A save that lost a revision race (HTTP 409). The store keeps the superseded
+ * content as a version, so callers can retry against the current revision
+ * without losing the other client's work. Checked structurally so injected API
+ * doubles in tests can produce it without importing the real error class.
+ */
+export function isConflictError(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 409
+  );
+}

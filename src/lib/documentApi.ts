@@ -45,6 +45,17 @@ function createContentUrl(documentId: string, options?: ReadDocumentOptions) {
   return `${DOCUMENTS_API_PATH}/${documentId}/content${query ? `?${query}` : ''}`;
 }
 
+/** Error carrying the HTTP status, so callers react to a 409 instead of matching its message. */
+export class DocumentApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'DocumentApiError';
+    this.status = status;
+  }
+}
+
 export async function readErrorMessage(response: Response) {
   const fallback = `Request failed with status ${response.status}.`;
 
@@ -67,7 +78,7 @@ export async function readErrorMessage(response: Response) {
 
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw new DocumentApiError(await readErrorMessage(response), response.status);
   }
 
   try {
