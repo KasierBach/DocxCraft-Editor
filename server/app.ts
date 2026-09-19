@@ -506,6 +506,11 @@ function registerDocumentRoutes(
     return scope ? scope.store.listDocuments() : reply;
   });
 
+  app.get('/api/documents/trash', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    return scope ? scope.store.listDeletedDocuments() : reply;
+  });
+
   app.get('/api/documents/:documentId/versions', async (request, reply) => {
     const scope = await resolveScope(request, reply);
     if (!scope) return reply;
@@ -575,6 +580,34 @@ function registerDocumentRoutes(
     await scope.store.deleteDocument(documentId);
     await accounts?.audit?.record({
       action: 'document.delete',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
+    });
+    return reply.code(204).send();
+  });
+
+  app.post('/api/documents/:documentId/restore', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
+    const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
+    const document = await scope.store.restoreDocument(documentId);
+    await accounts?.audit?.record({
+      action: 'document.restore',
+      actorUserId: scope.userId,
+      documentId,
+      ip: request.ip,
+    });
+    return reply.code(200).send(document);
+  });
+
+  app.delete('/api/documents/:documentId/purge', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
+    const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
+    await scope.store.purgeDocument(documentId);
+    await accounts?.audit?.record({
+      action: 'document.purge',
       actorUserId: scope.userId,
       documentId,
       ip: request.ip,

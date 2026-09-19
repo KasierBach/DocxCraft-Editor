@@ -44,11 +44,14 @@ export interface DocumentStorePort {
    */
   forOwner(ownerId: string): DocumentStorePort;
   listDocuments(): Promise<SavedDocumentSummary[]>;
+  listDeletedDocuments(): Promise<SavedDocumentSummary[]>;
   listDocumentVersions(documentId: string): Promise<SavedDocumentVersionSummary[]>;
   saveNewDocument(input: SaveDocumentInput): Promise<SavedDocumentSummary>;
   updateDocument(id: string, input: UpdateDocumentInput): Promise<SavedDocumentSummary>;
   renameDocument(id: string, input: RenameDocumentInput): Promise<SavedDocumentSummary>;
   deleteDocument(id: string): Promise<void>;
+  restoreDocument(id: string): Promise<SavedDocumentSummary>;
+  purgeDocument(id: string): Promise<void>;
   readDocument(id: string, options?: ReadDocumentOptions): Promise<Uint8Array>;
   readDocumentRecord(id: string, options?: ReadDocumentOptions): Promise<SavedDocumentRecord>;
   readDocumentVersionRecord(

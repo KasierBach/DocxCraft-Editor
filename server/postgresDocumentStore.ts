@@ -120,6 +120,14 @@ export class PostgresDocumentStore implements DocumentStorePort {
     return rows.map(toDocumentSummary);
   }
 
+  async listDeletedDocuments() {
+    const rows = await this.prisma.document.findMany({
+      where: { deletedAt: { not: null }, ...this.ownerFilter },
+      orderBy: { deletedAt: 'desc' },
+    });
+    return rows.map(toDocumentSummary);
+  }
+
   async listDocumentVersions(documentId: string) {
     await this.requireDocument(this.prisma, documentId);
     const rows = await this.prisma.documentVersion.findMany({
@@ -237,6 +245,20 @@ export class PostgresDocumentStore implements DocumentStorePort {
 
   async deleteDocument(id: string) {
     await this.requireDocument(this.prisma, id);
+    await this.prisma.document.update({ where: { id }, data: { deletedAt: new Date() } });
+  }
+
+  async restoreDocument(id: string) {
+    await this.requireDeletedDocument(id);
+    const restored = await this.prisma.document.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+    return toDocumentSummary(restored);
+  }
+
+  async purgeDocument(id: string) {
+    await this.requireDeletedDocument(id);
     await this.prisma.document.delete({ where: { id } });
     await this.blobs.deletePrefix(documentPrefix(id));
   }
@@ -274,6 +296,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
     documentId: string,
     versionId: string,
   ): Promise<SavedDocumentVersionRecord> {
+    await this.requireDocument(this.prisma, documentId);
     const version = await this.prisma.documentVersion.findFirst({
       where: { id: versionId, documentId },
     });
@@ -346,6 +369,16 @@ export class PostgresDocumentStore implements DocumentStorePort {
   private async requireDocument(db: Database, id: string) {
     const document = await db.document.findFirst({
       where: { id, deletedAt: null, ...this.ownerFilter },
+    });
+    if (!document) {
+      throw new DocumentNotFoundError(`Document ${id} was not found.`);
+    }
+    return document;
+  }
+
+  private async requireDeletedDocument(id: string) {
+    const document = await this.prisma.document.findFirst({
+      where: { id, deletedAt: { not: null }, ...this.ownerFilter },
     });
     if (!document) {
       throw new DocumentNotFoundError(`Document ${id} was not found.`);

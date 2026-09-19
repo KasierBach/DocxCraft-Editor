@@ -5,6 +5,8 @@ export type AuditAction =
   | 'document.update'
   | 'document.rename'
   | 'document.delete'
+  | 'document.restore'
+  | 'document.purge'
   | 'document.duplicate'
   | 'account.sign_in'
   | 'account.export'

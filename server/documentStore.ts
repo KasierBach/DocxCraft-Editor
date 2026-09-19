@@ -23,6 +23,7 @@ const DEFAULT_MAX_VERSIONS_PER_DOCUMENT = 100;
 type StoredDocumentSummary = Omit<SavedDocumentSummary, 'revision'> & {
   latestVersionId: string;
   revision: number;
+  deletedAt: string | null;
 };
 
 export class DocumentConflictError extends Error {
@@ -50,6 +51,10 @@ function createTimestamp() {
 
 function byUpdatedAtDescending(left: SavedDocumentSummary, right: SavedDocumentSummary) {
   return right.updatedAt.localeCompare(left.updatedAt);
+}
+
+function byDeletedAtDescending(left: StoredDocumentSummary, right: StoredDocumentSummary) {
+  return (right.deletedAt ?? '').localeCompare(left.deletedAt ?? '');
 }
 
 function byCreatedAtDescending(
@@ -117,7 +122,18 @@ export class FileDocumentStore implements DocumentStorePort {
   }
   async listDocuments() {
     const index = await this.readIndex();
-    return index.documents.map(this.toPublicDocumentSummary).sort(byUpdatedAtDescending);
+    return index.documents
+      .filter((document) => !document.deletedAt)
+      .map(this.toPublicDocumentSummary)
+      .sort(byUpdatedAtDescending);
+  }
+
+  async listDeletedDocuments() {
+    const index = await this.readIndex();
+    return index.documents
+      .filter((document) => document.deletedAt)
+      .sort(byDeletedAtDescending)
+      .map(this.toPublicDocumentSummary);
   }
 
   async listDocumentVersions(documentId: string) {
@@ -218,7 +234,32 @@ export class FileDocumentStore implements DocumentStorePort {
   async deleteDocument(id: string) {
     return this.runExclusive(async () => {
       const index = await this.readIndex();
-      this.getStoredDocumentOrThrow(index, id);
+      const document = this.getStoredDocumentOrThrow(index, id);
+      const deletedDocument: StoredDocumentSummary = { ...document, deletedAt: createTimestamp() };
+
+      index.documents = index.documents.map((entry) => (entry.id === id ? deletedDocument : entry));
+      await this.writeIndex(index);
+    });
+  }
+
+  async restoreDocument(id: string) {
+    return this.runExclusive(async () => {
+      const index = await this.readIndex();
+      const document = this.getDeletedDocumentOrThrow(index, id);
+      const restoredDocument: StoredDocumentSummary = { ...document, deletedAt: null };
+
+      index.documents = index.documents.map((entry) =>
+        entry.id === id ? restoredDocument : entry,
+      );
+      await this.writeIndex(index);
+      return this.toPublicDocumentSummary(restoredDocument);
+    });
+  }
+
+  async purgeDocument(id: string) {
+    return this.runExclusive(async () => {
+      const index = await this.readIndex();
+      this.getDeletedDocumentOrThrow(index, id);
 
       index.documents = index.documents.filter((document) => document.id !== id);
       index.versions = index.versions.filter((version) => version.documentId !== id);
@@ -297,6 +338,7 @@ export class FileDocumentStore implements DocumentStorePort {
     versionId: string,
   ): Promise<SavedDocumentVersionRecord> {
     const index = await this.readIndex();
+    this.getStoredDocumentOrThrow(index, documentId);
     const version = this.getVersionOrThrow(index, documentId, versionId);
     return {
       metadata: version,
@@ -335,6 +377,7 @@ export class FileDocumentStore implements DocumentStorePort {
       lastOpenedAt,
       versionCount,
       revision,
+      deletedAt: null,
     };
   }
 
@@ -415,7 +458,16 @@ export class FileDocumentStore implements DocumentStorePort {
   }
 
   private getStoredDocumentOrThrow(index: DocumentIndex, documentId: string) {
-    const document = index.documents.find((entry) => entry.id === documentId);
+    const document = index.documents.find((entry) => entry.id === documentId && !entry.deletedAt);
+    if (!document) {
+      throw new DocumentNotFoundError(`Document ${documentId} was not found.`);
+    }
+
+    return document;
+  }
+
+  private getDeletedDocumentOrThrow(index: DocumentIndex, documentId: string) {
+    const document = index.documents.find((entry) => entry.id === documentId && entry.deletedAt);
     if (!document) {
       throw new DocumentNotFoundError(`Document ${documentId} was not found.`);
     }
@@ -469,6 +521,7 @@ export class FileDocumentStore implements DocumentStorePort {
               lastOpenedAt: partialDocument.lastOpenedAt ?? null,
               versionCount: partialDocument.versionCount ?? documentVersions.length,
               revision: partialDocument.revision ?? partialDocument.versionCount ?? documentVersions.length,
+              deletedAt: partialDocument.deletedAt ?? null,
             } as StoredDocumentSummary;
           })
           : [],

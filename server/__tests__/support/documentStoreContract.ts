@@ -9,6 +9,10 @@ function bytes(values: number[]) {
   return Uint8Array.from(values);
 }
 
+function tick() {
+  return new Promise((resolve) => setTimeout(resolve, 25));
+}
+
 export type StoreHarness = {
   createStore(options?: { maxVersionsPerDocument?: number }): Promise<DocumentStorePort>;
   /** Returns the store to an empty state between tests. */
@@ -134,6 +138,106 @@ export function describeDocumentStoreContract(name: string, setup: () => Promise
         DocumentNotFoundError,
       );
       await expect(store.readDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+    });
+
+    it('moves a deleted document to trash and hides its reads', async () => {
+      const store = await harness.createStore();
+      const created = await store.saveNewDocument({ name: 'Trashed', buffer: bytes([1]) });
+      const [version] = await store.listDocumentVersions(created.id);
+
+      await store.deleteDocument(created.id);
+
+      expect(await store.listDocuments()).toHaveLength(0);
+      expect((await store.listDeletedDocuments()).map((document) => document.id)).toEqual([
+        created.id,
+      ]);
+      await expect(store.readDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.readDocumentRecord(created.id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+      await expect(store.listDocumentVersions(created.id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+      await expect(
+        store.readDocumentVersionRecord(created.id, version!.id),
+      ).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(
+        store.updateDocument(created.id, { buffer: bytes([2]) }),
+      ).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(
+        store.renameDocument(created.id, { name: 'Nope' }),
+      ).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.duplicateDocument(created.id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+      await expect(store.restoreDocument(MISSING_ID)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+    });
+
+    it('lists trashed documents most recently deleted first', async () => {
+      const store = await harness.createStore();
+      const first = await store.saveNewDocument({ name: 'First', buffer: bytes([1]) });
+      const second = await store.saveNewDocument({ name: 'Second', buffer: bytes([2]) });
+
+      await store.deleteDocument(first.id);
+      await tick();
+      await store.deleteDocument(second.id);
+
+      expect((await store.listDeletedDocuments()).map((document) => document.id)).toEqual([
+        second.id,
+        first.id,
+      ]);
+    });
+
+    it('restores a soft-deleted document with its versions intact', async () => {
+      const store = await harness.createStore();
+      const created = await store.saveNewDocument({ name: 'Restore Me', buffer: bytes([1]) });
+      const updated = await store.updateDocument(created.id, { buffer: bytes([2]) });
+      await store.deleteDocument(created.id);
+      expect(await store.listDeletedDocuments()).toHaveLength(1);
+
+      const restored = await store.restoreDocument(created.id);
+
+      expect(restored).toMatchObject({
+        id: created.id,
+        name: 'Restore Me.docx',
+        revision: updated.revision,
+        versionCount: 2,
+      });
+      expect((await store.listDocuments()).map((document) => document.id)).toEqual([created.id]);
+      expect(await store.listDeletedDocuments()).toHaveLength(0);
+      expect(await store.listDocumentVersions(created.id)).toHaveLength(2);
+      expect(Array.from(await store.readDocument(created.id))).toEqual([2]);
+    });
+
+    it('purges a soft-deleted document permanently', async () => {
+      const store = await harness.createStore();
+      const created = await store.saveNewDocument({ name: 'Purge Me', buffer: bytes([1]) });
+      await store.deleteDocument(created.id);
+
+      await store.purgeDocument(created.id);
+
+      expect(await store.listDocuments()).toHaveLength(0);
+      expect(await store.listDeletedDocuments()).toHaveLength(0);
+      await expect(store.readDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.restoreDocument(created.id)).rejects.toBeInstanceOf(
+        DocumentNotFoundError,
+      );
+      await expect(store.purgeDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.verifyIntegrity()).resolves.toBeUndefined();
+    });
+
+    it('refuses to purge a live document', async () => {
+      const store = await harness.createStore();
+      const created = await store.saveNewDocument({ name: 'Alive', buffer: bytes([1]) });
+
+      await expect(store.purgeDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+      await expect(store.restoreDocument(created.id)).rejects.toBeInstanceOf(DocumentNotFoundError);
+
+      expect((await store.listDocuments()).map((document) => document.id)).toEqual([created.id]);
+      expect(await store.listDeletedDocuments()).toHaveLength(0);
+      expect(Array.from(await store.readDocument(created.id))).toEqual([1]);
     });
 
     it('throws for a missing document', async () => {

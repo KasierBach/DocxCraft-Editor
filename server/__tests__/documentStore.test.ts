@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { mkdtemp, rm } from 'node:fs/promises';
-import { unlink } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -102,6 +102,31 @@ describe('createDocumentStore', () => {
     await expect(store.readDocument(created.id)).rejects.toThrow(/not found/i);
     await expect(store.listDocumentVersions(created.id)).rejects.toThrow(/not found/i);
   });
+  it('loads an index written before deletedAt existed as not deleted', async () => {
+    const dataDir = await createTempDir();
+    const store = createDocumentStore({ dataDir });
+    const created = await store.saveNewDocument({
+      name: 'Legacy.docx',
+      buffer: Buffer.from('legacy'),
+    });
+
+    const indexPath = join(dataDir, 'index.json');
+    const legacyIndex = JSON.parse(await readFile(indexPath, 'utf-8')) as {
+      documents: Array<Record<string, unknown>>;
+    };
+    for (const document of legacyIndex.documents) delete document.deletedAt;
+    await writeFile(indexPath, JSON.stringify(legacyIndex, null, 2));
+
+    expect((await store.listDocuments()).map((document) => document.id)).toEqual([created.id]);
+    expect(await store.listDeletedDocuments()).toEqual([]);
+
+    await store.deleteDocument(created.id);
+    expect(await store.listDocuments()).toEqual([]);
+    expect((await store.listDeletedDocuments()).map((document) => document.id)).toEqual([
+      created.id,
+    ]);
+  });
+
   it('serializes concurrent writes without losing documents', async () => {
     const store = createDocumentStore({ dataDir: await createTempDir() });
 
