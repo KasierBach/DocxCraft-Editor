@@ -84,12 +84,52 @@ describe('SecuritySection', () => {
     await waitFor(() => expect(revokeOtherSessions).toHaveBeenCalled());
   });
 
-  it('shows an empty state when there are no sign-ins', async () => {
+  it('shows an empty state when there is no activity', async () => {
     vi.mocked(listSessions).mockResolvedValue([currentSession]);
 
     renderProfile(<SecuritySection />);
 
-    expect(await screen.findByText(/no sign-ins recorded yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no activity recorded yet/i)).toBeInTheDocument();
+  });
+
+  it('renders the from/to names when a rename carries metadata', async () => {
+    vi.mocked(listSessions).mockResolvedValue([currentSession]);
+    vi.mocked(listActivity).mockResolvedValue({
+      events: [
+        {
+          id: 'r1',
+          action: 'document.rename',
+          documentId: 'd1',
+          metadata: { previousName: 'Bob.docx', newName: 'Bob Q3.docx' },
+          createdAt: '2026-09-10T00:00:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderProfile(<SecuritySection />);
+
+    expect(await screen.findByText('Renamed Bob.docx → Bob Q3.docx')).toBeInTheDocument();
+  });
+
+  it('falls back for a rename written before metadata existed', async () => {
+    vi.mocked(listSessions).mockResolvedValue([currentSession]);
+    vi.mocked(listActivity).mockResolvedValue({
+      events: [
+        {
+          id: 'r2',
+          action: 'document.rename',
+          documentId: 'd1',
+          metadata: null,
+          createdAt: '2026-09-10T00:00:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    });
+
+    renderProfile(<SecuritySection />);
+
+    expect(await screen.findByText('Renamed a document')).toBeInTheDocument();
   });
 
   it('offers a retry when the activity feed fails', async () => {
@@ -114,12 +154,14 @@ describe('SecuritySection', () => {
             id: 'e1',
             action: 'account.sign_in',
             documentId: null,
+            metadata: null,
             createdAt: '2026-09-10T00:00:00.000Z',
           },
           {
             id: 'e1b',
             action: 'account.sign_in',
             documentId: null,
+            metadata: null,
             createdAt: '2026-09-10T04:00:00.000Z',
           },
         ],
@@ -131,6 +173,7 @@ describe('SecuritySection', () => {
             id: 'e2',
             action: 'account.sign_in',
             documentId: null,
+            metadata: null,
             createdAt: '2026-09-09T00:00:00.000Z',
           },
         ],

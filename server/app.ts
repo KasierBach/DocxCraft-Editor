@@ -571,12 +571,19 @@ function registerDocumentRoutes(
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const body = parseWithSchema(renameDocumentBodySchema, request.body);
-    const document = await scope.store.renameDocument(documentId, { name: body.name });
+    let previousName: string | null = null;
+    const document = await scope.store.renameDocument(documentId, {
+      name: body.name,
+      onPreviousName: (name) => {
+        previousName = name;
+      },
+    });
     await accounts?.audit?.record({
       action: 'document.rename',
       actorUserId: scope.userId,
       documentId,
       ip: request.ip,
+      ...(previousName ? { metadata: { previousName, newName: document.name } } : {}),
     });
     return reply.code(200).send(document);
   });

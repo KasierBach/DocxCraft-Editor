@@ -1,4 +1,4 @@
-import type { PrismaClient } from './generated/prisma/client.ts';
+import type { Prisma, PrismaClient } from './generated/prisma/client.ts';
 
 export type AuditAction =
   | 'document.create'
@@ -17,11 +17,31 @@ export type AuditAction =
 export const ACTIVITY_DEFAULT_LIMIT = 20;
 export const ACTIVITY_MAX_LIMIT = 50;
 
+/**
+ * Action-specific detail. Only rename carries it today; the shape stays a
+ * single object so adding another action's detail widens rather than reshapes.
+ */
+export type AuditEventMetadata = {
+  previousName: string;
+  newName: string;
+};
+
+/** Rows written before the metadata column existed, or by another writer, may not match. */
+function readMetadata(value: Prisma.JsonValue | null): AuditEventMetadata | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+
+  const { previousName, newName } = value as Record<string, unknown>;
+  return typeof previousName === 'string' && typeof newName === 'string'
+    ? { previousName, newName }
+    : null;
+}
+
 /** One row of a user's own activity feed. */
 export type AuditActivityItem = {
   id: string;
   action: string;
   documentId: string | null;
+  metadata: AuditEventMetadata | null;
   createdAt: string;
 };
 
@@ -46,6 +66,7 @@ export class AuditService {
     actorUserId?: string | null;
     documentId?: string | null;
     ip?: string | null;
+    metadata?: AuditEventMetadata | null;
   }) {
     try {
       await this.prisma.auditEvent.create({
@@ -54,6 +75,7 @@ export class AuditService {
           actorUserId: input.actorUserId ?? null,
           documentId: input.documentId ?? null,
           ip: input.ip ?? null,
+          ...(input.metadata ? { metadata: input.metadata } : {}),
         },
       });
     } catch (error) {
@@ -89,6 +111,7 @@ export class AuditService {
       id: row.id,
       action: row.action,
       documentId: row.documentId,
+      metadata: readMetadata(row.metadata),
       createdAt: row.createdAt.toISOString(),
     }));
 

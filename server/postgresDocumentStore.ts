@@ -236,12 +236,13 @@ export class PostgresDocumentStore implements DocumentStorePort {
     }
   }
 
-  async renameDocument(id: string, { name }: RenameDocumentInput) {
+  async renameDocument(id: string, { name, onPreviousName }: RenameDocumentInput) {
     const current = await this.requireDocument(this.prisma, id);
     const renamed = await this.prisma.document.update({
       where: { id },
       data: { name: ensureDocxName(name ?? current.name), updatedAt: new Date() },
     });
+    onPreviousName?.(current.name);
     return toDocumentSummary(renamed);
   }
 

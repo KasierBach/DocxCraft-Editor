@@ -117,6 +117,22 @@ export function describeDocumentStoreContract(name: string, setup: () => Promise
       expect(renamed.revision).toBe(created.revision);
     });
 
+    it('reports the previous name to the rename callback', async () => {
+      const store = await harness.createStore();
+      const created = await store.saveNewDocument({ name: 'Before', buffer: bytes([1]) });
+      let previousName: string | null = null;
+
+      const renamed = await store.renameDocument(created.id, {
+        name: 'After',
+        onPreviousName: (name) => {
+          previousName = name;
+        },
+      });
+
+      expect(previousName).toBe('Before.docx');
+      expect(renamed.name).toBe('After.docx');
+    });
+
     it('duplicates a document with the latest content and a Copy name', async () => {
       const store = await harness.createStore();
       const created = await store.saveNewDocument({ name: 'Original.docx', buffer: bytes([9]) });

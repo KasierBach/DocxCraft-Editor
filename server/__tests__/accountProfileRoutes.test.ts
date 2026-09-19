@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { FastifyInstance } from 'fastify';
+import JSZip from 'jszip';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AccountService } from '../accountService.ts';
@@ -42,6 +43,13 @@ function stubProvider(id: 'google' | 'github', label: string): OAuthProvider {
 }
 
 const PROVIDERS = [stubProvider('google', 'Google'), stubProvider('github', 'GitHub')];
+
+async function docxPayload() {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<Types/>');
+  zip.file('word/document.xml', '<document/>');
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array', compression: 'STORE' }));
+}
 
 function readCookie(setCookie: string | string[] | undefined, name: string) {
   const headers = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
@@ -619,6 +627,44 @@ describe.skipIf(!hasDatabase)('account profile routes', () => {
       });
 
       expect(response.statusCode).toBe(400);
+    });
+
+    it('records the previous and new name for a rename', async () => {
+      const caller = await startSession();
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/documents',
+        headers: {
+          cookie: caller.cookie,
+          'content-type': 'application/octet-stream',
+          'x-document-name': 'Bob.docx',
+        },
+        payload: await docxPayload(),
+      });
+      const document = created.json<{ id: string }>();
+
+      const renamed = await app.inject({
+        method: 'PATCH',
+        url: `/api/documents/${document.id}`,
+        headers: { cookie: caller.cookie, 'content-type': 'application/json' },
+        payload: { name: 'Bob Q3.docx' },
+      });
+      expect(renamed.statusCode).toBe(200);
+
+      const activity = await app.inject({
+        method: 'GET',
+        url: '/api/account/activity',
+        headers: { cookie: caller.cookie },
+      });
+      const body = activity.json() as {
+        events: Array<{ action: string; metadata: unknown }>;
+      };
+      const renameEvent = body.events.find((event) => event.action === 'document.rename');
+
+      expect(renameEvent?.metadata).toEqual({
+        previousName: 'Bob.docx',
+        newName: 'Bob Q3.docx',
+      });
     });
   });
 });

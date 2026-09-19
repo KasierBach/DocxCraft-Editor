@@ -27,6 +27,11 @@ export type UpdateDocumentInput = {
 
 export type RenameDocumentInput = {
   name?: string;
+  /**
+   * Called with the stored name before the rename succeeds. Only the store
+   * reads the current row, so this is how the caller learns the previous name.
+   */
+  onPreviousName?: (previousName: string) => void;
 };
 
 export type CreateDocumentStoreOptions = {

@@ -26,11 +26,18 @@ export type AccountSession = {
   isCurrent: boolean;
 };
 
+/** Structured detail on an activity event; rename rows carry the from/to names. */
+export type ActivityMetadata = {
+  previousName: string;
+  newName: string;
+};
+
 /** `action` is a plain string: a future server action must not look known here. */
 export type ActivityEvent = {
   id: string;
   action: string;
   documentId: string | null;
+  metadata: ActivityMetadata | null;
   createdAt: string;
 };
 

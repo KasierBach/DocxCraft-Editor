@@ -213,7 +213,7 @@ export class FileDocumentStore implements DocumentStorePort {
     });
   }
 
-  async renameDocument(id: string, { name }: RenameDocumentInput) {
+  async renameDocument(id: string, { name, onPreviousName }: RenameDocumentInput) {
     return this.runExclusive(async () => {
       const index = await this.readIndex();
       const existingDocument = this.getStoredDocumentOrThrow(index, id);
@@ -227,6 +227,7 @@ export class FileDocumentStore implements DocumentStorePort {
         document.id === id ? renamedDocument : document,
       );
       await this.writeIndex(index);
+      onPreviousName?.(existingDocument.name);
       return this.toPublicDocumentSummary(renamedDocument);
     });
   }

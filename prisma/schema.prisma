@@ -103,6 +103,8 @@ model AuditEvent {
   action      String
   documentId  String?  @map("document_id") @db.Uuid
   ip          String?
+  /** Action-specific detail; nullable because most actions carry none. */
+  metadata    Json?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)

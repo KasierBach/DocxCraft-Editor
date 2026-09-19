@@ -138,5 +138,25 @@ describe.skipIf(!hasDatabase)('AuditService.listForActor (integration)', () => {
     const page = await audit.listForActor({ actorUserId: actor.id });
     expect(page.events).toHaveLength(1);
     expect(page.events[0]?.action).toBe('account.profile_update');
+    expect(page.events[0]?.metadata).toBeNull();
+  });
+
+  it('round-trips rename metadata and treats legacy rows as null', async () => {
+    const actor = await createUser();
+
+    await createEvent(actor.id, new Date(Date.now() - 60_000), 'document.rename');
+    await audit.record({
+      action: 'document.rename',
+      actorUserId: actor.id,
+      metadata: { previousName: 'Bob.docx', newName: 'Bob Q3.docx' },
+    });
+
+    const page = await audit.listForActor({ actorUserId: actor.id });
+
+    expect(page.events[0]?.metadata).toEqual({
+      previousName: 'Bob.docx',
+      newName: 'Bob Q3.docx',
+    });
+    expect(page.events[1]?.metadata).toBeNull();
   });
 });
