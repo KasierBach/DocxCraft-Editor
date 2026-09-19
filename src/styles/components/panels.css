@@ -345,6 +345,16 @@
   color: var(--nb-text-muted);
 }
 
+.documents-page__view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.documents-page__view-toggle .action-button[aria-pressed='true'] {
+  background: var(--nb-blue);
+}
+
 .documents-page__state {
   display: flex;
   flex-direction: column;

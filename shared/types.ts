@@ -12,6 +12,8 @@ export type SavedDocumentSummary = {
   lastOpenedAt: string | null;
   versionCount: number;
   revision?: number;
+  /** When the document was moved to Trash; `null` while it is live. */
+  deletedAt: string | null;
 };
 
 export type SavedDocumentVersionSummary = {

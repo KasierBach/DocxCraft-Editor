@@ -4,9 +4,12 @@ import {
   deleteDocument,
   listDocuments,
   listDocumentVersions,
+  listTrash,
+  purgeDocument,
   readDocumentContent,
   readDocumentVersionContent,
   renameDocument,
+  restoreDocument,
   saveDocument,
 } from '../documentApi';
 
@@ -286,6 +289,73 @@ describe('documentApi', () => {
         method: 'DELETE',
       }),
     );
+  });
+
+  it('lists trashed documents, restores one, and purges one', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: 'doc-1',
+              name: 'Proposal.docx',
+              createdAt: '2026-05-25T05:20:00.000Z',
+              updatedAt: '2026-05-25T05:21:00.000Z',
+              sizeInBytes: 1024,
+              lastOpenedAt: null,
+              versionCount: 1,
+              deletedAt: '2026-05-26T05:00:00.000Z',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'doc-1',
+            name: 'Proposal.docx',
+            createdAt: '2026-05-25T05:20:00.000Z',
+            updatedAt: '2026-05-25T05:21:00.000Z',
+            sizeInBytes: 1024,
+            lastOpenedAt: null,
+            versionCount: 1,
+            deletedAt: null,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const trashed = await listTrash();
+    const restored = await restoreDocument('doc-1');
+    await purgeDocument('doc-1');
+
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/api/documents/trash', expectedFetchInit);
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      2,
+      '/api/documents/doc-1/restore',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      3,
+      '/api/documents/doc-1/purge',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(trashed[0]?.deletedAt).toBe('2026-05-26T05:00:00.000Z');
+    expect(restored.deletedAt).toBeNull();
+  });
+
+  it('surfaces purge failures', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Document not found.' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(purgeDocument('doc-1')).rejects.toThrow('Document not found.');
   });
 
   it('surfaces the server message from JSON error responses', async () => {

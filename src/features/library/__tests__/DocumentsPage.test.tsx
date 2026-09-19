@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentsPage } from '../DocumentsPage';
@@ -11,9 +11,12 @@ vi.mock('../../../lib/documentApi', () => ({
   renameDocument: vi.fn(),
   deleteDocument: vi.fn(),
   readDocumentContent: vi.fn(),
+  listTrash: vi.fn(),
+  restoreDocument: vi.fn(),
+  purgeDocument: vi.fn(),
 }));
 
-import { deleteDocument, listDocuments, renameDocument } from '../../../lib/documentApi';
+import { deleteDocument, listDocuments, listTrash, renameDocument } from '../../../lib/documentApi';
 
 const document = {
   id: 'd1',
@@ -23,14 +26,21 @@ const document = {
   sizeInBytes: 12,
   lastOpenedAt: null,
   versionCount: 2,
+  deletedAt: null,
 };
 
-function renderPage() {
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
+}
+
+function renderPage(initialEntries: string[] = ['/documents']) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <DocumentsPage />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -103,5 +113,39 @@ describe('DocumentsPage', () => {
     await user.type(screen.getByRole('searchbox'), 'nothing');
 
     expect(screen.getByText(/no saved documents match that search/i)).toBeInTheDocument();
+  });
+
+  it('reads the trash view from the URL and toggles it back', async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(listTrash).mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderPage(['/documents?view=trash']);
+
+    expect(await screen.findByText(/trash is empty/i)).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/documents?view=trash');
+    expect(screen.getByRole('button', { name: 'Trash' })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Documents' }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/documents$/);
+    expect(screen.getByRole('button', { name: 'Documents' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('switches to the trash view from the documents list', async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+    vi.mocked(listTrash).mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText(/no saved documents yet/i);
+
+    await user.click(screen.getByRole('button', { name: 'Trash' }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/documents?view=trash');
+    expect(await screen.findByText(/trash is empty/i)).toBeInTheDocument();
   });
 });

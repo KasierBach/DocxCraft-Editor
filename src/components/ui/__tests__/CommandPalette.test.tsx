@@ -14,6 +14,7 @@ const DOCUMENTS: SavedDocumentSummary[] = [
         sizeInBytes: 1024,
         lastOpenedAt: null,
         versionCount: 1,
+        deletedAt: null,
     },
     {
         id: 'doc-2',
@@ -23,6 +24,7 @@ const DOCUMENTS: SavedDocumentSummary[] = [
         sizeInBytes: 2048,
         lastOpenedAt: null,
         versionCount: 2,
+        deletedAt: null,
     },
 ];
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useTranslation } from '../../i18n';
 import {
@@ -12,8 +12,8 @@ import {
 } from '../../lib/documentApi';
 import { triggerBlobDownload } from '../../lib/download';
 import { formatBytes, formatDateTime } from '../../lib/format';
-
-const DOCUMENTS_KEY = ['documents'];
+import { TrashView } from './TrashView';
+import { DOCUMENTS_KEY } from './queryKeys';
 
 /**
  * The hosted documents library: a TanStack Query-backed dashboard over the same
@@ -27,6 +27,18 @@ export function DocumentsPage() {
   const [search, setSearch] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const view = searchParams.get('view') === 'trash' ? 'trash' : 'documents';
+  const setView = (next: 'documents' | 'trash') => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'trash') {
+      params.set('view', 'trash');
+    } else {
+      params.delete('view');
+    }
+    setSearchParams(params);
+  };
 
   const documentsQuery = useQuery({ queryKey: DOCUMENTS_KEY, queryFn: listDocuments });
 
@@ -63,8 +75,8 @@ export function DocumentsPage() {
     ? documents.filter((document) => document.name.toLowerCase().includes(normalizedSearch))
     : documents;
 
-  return (
-    <main className="documents-page">
+  const chrome = (
+    <>
       <header className="documents-page__header">
         <div>
           <h1 className="documents-page__title">{t('library.title')}</h1>
@@ -79,6 +91,39 @@ export function DocumentsPage() {
         </button>
       </header>
 
+      <div className="documents-page__view-toggle" role="group" aria-label={t('library.viewLabel')}>
+        <button
+          type="button"
+          className="action-button"
+          aria-pressed={view === 'documents'}
+          onClick={() => setView('documents')}
+        >
+          {t('library.viewDocuments')}
+        </button>
+        <button
+          type="button"
+          className="action-button"
+          aria-pressed={view === 'trash'}
+          onClick={() => setView('trash')}
+        >
+          {t('library.viewTrash')}
+        </button>
+      </div>
+    </>
+  );
+
+  if (view === 'trash') {
+    return (
+      <main className="documents-page">
+        {chrome}
+        <TrashView />
+      </main>
+    );
+  }
+
+  return (
+    <main className="documents-page">
+      {chrome}
       <div className="filter-group">
         <input
           type="search"

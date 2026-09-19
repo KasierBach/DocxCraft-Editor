@@ -29,6 +29,7 @@ const EXISTING_DOCUMENT: SavedDocumentSummary = {
   sizeInBytes: 1024,
   lastOpenedAt: null,
   versionCount: 1,
+  deletedAt: null,
 };
 
 const EXISTING_VERSIONS: SavedDocumentVersionSummary[] = [
@@ -130,6 +131,7 @@ describe('useDocumentLibrary', () => {
       sizeInBytes: 4,
       lastOpenedAt: null,
       versionCount: 1,
+      deletedAt: null,
     };
 
     let resolveSave!: (document: SavedDocumentSummary) => void;
@@ -233,6 +235,7 @@ describe('useDocumentLibrary', () => {
       sizeInBytes: 4,
       lastOpenedAt: null,
       versionCount: 1,
+      deletedAt: null,
     };
     const createdVersions: SavedDocumentVersionSummary[] = [
       {
@@ -356,6 +359,7 @@ describe('useDocumentLibrary', () => {
       sizeInBytes: 1024,
       lastOpenedAt: null,
       versionCount: 1,
+      deletedAt: null,
     };
     const restoredDocument: SavedDocumentSummary = {
       ...renamedDocument,

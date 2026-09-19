@@ -13,6 +13,7 @@ const DOCUMENTS = [
     sizeInBytes: 1024,
     lastOpenedAt: '2026-05-25T05:25:00.000Z',
     versionCount: 2,
+    deletedAt: null,
   },
   {
     id: 'doc-2',
@@ -22,6 +23,7 @@ const DOCUMENTS = [
     sizeInBytes: 2048,
     lastOpenedAt: null,
     versionCount: 1,
+    deletedAt: null,
   },
 ] as const;
 
@@ -134,7 +136,7 @@ describe('SavedDocumentsPanel', () => {
     await user.click(screen.getAllByRole('button', { name: /delete proposal final\.docx/i })[0]!);
 
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByText(/delete this saved document\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/move this document to trash\? you can restore it for 30 days/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /confirm delete proposal final\.docx/i }));
 
@@ -146,7 +148,7 @@ describe('SavedDocumentsPanel', () => {
     resolveDelete();
 
     await waitFor(() => {
-      expect(screen.queryByText(/delete this saved document\?/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/move this document to trash/i)).not.toBeInTheDocument();
     });
   });
 });

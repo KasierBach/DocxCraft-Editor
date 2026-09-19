@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useTranslation } from '../../i18n';
 import { readAuthSession, type SavedDocumentSummary } from '../../lib/documentApi';
-import { formatBytes } from '../../lib/format';
+import { formatBytes, formatRelativeTime } from '../../lib/format';
 import { readRecoverySnapshot } from '../../lib/recoveryStore';
 import { useAuthGate } from '../auth/AuthGateContext';
 
@@ -13,31 +13,6 @@ type ProfileHeaderProps = {
 
 /** Same-origin: the provider photo is proxied so the browser can load it. */
 const ACCOUNT_AVATAR_PATH = '/api/account/avatar';
-
-const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-  ['year', 365 * 24 * 60 * 60 * 1000],
-  ['month', 30 * 24 * 60 * 60 * 1000],
-  ['day', 24 * 60 * 60 * 1000],
-  ['hour', 60 * 60 * 1000],
-  ['minute', 60 * 1000],
-  ['second', 1000],
-];
-
-function formatRelative(isoDate: string, language: string) {
-  const timestamp = Date.parse(isoDate);
-  if (Number.isNaN(timestamp)) return null;
-
-  const elapsed = timestamp - Date.now();
-  const formatter = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
-
-  for (const [unit, size] of RELATIVE_UNITS) {
-    if (Math.abs(elapsed) >= size) {
-      return formatter.format(Math.round(elapsed / size), unit);
-    }
-  }
-
-  return formatter.format(0, 'second');
-}
 
 function initialsFor(name: string | null | undefined, email: string | null | undefined) {
   const source = name?.trim() || email?.split('@')[0] || '';
@@ -126,7 +101,7 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
         <div className="profile-stat">
           <dt className="profile-stat__label">{t('profile.statLastEdited')}</dt>
           <dd className="profile-stat__value">
-            {lastEdited ? (formatRelative(lastEdited, language) ?? t('profile.statNone')) : t('profile.statNone')}
+            {lastEdited ? (formatRelativeTime(lastEdited, language) ?? t('profile.statNone')) : t('profile.statNone')}
           </dd>
         </div>
         <div className="profile-stat">

@@ -413,6 +413,7 @@ export class FileDocumentStore implements DocumentStorePort {
       lastOpenedAt: document.lastOpenedAt,
       versionCount: document.versionCount,
       revision: document.revision,
+      deletedAt: document.deletedAt ?? null,
     };
   }
 

@@ -237,6 +237,31 @@ export async function deleteDocument(documentId: string) {
   }
 }
 
+export async function listTrash() {
+  return dedupeRequest('list-trash', async () => {
+    const response = await fetch(`${DOCUMENTS_API_PATH}/trash`, withRequestTimeout());
+    return readJson<SavedDocumentSummary[]>(response);
+  });
+}
+
+export async function restoreDocument(documentId: string) {
+  const response = await fetch(`${DOCUMENTS_API_PATH}/${documentId}/restore`, withRequestTimeout({
+    method: 'POST',
+  }));
+
+  return readJson<SavedDocumentSummary>(response);
+}
+
+export async function purgeDocument(documentId: string) {
+  const response = await fetch(`${DOCUMENTS_API_PATH}/${documentId}/purge`, withRequestTimeout({
+    method: 'DELETE',
+  }));
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+}
+
 export async function readDocumentContent(documentId: string, options?: ReadDocumentOptions) {
   const markOpened = options?.markOpened === true ? 'opened' : 'plain';
   return dedupeRequest(`read-content-${documentId}-${markOpened}`, async () => {

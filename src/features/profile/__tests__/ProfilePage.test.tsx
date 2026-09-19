@@ -106,6 +106,7 @@ describe('ProfilePage', () => {
         sizeInBytes: 2048,
         lastOpenedAt: null,
         versionCount: 3,
+        deletedAt: null,
       },
     ]);
 

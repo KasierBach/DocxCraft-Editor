@@ -22,6 +22,7 @@ function makeDocument(
   sizeInBytes: number;
   lastOpenedAt: string | null;
   versionCount: number;
+  deletedAt: string | null;
 } {
   return {
     id,
@@ -31,6 +32,7 @@ function makeDocument(
     sizeInBytes: 2048,
     lastOpenedAt,
     versionCount: 2,
+    deletedAt: null,
   };
 }
 

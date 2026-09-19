@@ -33,6 +33,7 @@ type DocumentRow = {
   revision: number;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt: Date | null;
 };
 
 type VersionRow = {
@@ -54,6 +55,7 @@ function toDocumentSummary(row: DocumentRow): SavedDocumentSummary {
     lastOpenedAt: row.lastOpenedAt ? row.lastOpenedAt.toISOString() : null,
     versionCount: row.versionCount,
     revision: row.revision,
+    deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
   };
 }
 

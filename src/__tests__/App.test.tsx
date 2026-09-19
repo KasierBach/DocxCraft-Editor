@@ -248,6 +248,7 @@ describe('App', () => {
       sizeInBytes: 4,
       lastOpenedAt: null,
       versionCount: 1,
+      deletedAt: null,
     });
 
     render(<App />);
