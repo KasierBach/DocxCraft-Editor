@@ -8,6 +8,9 @@ test-results/
 # Brainstorming mockups (local scratch, not for version control)
 .superpowers/
 
+# Agent tooling output (local analysis, not for version control)
+.claude/
+
 # Build output
 dist
 dist-ssr

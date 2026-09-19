@@ -62,7 +62,6 @@ jobs:
       - run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
-      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - name: Apply database migrations
@@ -70,6 +69,12 @@ jobs:
       - run: npm run test:coverage
       - run: npm run test:e2e
       - run: npm run build
+
+      # Last, so a registry outage cannot skip the gates above it. npm audit
+      # fails both when it finds vulnerabilities and when the advisory service
+      # is unreachable, and it used to sit first: a 503 from npm meant this job
+      # reported red without ever running the suite.
+      - run: npm audit --audit-level=high
 
       - name: Upload build artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
