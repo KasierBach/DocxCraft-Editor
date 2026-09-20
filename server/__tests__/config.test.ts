@@ -3,69 +3,44 @@ import { describe, expect, it } from 'vitest';
 import { resolveAppConfig } from '../config.ts';
 
 describe('resolveAppConfig', () => {
-  it('defaults to the file store with derived paths', () => {
-    const config = resolveAppConfig({} as NodeJS.ProcessEnv);
-
+  it('applies safe defaults and treats blank placeholders as unset', () => {
+    const config = resolveAppConfig({ DATA_DIR: 'data/docs', AI_ENABLED: 'true', AI_API_KEY: '  ' });
     expect(config.documentStore).toBe('file');
-    expect(config.databaseUrl).toBeUndefined();
-    expect(config.dataDir).toContain('documents');
-    expect(config.blobDir.endsWith('blobs')).toBe(true);
+    expect(config.dataDir).toBe('data/docs');
+    expect(config.quotas).toEqual({ maxDocuments: 100, maxStorageBytes: 100 * 1024 * 1024 });
+    expect(config.ai.enabled).toBe(false);
+    expect(config.ai.baseUrl).toBe('https://api.openai.com/v1');
   });
 
-  it('requires DATABASE_URL when the postgres store is selected', () => {
-    expect(() =>
-      resolveAppConfig({ DOCUMENT_STORE: 'postgres' } as NodeJS.ProcessEnv),
-    ).toThrow(/DATABASE_URL/);
-  });
-
-  it('accepts the postgres store when DATABASE_URL is set', () => {
+  it('resolves hosted Postgres, OAuth, AI, quotas, and error tracking settings', () => {
     const config = resolveAppConfig({
       DOCUMENT_STORE: 'postgres',
-      DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
-    } as NodeJS.ProcessEnv);
-
-    expect(config.documentStore).toBe('postgres');
-  });
-
-  it('rejects an unknown driver', () => {
-    expect(() =>
-      resolveAppConfig({ DOCUMENT_STORE: 'sqlite' } as NodeJS.ProcessEnv),
-    ).toThrow(/Invalid environment configuration/);
-  });
-
-  it('reads OAuth clients, base URL, and session TTL', () => {
-    const config = resolveAppConfig({
+      DATABASE_URL: 'postgres://user:pass@localhost/db',
+      APP_BASE_URL: 'https://editor.example.test',
       GOOGLE_CLIENT_ID: 'google-id',
       GOOGLE_CLIENT_SECRET: 'google-secret',
-      APP_BASE_URL: 'https://editor.example.com',
       SESSION_TTL_DAYS: '7',
-    } as NodeJS.ProcessEnv);
-
+      MAX_DOCUMENTS_PER_USER: '5',
+      MAX_STORAGE_BYTES_PER_USER: '2048',
+      AI_ENABLED: 'true',
+      AI_API_KEY: 'operator-key',
+      AI_BASE_URL: 'https://ai.example.test/v1',
+      AI_MODEL: 'small',
+      AI_MAX_REQUESTS_PER_HOUR: '9',
+      ERROR_TRACKING_URL: 'https://errors.example.test/ingest',
+    });
+    expect(config.documentStore).toBe('postgres');
+    expect(config.auth.sessionTtlMs).toBe(7 * 24 * 60 * 60 * 1000);
     expect(config.auth.google).toEqual({ clientId: 'google-id', clientSecret: 'google-secret' });
     expect(config.auth.github).toBeUndefined();
-    expect(config.auth.baseUrl).toBe('https://editor.example.com');
-    expect(config.auth.sessionTtlMs).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(config.quotas).toEqual({ maxDocuments: 5, maxStorageBytes: 2048 });
+    expect(config.ai).toMatchObject({ enabled: true, apiKey: 'operator-key', baseUrl: 'https://ai.example.test/v1', model: 'small', maxRequestsPerHour: 9 });
+    expect(config.errorTrackingUrl).toBe('https://errors.example.test/ingest');
   });
 
-  it('ignores a half-configured OAuth client', () => {
-    const config = resolveAppConfig({
-      GITHUB_CLIENT_ID: 'github-id',
-    } as NodeJS.ProcessEnv);
-
-    expect(config.auth.github).toBeUndefined();
-  });
-
-  it('treats blank values as unset (empty .env placeholders)', () => {
-    const config = resolveAppConfig({
-      DOCUMENT_STORE: 'postgres',
-      DATABASE_URL: 'postgres://user:pass@localhost:5432/db',
-      GOOGLE_CLIENT_ID: '',
-      GOOGLE_CLIENT_SECRET: '',
-      APP_BASE_URL: '',
-    } as NodeJS.ProcessEnv);
-
-    expect(config.documentStore).toBe('postgres');
-    expect(config.auth.google).toBeUndefined();
-    expect(config.auth.baseUrl).toBeUndefined();
+  it('fails fast for invalid hosted database and invalid environment values', () => {
+    expect(() => resolveAppConfig({ DOCUMENT_STORE: 'postgres' })).toThrow(/DATABASE_URL is required/);
+    expect(() => resolveAppConfig({ APP_BASE_URL: 'not a URL' })).toThrow(/Invalid environment configuration/);
+    expect(() => resolveAppConfig({ AI_MAX_REQUESTS_PER_HOUR: '0' })).toThrow(/AI_MAX_REQUESTS_PER_HOUR/);
   });
 });

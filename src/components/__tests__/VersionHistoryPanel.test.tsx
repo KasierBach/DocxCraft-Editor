@@ -2,9 +2,56 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { compareDocumentVersions } from '../../lib/documentApi';
 import { VersionHistoryPanel } from '../VersionHistoryPanel';
 
+vi.mock('../../lib/documentApi', () => ({
+  compareDocumentVersions: vi.fn(),
+}));
+
 describe('VersionHistoryPanel', () => {
+  it('compares an older version with the latest and renders the diff', async () => {
+    vi.mocked(compareDocumentVersions).mockResolvedValue({
+      added: ['A new conclusion.'],
+      removed: ['The old conclusion.'],
+    });
+
+    const user = userEvent.setup();
+    render(
+      <VersionHistoryPanel
+        documentName="Proposal.docx"
+        documentId="doc-1"
+        isLoading={false}
+        versions={[
+          {
+            id: 'ver-2',
+            documentId: 'doc-1',
+            name: 'Proposal Final.docx',
+            createdAt: '2026-05-25T05:22:00.000Z',
+            sizeInBytes: 2048,
+          },
+          {
+            id: 'ver-1',
+            documentId: 'doc-1',
+            name: 'Proposal.docx',
+            createdAt: '2026-05-25T05:21:00.000Z',
+            sizeInBytes: 1024,
+          },
+        ]}
+        onRestore={vi.fn()}
+        onDownload={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+
+    await waitFor(() => {
+      expect(compareDocumentVersions).toHaveBeenCalledWith('doc-1', 'ver-1', 'ver-2');
+      expect(screen.getByRole('status')).toHaveTextContent('+ A new conclusion.');
+      expect(screen.getByRole('status')).toHaveTextContent('- The old conclusion.');
+    });
+  });
+
   it('renders versions and triggers restore/download actions', async () => {
     let resolveRestore!: () => void;
     const restorePromise = new Promise<void>((resolve) => {
