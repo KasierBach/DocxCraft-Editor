@@ -43,6 +43,29 @@ describe('activityLabel', () => {
     expect(activityLabel(makeEvent({ action: 'account.sign_in' }), t)).toBe('Signed in');
   });
 
+  it.each([
+    ['document.update', 'Saved a document'],
+    ['document.delete', 'Deleted a document'],
+    ['document.restore', 'Restored a document'],
+    ['document.purge', 'Permanently deleted a document'],
+    ['document.duplicate', 'Duplicated a document'],
+    ['account.export', 'Exported account data'],
+    ['account.delete', 'Deleted the account'],
+    ['account.profile_update', 'Updated the display name'],
+    ['account.provider_disconnect', 'Disconnected a sign-in provider'],
+  ] as const)('labels %s', (action, expected) => {
+    expect(activityLabel(makeEvent({ action }), t)).toBe(expected);
+  });
+
+  it('falls back when rename names are empty', () => {
+    expect(
+      activityLabel(
+        makeEvent({ action: 'document.rename', metadata: { previousName: '', newName: 'Renamed.docx' } }),
+        t,
+      ),
+    ).toBe('Renamed a document');
+  });
+
   it('tolerates an action the client does not know', () => {
     expect(activityLabel(makeEvent({ action: 'future.something' }), t)).toBe('Account activity');
   });

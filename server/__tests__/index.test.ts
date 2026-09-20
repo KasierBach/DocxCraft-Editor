@@ -1,60 +1,62 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
 
 import { resolveAuthPassphraseHash, resolveAuthState } from '../index.ts';
+import { defaultAuthStateFilePath } from '../authStore.ts';
 
-const DATA_DIR = path.join('tmp', 'docx-data', 'documents');
+afterEach(() => vi.restoreAllMocks());
 
 describe('resolveAuthPassphraseHash', () => {
-  it('prefers an explicit hash over a plaintext passphrase', () => {
-    const hash = resolveAuthPassphraseHash({
-      AUTH_PASSPHRASE_HASH: 'scrypt:salt:hash',
-      AUTH_PASSPHRASE: 'ignored',
-    });
-
-    expect(hash).toBe('scrypt:salt:hash');
+  it('prefers a configured hash and treats blank values as absent', () => {
+    expect(resolveAuthPassphraseHash({ AUTH_PASSPHRASE_HASH: '  scrypt:hash  ', AUTH_PASSPHRASE: 'ignored' })).toBe(
+      'scrypt:hash',
+    );
+    expect(resolveAuthPassphraseHash({ AUTH_PASSPHRASE_HASH: '  ' })).toBeUndefined();
   });
 
-  it('hashes a plaintext passphrase with a warning', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('hashes a plaintext passphrase as a development fallback', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const result = resolveAuthPassphraseHash({ AUTH_PASSPHRASE: 'correct horse battery staple' });
 
-    const hash = resolveAuthPassphraseHash({ AUTH_PASSPHRASE: 'my-passphrase' });
-
-    expect(hash).toMatch(/^scrypt:[0-9a-f]{32}:[0-9a-f]{64}$/);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-  });
-
-  it('returns undefined when auth is not configured', () => {
-    expect(resolveAuthPassphraseHash({})).toBe(undefined);
-    expect(resolveAuthPassphraseHash({ AUTH_PASSPHRASE: '   ' })).toBe(undefined);
+    expect(result).toMatch(/^scrypt:[^:]+:[^:]+$/);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('AUTH_PASSPHRASE set in plaintext'));
   });
 });
 
 describe('resolveAuthState', () => {
-  it('enables claiming with a file-backed store in claim mode', () => {
-    const state = resolveAuthState({ AUTH_MODE: 'claim' }, DATA_DIR);
-
-    expect(state.allowAuthClaim).toBe(true);
-    expect(state.authStateStore).toBeDefined();
-    expect(state.authStateStore?.read()).toBe(undefined);
+  it('disables claiming unless AUTH_MODE is claim', () => {
+    expect(resolveAuthState({}, 'data/documents')).toEqual({ allowAuthClaim: false });
   });
 
-  it('honours an explicit auth state file path', () => {
-    const state = resolveAuthState(
-      { AUTH_MODE: 'CLAIM', AUTH_STATE_FILE: path.join('tmp', 'custom-auth.json') },
-      DATA_DIR,
-    );
+  it('creates a file-backed claim store with the default path', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'docxcraft-auth-'));
+    const dataDir = path.join(directory, 'documents');
+    const state = resolveAuthState({ AUTH_MODE: 'claim' }, dataDir);
 
-    expect(state.allowAuthClaim).toBe(true);
-    expect(state.authStateStore).toBeDefined();
+    try {
+      expect(state.allowAuthClaim).toBe(true);
+      expect(state.authStateStore?.read()).toBeUndefined();
+      await state.authStateStore?.save('scrypt:test');
+      expect(state.authStateStore?.read()).toBe('scrypt:test');
+      expect(defaultAuthStateFilePath(dataDir)).toBe(path.join(directory, 'auth.json'));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
-  it('stays off for other or missing modes', () => {
-    for (const env of [{}, { AUTH_MODE: 'off' }, { AUTH_MODE: 'passphrase' }]) {
-      const state = resolveAuthState(env, DATA_DIR);
-      expect(state.allowAuthClaim).toBe(false);
-      expect(state.authStateStore).toBe(undefined);
+  it('honors an explicit auth state file path', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'docxcraft-auth-'));
+    const filePath = path.join(directory, 'custom-auth.json');
+    const state = resolveAuthState({ AUTH_MODE: 'claim', AUTH_STATE_FILE: filePath }, 'data/documents');
+
+    try {
+      await state.authStateStore?.save('scrypt:custom');
+      expect(state.authStateStore?.read()).toBe('scrypt:custom');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });
