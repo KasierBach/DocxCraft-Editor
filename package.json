@@ -28,7 +28,8 @@
     "test:watch": "vitest",
     "test:changed": "vitest run --changed",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test && npm run test:e2e:auth",
+    "test:e2e:auth": "playwright test --config playwright.auth.config.ts",
     "test:load": "tsx scripts/load-test.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"

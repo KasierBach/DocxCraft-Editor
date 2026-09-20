@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/auth.passphrase.spec.ts'],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   // The editor and its local API share one browser-sized fixture. Running all
