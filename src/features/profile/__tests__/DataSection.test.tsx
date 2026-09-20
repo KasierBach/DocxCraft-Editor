@@ -14,14 +14,14 @@ vi.mock('../../../lib/documentApi', () => ({
 vi.mock('../../../lib/download', () => ({ triggerBlobDownload: vi.fn() }));
 vi.mock('../../../lib/navigation', () => ({ hardNavigate: vi.fn() }));
 vi.mock('../../../lib/recoveryStore', () => ({
-  readRecoverySnapshot: vi.fn(),
+  listRecoverySnapshots: vi.fn(),
   clearRecoverySnapshot: vi.fn(),
 }));
 
 import { listActivity } from '../../../lib/accountApi';
 import { deleteAccount, exportAccount, listDocuments } from '../../../lib/documentApi';
 import { triggerBlobDownload } from '../../../lib/download';
-import { clearRecoverySnapshot, readRecoverySnapshot } from '../../../lib/recoveryStore';
+import { clearRecoverySnapshot, listRecoverySnapshots } from '../../../lib/recoveryStore';
 
 const snapshot = {
   sourceKind: 'sample' as const,
@@ -37,7 +37,7 @@ describe('DataSection', () => {
     vi.clearAllMocks();
     vi.mocked(listDocuments).mockResolvedValue([]);
     vi.mocked(listActivity).mockResolvedValue({ events: [], nextCursor: null });
-    vi.mocked(readRecoverySnapshot).mockResolvedValue(null);
+    vi.mocked(listRecoverySnapshots).mockResolvedValue([]);
   });
 
   it('exports account data', async () => {
@@ -71,7 +71,7 @@ describe('DataSection', () => {
   });
 
   it('discards an unsaved recovery draft', async () => {
-    vi.mocked(readRecoverySnapshot).mockResolvedValue(snapshot);
+    vi.mocked(listRecoverySnapshots).mockResolvedValue([snapshot]);
     const user = userEvent.setup();
 
     renderProfile(<DataSection />);
@@ -80,6 +80,24 @@ describe('DataSection', () => {
     await user.click(screen.getByRole('button', { name: /discard draft/i }));
 
     await waitFor(() => expect(clearRecoverySnapshot).toHaveBeenCalledWith(snapshot));
+  });
+
+  it('manages every stored recovery draft and targets the selected draft', async () => {
+    const olderSnapshot = {
+      ...snapshot,
+      documentName: 'Older.docx',
+      savedAt: '2026-09-14T10:00:00.000Z',
+    };
+    vi.mocked(listRecoverySnapshots).mockResolvedValue([snapshot, olderSnapshot]);
+
+    renderProfile(<DataSection />);
+
+    expect(await screen.findByText('Draft.docx')).toBeInTheDocument();
+    expect(screen.getByText('Older.docx')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /restore in the editor/i })[1]).toHaveAttribute(
+      'href',
+      expect.stringContaining('recoveryName=Older.docx'),
+    );
   });
 
   it('deletes the account after confirmation', async () => {

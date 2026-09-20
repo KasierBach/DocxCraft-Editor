@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearRecoverySnapshot,
   listRecoverySnapshots,
+  recoverySnapshotIdentityFromSearch,
   readRecoverySnapshot,
   saveRecoverySnapshot,
   type RecoverySnapshot,
@@ -65,6 +66,22 @@ describe('recoveryStore', () => {
     await saveRecoverySnapshot(snapshot({ documentId: 'doc-c', savedAt: '2026-05-25T11:00:00.000Z' }));
 
     expect((await readRecoverySnapshot())?.documentId).toBe('doc-b');
+  });
+
+  it('reads the exact draft selected by the profile link', async () => {
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-a', savedAt: '2026-05-25T10:00:00.000Z' }));
+    await saveRecoverySnapshot(snapshot({ documentId: 'doc-b', savedAt: '2026-05-25T12:00:00.000Z' }));
+
+    const identity = recoverySnapshotIdentityFromSearch(
+      '?recoverySource=saved-document&recoveryName=Proposal.docx&recoveryDocumentId=doc-a',
+    );
+
+    expect(identity).toEqual({
+      sourceKind: 'saved-document',
+      documentId: 'doc-a',
+      documentName: 'Proposal.docx',
+    });
+    expect((await readRecoverySnapshot(identity))?.documentId).toBe('doc-a');
   });
 
   it('lists every draft, newest first, so a count is real', async () => {

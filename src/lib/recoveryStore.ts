@@ -9,6 +9,11 @@ export type RecoverySnapshot = {
   buffer: ArrayBuffer;
 };
 
+export type RecoverySnapshotIdentity = Pick<
+  RecoverySnapshot,
+  'sourceKind' | 'documentId' | 'documentName'
+>;
+
 type StoredRecoverySnapshot = RecoverySnapshot & {
   key: string;
 };
@@ -24,7 +29,7 @@ const FALLBACK_STORAGE_KEY = 'docx-editor/recovery-snapshots';
 const LEGACY_FALLBACK_STORAGE_KEY = 'docx-editor/recovery-snapshot';
 const MAX_FALLBACK_SNAPSHOTS = 5;
 
-function snapshotKey(snapshot: Pick<RecoverySnapshot, 'sourceKind' | 'documentId' | 'documentName'>) {
+function snapshotKey(snapshot: RecoverySnapshotIdentity) {
   return snapshot.documentId
     ? `saved-document:${snapshot.documentId}`
     : `${snapshot.sourceKind}:${snapshot.documentName}`;
@@ -214,9 +219,33 @@ export async function listRecoverySnapshots(): Promise<RecoverySnapshot[]> {
   return readAllRecoverySnapshots();
 }
 
-export async function readRecoverySnapshot(): Promise<RecoverySnapshot | null> {
+export function recoverySnapshotIdentityFromSearch(search: string): RecoverySnapshotIdentity | null {
+  const params = new URLSearchParams(search);
+  const sourceKind = params.get('recoverySource');
+  const documentName = params.get('recoveryName')?.trim();
+
+  if (
+    (sourceKind !== 'sample' && sourceKind !== 'local-file' && sourceKind !== 'saved-document') ||
+    !documentName
+  ) {
+    return null;
+  }
+
+  return {
+    sourceKind,
+    documentId: params.get('recoveryDocumentId')?.trim() || null,
+    documentName,
+  };
+}
+
+export async function readRecoverySnapshot(
+  identity?: RecoverySnapshotIdentity | null,
+): Promise<RecoverySnapshot | null> {
   const snapshots = await readAllRecoverySnapshots();
-  return snapshots[0] ?? null;
+  if (!identity) return snapshots[0] ?? null;
+
+  const key = snapshotKey(identity);
+  return snapshots.find((snapshot) => snapshotKey(snapshot) === key) ?? null;
 }
 
 export async function saveRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {

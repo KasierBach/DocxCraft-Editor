@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   clearRecoverySnapshot,
+  recoverySnapshotIdentityFromSearch,
   readRecoverySnapshot,
   saveRecoverySnapshot,
   type RecoverySnapshot,
+  type RecoverySnapshotIdentity,
   type RecoverySourceKind,
 } from '../lib/recoveryStore';
 
@@ -29,11 +31,14 @@ export function useRecoveryDraft({
 }: UseRecoveryDraftOptions) {
   const [recoverySnapshot, setRecoverySnapshot] = useState<RecoverySnapshot | null>(null);
   const saveRecoveryTaskRef = useRef<Promise<RecoverySnapshot | null> | null>(null);
+  const recoveryTargetRef = useRef<RecoverySnapshotIdentity | null>(
+    typeof window === 'undefined' ? null : recoverySnapshotIdentityFromSearch(window.location.search),
+  );
   // Bumped by every discard so in-flight saves stop applying their results.
   const saveEpochRef = useRef(0);
 
   const refreshRecovery = useCallback(async () => {
-    const snapshot = await readRecoverySnapshot();
+    const snapshot = await readRecoverySnapshot(recoveryTargetRef.current);
     setRecoverySnapshot(snapshot);
     return snapshot;
   }, []);

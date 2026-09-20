@@ -9,7 +9,7 @@ import { formatBytes, formatDateTime } from '../../../lib/format';
 import { hardNavigate } from '../../../lib/navigation';
 import {
   clearRecoverySnapshot,
-  readRecoverySnapshot,
+  listRecoverySnapshots,
   type RecoverySnapshot,
 } from '../../../lib/recoveryStore';
 import { useAccountActivity } from '../useAccountActivity';
@@ -19,13 +19,16 @@ export function DataSection() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const documentsQuery = useQuery({ queryKey: ['account', 'documents'], queryFn: listDocuments });
-  const recoveryQuery = useQuery({ queryKey: ['account', 'recovery'], queryFn: readRecoverySnapshot });
+  const recoveryQuery = useQuery({
+    queryKey: ['account', 'recovery'],
+    queryFn: listRecoverySnapshots,
+  });
   const activity = useAccountActivity();
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
-  const snapshot = recoveryQuery.data ?? null;
+  const snapshots = recoveryQuery.data ?? [];
   const totalBytes = (documentsQuery.data ?? []).reduce(
     (sum, document) => sum + document.sizeInBytes,
     0,
@@ -91,27 +94,36 @@ export function DataSection() {
 
       <section className="profile-section">
         <h3>{t('profile.unsavedWork')}</h3>
-        {snapshot ? (
-          <>
-            <p className="panel-copy">
-              {t('profile.unsavedWorkHint', { name: snapshot.documentName })}
-            </p>
-            <p className="panel-copy">{formatDateTime(snapshot.savedAt)}</p>
-            <div className="profile-actions">
-              {/* ponytail: restoring needs the editor's buffer handoff, so link to the editor's existing restore UI instead of replaying it here. */}
-              <Link className="action-button" to="/app">
-                {t('profile.restoreInEditor')}
-              </Link>
-              <button
-                type="button"
-                className="action-button"
-                onClick={() => discardMutation.mutate(snapshot)}
-                disabled={discardMutation.isPending}
-              >
-                {t('profile.discardDraft')}
-              </button>
-            </div>
-          </>
+        {snapshots.length > 0 ? (
+          <ul className="documents-list">
+            {snapshots.map((draft) => {
+              const search = new URLSearchParams({
+                recoverySource: draft.sourceKind,
+                recoveryName: draft.documentName,
+              });
+              if (draft.documentId) search.set('recoveryDocumentId', draft.documentId);
+
+              return (
+                <li key={`${draft.sourceKind}:${draft.documentId ?? draft.documentName}`} className="saved-document-card">
+                  <strong className="saved-document-card__name">{draft.documentName}</strong>
+                  <span className="saved-document-card__meta">{formatDateTime(draft.savedAt)}</span>
+                  <div className="profile-actions">
+                    <Link className="action-button" to={`/app?${search.toString()}`}>
+                      {t('profile.restoreInEditor')}
+                    </Link>
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => discardMutation.mutate(draft)}
+                      disabled={discardMutation.isPending}
+                    >
+                      {t('profile.discardDraft')}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <p className="panel-copy">{t('profile.noUnsavedWork')}</p>
         )}

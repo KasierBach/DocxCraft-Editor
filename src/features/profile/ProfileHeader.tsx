@@ -42,7 +42,7 @@ export function ProfileHeader({ documents }: ProfileHeaderProps) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const sessionQuery = useQuery({ queryKey: ['session'], queryFn: readAuthSession });
   const recoveryQuery = useQuery({
-    queryKey: ['account', 'recovery', 'list'],
+    queryKey: ['account', 'recovery'],
     queryFn: listRecoverySnapshots,
   });
   const providersQuery = useQuery({ queryKey: ['account', 'providers'], queryFn: listProviders });
