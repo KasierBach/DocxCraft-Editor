@@ -306,6 +306,17 @@ const DEFAULT_STATIC_DIR = path.join(
   'dist',
 );
 
+const PUBLIC_SEO_PATHS = ['/', '/docs', '/changelog', '/privacy', '/terms'] as const;
+
+function publicOrigin(request: FastifyRequest, configuredOrigin?: string) {
+  return (configuredOrigin ?? `${request.protocol}://${request.host}`).replace(/\/+$/, '');
+}
+
+function renderSitemap(origin: string) {
+  const urls = PUBLIC_SEO_PATHS.map((pathName) => `<url><loc>${origin}${pathName}</loc></url>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>\n`;
+}
+
 export function buildDocumentApiApp({
   store,
   logger = false,
@@ -348,6 +359,24 @@ export function buildDocumentApiApp({
     staticDir === ''
       ? undefined
       : staticDir ?? (existsSync(DEFAULT_STATIC_DIR) ? DEFAULT_STATIC_DIR : undefined);
+
+  app.get('/robots.txt', async (request, reply) => {
+    const origin = publicOrigin(request, accounts?.baseUrl);
+    return reply
+      .type('text/plain')
+      .header('cache-control', 'public, max-age=300')
+      .send(
+        `# Public reference pages are indexable; app surfaces are not.\nUser-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /app\nDisallow: /documents\nDisallow: /settings\nDisallow: /login\nDisallow: /setup\nSitemap: ${origin}/sitemap.xml\n`,
+      );
+  });
+
+  app.get('/sitemap.xml', async (request, reply) => {
+    const origin = publicOrigin(request, accounts?.baseUrl);
+    return reply
+      .type('application/xml')
+      .header('cache-control', 'public, max-age=300')
+      .send(renderSitemap(origin));
+  });
 
   if (resolvedStaticDir) {
     const hashedAssetsDirectory = path.join(resolvedStaticDir, 'assets');
@@ -572,6 +601,21 @@ export function buildDocumentApiApp({
     }
     if (!reply.hasHeader('content-security-policy')) {
       reply.header('content-security-policy', CSP_DIRECTIVES);
+    }
+
+    const contentType = reply.getHeader('content-type');
+    if (request.method === 'GET' && typeof contentType === 'string' && contentType.includes('text/html')) {
+      const pathName = request.url.split('?')[0] || '/';
+      reply.header('link', `<${publicOrigin(request, accounts?.baseUrl)}${pathName}>; rel="canonical"`);
+      if (
+        pathName === '/app' ||
+        pathName.startsWith('/documents') ||
+        pathName.startsWith('/settings') ||
+        pathName === '/login' ||
+        pathName === '/setup'
+      ) {
+        reply.header('x-robots-tag', 'noindex, nofollow');
+      }
     }
   });
 

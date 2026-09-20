@@ -888,6 +888,38 @@ describe('buildDocumentApiApp', () => {
         expect(response.headers['content-type']).toContain('text/html');
         expect(response.body).toContain('DocxCraft');
         expect(response.headers['cache-control']).toBe('no-cache');
+        expect(response.headers.link).toContain('rel="canonical"');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('serves host-aware robots and sitemap metadata', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const robots = await app.inject({ method: 'GET', url: '/robots.txt', headers: { host: 'editor.example.test' } });
+        expect(robots.statusCode).toBe(200);
+        expect(robots.headers['content-type']).toContain('text/plain');
+        expect(robots.body).toContain('Sitemap: http://editor.example.test/sitemap.xml');
+
+        const sitemap = await app.inject({ method: 'GET', url: '/sitemap.xml', headers: { host: 'editor.example.test' } });
+        expect(sitemap.statusCode).toBe(200);
+        expect(sitemap.headers['content-type']).toContain('application/xml');
+        expect(sitemap.body).toContain('<loc>http://editor.example.test/docs</loc>');
+        expect(sitemap.body).not.toContain('/app');
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('marks private app surfaces as noindex', async () => {
+      const app = await createStaticApp();
+
+      try {
+        const response = await app.inject({ method: 'GET', url: '/settings/profile' });
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['x-robots-tag']).toBe('noindex, nofollow');
       } finally {
         await app.close();
       }
