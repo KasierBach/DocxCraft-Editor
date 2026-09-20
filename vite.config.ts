@@ -40,7 +40,9 @@ export default defineConfig({
         // Prisma-generated client.
         'server/generated/**',
       ],
-      thresholds: { lines: 78, functions: 74, statements: 76, branches: 67 },
+      // Keep the gate above the pre-feature baseline while leaving a small
+      // buffer for generated/runtime branches that are intentionally excluded.
+      thresholds: { lines: 83, functions: 81, statements: 82, branches: 70 },
       // Without this a failing suite suppresses the report entirely, so CI
       // shows no numbers to act on.
       reportOnFailure: true,

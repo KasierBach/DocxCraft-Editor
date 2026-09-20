@@ -4,7 +4,12 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
+  // The editor and its local API share one browser-sized fixture. Running all
+  // four projects in parallel exhausts the Windows/CI renderer budget and
+  // creates false setup timeouts; keep the default deterministic and allow an
+  // explicit override for larger runners.
+  fullyParallel: false,
+  workers: Math.max(1, Number(process.env.PW_WORKERS ?? '1') || 1),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI

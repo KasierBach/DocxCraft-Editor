@@ -1,0 +1,10 @@
+{
+  "name": "DocxCraft Editor",
+  "short_name": "DocxCraft",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f0",
+  "theme_color": "#ffe14d",
+  "description": "Local-first .docx editor with recovery and version history.",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

@@ -38,7 +38,34 @@ services:
       timeout: 5s
       retries: 10
 
+  # Apply every checked-in Prisma migration to the development database.
+  # Run with: npm run db:migrate:docker
+  postgres-migrate:
+    profiles: ["migrate"]
+    build:
+      context: .
+      target: build
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://docxcraft:docxcraft@postgres:5432/docxcraft
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # The same migration command against the throwaway integration-test database.
+  # Run with: npm run db:test:migrate:docker
+  postgres-test-migrate:
+    profiles: ["migrate"]
+    build:
+      context: .
+      target: build
+    command: ["npm", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://docxcraft:docxcraft@postgres-test:5432/docxcraft_test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+
 volumes:
   postgres-dev-data:
   postgres-test-data:
-

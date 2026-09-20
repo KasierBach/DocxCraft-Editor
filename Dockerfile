@@ -3,6 +3,12 @@
 FROM node:22-slim AS build
 WORKDIR /app
 
+# Prisma's CLI needs OpenSSL on the slim base image (without it it falls back
+# to openssl-1.1.x and emits a runtime warning).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
@@ -17,6 +23,10 @@ ENV NODE_ENV=production \
     LOG_LEVEL=info
 
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
