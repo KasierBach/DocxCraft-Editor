@@ -12,6 +12,7 @@ import { ShortcutHelpModal } from './components/ui/ShortcutHelpModal';
 import { ToastViewport } from './components/ToastViewport';
 import { FirstRunOnboarding } from './features/landing/FirstRunOnboarding';
 import { GuestBanner } from './features/auth/GuestBanner';
+import { AiPanel } from './features/ai/AiPanel';
 import { logout } from './lib/documentApi';
 import { useAuthGate } from './features/auth/AuthGateContext';
 import { createDemoDocument } from './demoDocument';
@@ -39,6 +40,7 @@ import { resolveActiveAnchorId } from './lib/resolveActiveAnchor';
 import './app.css';
 import './styles/components/modals.css';
 import './styles/components/command-palette.css';
+import './styles/components/ai-panel.css';
 import './styles/layout/status-bar.css';
 import './styles/layout/breadcrumbs.css';
 
@@ -1240,6 +1242,21 @@ export default function App() {
               // keys fall back), Vietnamese is overridden with our catalog.
               i18n={language === 'vi' ? editorVi : undefined}
               className="docx-editor-frame"
+              agentPanel={{
+                title: 'Assistant',
+                render: ({ close }) => (
+                  <AiPanel
+                    editorRef={editorRef}
+                    documentName={documentName}
+                    onDocumentChanged={() => {
+                      setIsDirty(true);
+                      setStatusMessage(t('app.unsavedChanges'));
+                      scheduleAnchorRefresh();
+                    }}
+                    close={close}
+                  />
+                ),
+              }}
               onChange={() => {
                 if (Date.now() < ignoreContentChangeUntilRef.current) {
                   return;

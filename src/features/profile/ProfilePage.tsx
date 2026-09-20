@@ -8,12 +8,18 @@ import { DataSection } from './sections/DataSection';
 import { ProfileSection } from './sections/ProfileSection';
 import { SecuritySection } from './sections/SecuritySection';
 import { WorkspaceSection } from './sections/WorkspaceSection';
+import { AiSettingsSection } from './sections/AiSettingsSection';
+import { NotificationsSection } from './sections/NotificationsSection';
+import { TemplatesSection } from './sections/TemplatesSection';
 
 const SECTIONS = [
   { id: 'profile', labelKey: 'profile.sectionProfile' },
   { id: 'workspace', labelKey: 'profile.sectionWorkspace' },
   { id: 'security', labelKey: 'profile.sectionSecurity' },
   { id: 'data', labelKey: 'profile.sectionData' },
+  { id: 'ai', labelKey: 'profile.sectionAi' },
+  { id: 'notifications', labelKey: 'profile.sectionNotifications' },
+  { id: 'templates', labelKey: 'profile.sectionTemplates' },
 ] as const;
 
 type ProfileSectionId = (typeof SECTIONS)[number]['id'];
@@ -68,6 +74,9 @@ export function ProfilePage() {
           {activeSection === 'workspace' && <WorkspaceSection />}
           {activeSection === 'security' && <SecuritySection />}
           {activeSection === 'data' && <DataSection />}
+          {activeSection === 'ai' && <AiSettingsSection />}
+          {activeSection === 'notifications' && <NotificationsSection />}
+          {activeSection === 'templates' && <TemplatesSection />}
         </div>
       </div>
     </main>

@@ -13,6 +13,7 @@ import { loadEnvFileIfPresent } from './loadEnv.ts';
 import { createServerLoggerOptions } from './logger.ts';
 import { SessionService } from './session.ts';
 import { createDocumentStoreFromConfig } from './storeFactory.ts';
+import { WorkspaceService } from './workspace.ts';
 
 export const DEFAULT_PORT = 4175;
 
@@ -102,6 +103,7 @@ export async function startDocumentApiServer({
   const config = resolveAppConfig(process.env);
   const { store, prisma } = createDocumentStoreFromConfig(config);
   const accounts = buildAccountsOptions(config, prisma);
+  const workspace = prisma ? new WorkspaceService({ prisma }) : undefined;
   const { authStateStore, allowAuthClaim } = resolveAuthState(process.env, config.dataDir);
   const app = buildDocumentApiApp({
     store,
@@ -110,6 +112,9 @@ export async function startDocumentApiServer({
     authStateStore,
     allowAuthClaim,
     accounts,
+    workspace,
+    ai: config.ai,
+    errorTrackingUrl: config.errorTrackingUrl,
     quotas: config.quotas,
     logger: createServerLoggerOptions({
       env: process.env.NODE_ENV,

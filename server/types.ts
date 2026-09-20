@@ -48,6 +48,10 @@ export interface DocumentStorePort {
    * and returns itself; the Postgres store filters and stamps `ownerId`.
    */
   forOwner(ownerId: string): DocumentStorePort;
+  /** Read-only account view that also includes documents shared by email. */
+  forAccess?(userId: string, email: string): DocumentStorePort;
+  /** Account view that includes owned documents and editor shares. */
+  forEditor?(userId: string, email: string): DocumentStorePort;
   listDocuments(): Promise<SavedDocumentSummary[]>;
   listDeletedDocuments(): Promise<SavedDocumentSummary[]>;
   listDocumentVersions(documentId: string): Promise<SavedDocumentVersionSummary[]>;

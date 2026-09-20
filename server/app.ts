@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { lookup } from 'node:dns/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +10,8 @@ import fastifyStatic from '@fastify/static';
 import { z } from 'zod';
 
 import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
+import { extractDocxText } from './docxText.ts';
+import { reportServerError } from './errorTracking.ts';
 import { validateDocx } from './docxValidation.ts';
 import type { AuthStateStore } from './authStore.ts';
 import {
@@ -22,6 +25,8 @@ import { readCookies } from './cookies.ts';
 import { QuotaExceededError, assertWithinQuota as checkQuota } from './quotas.ts';
 import { SESSION_COOKIE_NAME } from './session.ts';
 import type { DocumentStorePort } from './types.ts';
+import { registerWorkspaceRoutes, type AiGatewayConfig } from './workspaceRoutes.ts';
+import { WorkspaceError, type WorkspaceService } from './workspace.ts';
 import {
   createClearCookie,
   createSessionCookie,
@@ -66,11 +71,18 @@ const documentVersionParamsSchema = z.object({
   versionId: z.string().min(1),
 });
 
+const compareQuerySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+});
+
 const documentNameSchema = z.string().trim().min(1).max(255);
 
 const renameDocumentBodySchema = z.object({
   name: documentNameSchema,
 });
+
+const importUrlBodySchema = z.object({ url: z.string().url().max(2048) });
 
 const documentContentQuerySchema = z.object({
   markOpened: z
@@ -162,6 +174,47 @@ function parseWithSchema<T>(schema: z.ZodType<T>, input: unknown) {
   return result.data;
 }
 
+async function assertPublicImportUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') throw new RequestValidationError();
+    const addresses = await lookup(url.hostname, { all: true });
+    if (
+      addresses.some(({ address }) =>
+        /^(10\.|127\.|169\.254\.|192\.168\.|0\.)/.test(address) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(address) ||
+        address === '::1' ||
+        address.startsWith('fc') ||
+        address.startsWith('fd') ||
+        address.startsWith('fe80:')
+      )
+    ) {
+      throw new RequestValidationError();
+    }
+    return url;
+  } catch (error) {
+    if (error instanceof RequestValidationError) throw error;
+    throw new RequestValidationError();
+  }
+}
+
+function importedDocumentName(url: URL) {
+  const lastSegment = decodeURIComponent(url.pathname.split('/').pop() ?? '').replace(/[\\/:*?"<>|]/g, '').trim();
+  return (lastSegment || 'Imported document').slice(0, 255);
+}
+
+async function fetchImportedDocument(url: URL) {
+  let currentUrl = url;
+  for (let redirect = 0; redirect < 4; redirect += 1) {
+    const response = await fetch(currentUrl, { redirect: 'manual' });
+    if (response.status < 300 || response.status >= 400) return { response, url: currentUrl };
+    const location = response.headers.get('location');
+    if (!location) throw new RequestValidationError();
+    currentUrl = await assertPublicImportUrl(new URL(location, currentUrl).toString());
+  }
+  throw new RequestValidationError();
+}
+
 export const RATE_LIMIT_MAX_REQUESTS = 300;
 export const RATE_LIMIT_TIME_WINDOW_MS = 60_000;
 
@@ -181,6 +234,9 @@ export function buildDocumentApiApp({
   authStateStore,
   allowAuthClaim = false,
   accounts,
+  workspace,
+  ai,
+  errorTrackingUrl,
   quotas,
 }: {
   store: DocumentStorePort;
@@ -194,6 +250,9 @@ export function buildDocumentApiApp({
   allowAuthClaim?: boolean;
   /** Hosted accounts (guest + OAuth). Omit for the self-host passphrase flow. */
   accounts?: AccountsOptions;
+  workspace?: WorkspaceService;
+  ai?: AiGatewayConfig;
+  errorTrackingUrl?: string;
   /** Per-owner limits; only enforced when accounts are enabled. */
   quotas?: { maxDocuments: number; maxStorageBytes: number };
 }): FastifyInstance {
@@ -393,9 +452,24 @@ export function buildDocumentApiApp({
     }
 
     if (accounts) {
-  registerAccountRoutes(scope, accounts);
-  registerAccountDataRoutes(scope, accounts);
-  registerAccountProfileRoutes(scope, accounts);
+      registerAccountRoutes(scope, accounts);
+      registerAccountDataRoutes(scope, accounts);
+      registerAccountProfileRoutes(scope, accounts);
+      if (workspace) {
+        registerWorkspaceRoutes(scope, {
+          accounts,
+          workspace,
+          ai: ai ?? {
+            enabled: false,
+            provider: 'openai-compatible',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-4o-mini',
+            maxRequestsPerHour: 0,
+          },
+          audit: accounts.audit,
+          quotas,
+        });
+      }
     }
 
     registerDocumentRoutes(scope, store, accounts, quotas);
@@ -419,7 +493,12 @@ export function buildDocumentApiApp({
     },
   );
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof WorkspaceError) {
+      void reply.code(error.statusCode).send({ message: error.message });
+      return;
+    }
+
     if (error instanceof QuotaExceededError) {
       void reply.code(413).send({ message: error.message });
       return;
@@ -455,6 +534,7 @@ export function buildDocumentApiApp({
     }
 
     app.log.error(error);
+    reportServerError(errorTrackingUrl, error, request.id);
     void reply.code(500).send({ message: 'Unexpected server error.' });
   });
 
@@ -484,7 +564,11 @@ function registerDocumentRoutes(
   // With hosted accounts every document call runs against a store scoped to the
   // session's user. Without an account layer (self-host) the base store is used
   // directly and behaviour is unchanged.
-  const resolveScope = async (request: FastifyRequest, reply: FastifyReply) => {
+  const resolveScope = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    mode: 'read' | 'owner' | 'editor' = 'read',
+  ) => {
     if (!accounts) return { store, userId: null as string | null };
 
     const session = await accounts.sessions.resolve(
@@ -495,7 +579,13 @@ function registerDocumentRoutes(
       return null;
     }
 
-    return { store: store.forOwner(session.user.id), userId: session.user.id };
+    const scopedStore =
+      mode === 'read' && session.user.email && store.forAccess
+        ? store.forAccess(session.user.id, session.user.email)
+        : mode === 'editor' && session.user.email && store.forEditor
+          ? store.forEditor(session.user.id, session.user.email)
+          : store.forOwner(session.user.id);
+    return { store: scopedStore, userId: session.user.id };
   };
 
   const assertWithinQuota = (
@@ -510,7 +600,7 @@ function registerDocumentRoutes(
   });
 
   app.get('/api/documents/trash', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
     // Lazy sweep on read: expiry needs no scheduler, cron or extra
     // infrastructure, which is what a self-hoster can actually run.
@@ -527,7 +617,7 @@ function registerDocumentRoutes(
   });
 
   app.post('/api/documents', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
     const buffer = await readDocumentBuffer(request.body);
     await assertWithinQuota(scope.store, buffer.byteLength, { countLimit: true });
@@ -545,8 +635,25 @@ function registerDocumentRoutes(
     return reply.code(201).send(document);
   });
 
+  app.post('/api/documents/import-url', async (request, reply) => {
+    const scope = await resolveScope(request, reply, 'owner');
+    if (!scope) return reply;
+    const url = await assertPublicImportUrl(parseWithSchema(importUrlBodySchema, request.body).url);
+    const { response, url: resolvedUrl } = await fetchImportedDocument(url);
+    if (!response.ok || !response.body) throw new RequestValidationError();
+    const contentLength = Number(response.headers.get('content-length') ?? 0);
+    if (contentLength > MAX_DOCUMENT_BYTES) throw new RequestValidationError();
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    if (buffer.byteLength > MAX_DOCUMENT_BYTES) throw new RequestValidationError();
+    const validated = await readDocumentBuffer(buffer);
+    await assertWithinQuota(scope.store, validated.byteLength, { countLimit: true });
+    const document = await scope.store.saveNewDocument({ name: importedDocumentName(resolvedUrl), buffer: validated });
+    await accounts?.audit?.record({ action: 'document.create', actorUserId: scope.userId, documentId: document.id, ip: request.ip });
+    return reply.code(201).send(document);
+  });
+
   app.put('/api/documents/:documentId', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'editor');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const buffer = await readDocumentBuffer(request.body);
@@ -567,7 +674,7 @@ function registerDocumentRoutes(
   });
 
   app.patch('/api/documents/:documentId', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'editor');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const body = parseWithSchema(renameDocumentBodySchema, request.body);
@@ -589,7 +696,7 @@ function registerDocumentRoutes(
   });
 
   app.delete('/api/documents/:documentId', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     await scope.store.deleteDocument(documentId);
@@ -603,7 +710,7 @@ function registerDocumentRoutes(
   });
 
   app.post('/api/documents/:documentId/restore', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     const document = await scope.store.restoreDocument(documentId);
@@ -617,7 +724,7 @@ function registerDocumentRoutes(
   });
 
   app.delete('/api/documents/:documentId/purge', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     await scope.store.purgeDocument(documentId);
@@ -631,7 +738,7 @@ function registerDocumentRoutes(
   });
 
   app.post('/api/documents/:documentId/duplicate', async (request, reply) => {
-    const scope = await resolveScope(request, reply);
+    const scope = await resolveScope(request, reply, 'editor');
     if (!scope) return reply;
     const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
     await assertWithinQuota(scope.store, 0, { countLimit: true });
@@ -676,5 +783,28 @@ function registerDocumentRoutes(
     reply.header('content-length', version.buffer.byteLength.toString());
     reply.header('content-disposition', createContentDisposition(version.metadata.name));
     return reply.send(Buffer.from(version.buffer));
+  });
+
+  app.get('/api/documents/:documentId/compare', async (request, reply) => {
+    const scope = await resolveScope(request, reply);
+    if (!scope) return reply;
+    const { documentId } = parseWithSchema(documentIdParamsSchema, request.params);
+    const query = parseWithSchema(compareQuerySchema, request.query);
+    const [from, to] = await Promise.all([
+      scope.store.readDocumentVersionRecord(documentId, query.from),
+      scope.store.readDocumentVersionRecord(documentId, query.to),
+    ]);
+    // ponytail: line-set diff keeps comparisons dependency-free; add word-level
+    // hunks when reviewers need inline fidelity.
+    const fromLines = (await extractDocxText(from.buffer)).split(/\r?\n/).filter(Boolean);
+    const toLines = (await extractDocxText(to.buffer)).split(/\r?\n/).filter(Boolean);
+    const fromSet = new Set(fromLines);
+    const toSet = new Set(toLines);
+    return {
+      from: from.metadata,
+      to: to.metadata,
+      added: toLines.filter((line) => !fromSet.has(line)),
+      removed: fromLines.filter((line) => !toSet.has(line)),
+    };
   });
 }

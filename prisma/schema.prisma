@@ -25,6 +25,11 @@ model User {
   sessions      Session[]
   documents     Document[]
   auditEvents   AuditEvent[]
+  comments      DocumentComment[]
+  apiTokens     ApiToken[]
+  notifications Notification[]
+  aiPreference  AiPreference?
+  aiUsage       AiUsage[]
 
   @@unique([email])
   @@map("users")
@@ -72,13 +77,22 @@ model Document {
   updatedAt       DateTime  @map("updated_at") @db.Timestamptz(6)
   lastOpenedAt    DateTime? @map("last_opened_at") @db.Timestamptz(6)
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+  folder          String?
+  tags            String[]  @default([])
+  isStarred       Boolean   @default(false) @map("is_starred")
+  searchText      String    @default("") @map("search_text")
 
   owner         User?             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   latestVersion DocumentVersion?  @relation("DocumentLatestVersion", fields: [latestVersionId], references: [id], onDelete: SetNull)
   versions      DocumentVersion[] @relation("DocumentVersions")
+  shares        DocumentShare[]
+  comments      DocumentComment[]
 
   @@index([ownerId, updatedAt(sort: Desc)])
   @@index([updatedAt(sort: Desc)])
+  @@index([ownerId, folder])
+  @@index([ownerId, isStarred])
+  @@index([ownerId, searchText])
   @@map("documents")
 }
 
@@ -111,4 +125,98 @@ model AuditEvent {
 
   @@index([actorUserId, createdAt(sort: Desc)])
   @@map("audit_events")
+}
+
+model DocumentShare {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  email      String
+  role       String   @default("viewer")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, email])
+  @@index([email])
+  @@map("document_shares")
+}
+
+model DocumentComment {
+  id         String    @id @default(uuid()) @db.Uuid
+  documentId String    @map("document_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  parentId   String?   @map("parent_id") @db.Uuid
+  paraId     String?   @map("para_id")
+  body       String
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  document Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent   DocumentComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  DocumentComment[] @relation("CommentReplies")
+
+  @@index([documentId, createdAt])
+  @@index([authorId])
+  @@map("document_comments")
+}
+
+model ApiToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("api_tokens")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  payload   Json?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model AiPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  provider  String   @default("openai-compatible")
+  model     String   @default("gpt-4o-mini")
+  baseUrl   String?  @map("base_url")
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_preferences")
+}
+
+model AiUsage {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  windowStarted DateTime @map("window_started") @db.Timestamptz(6)
+  requests      Int      @default(0)
+  inputTokens   Int      @default(0) @map("input_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, windowStarted])
+  @@map("ai_usage")
 }

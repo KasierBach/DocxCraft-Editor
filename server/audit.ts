@@ -12,7 +12,8 @@ export type AuditAction =
   | 'account.export'
   | 'account.delete'
   | 'account.profile_update'
-  | 'account.provider_disconnect';
+  | 'account.provider_disconnect'
+  | 'ai.chat';
 
 export const ACTIVITY_DEFAULT_LIMIT = 20;
 export const ACTIVITY_MAX_LIMIT = 50;

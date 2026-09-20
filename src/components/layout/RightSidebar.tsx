@@ -5,6 +5,7 @@ import type { RecoverySnapshot } from '../../lib/recoveryStore';
 import type { MediaItem } from '../../lib/mediaScanner';
 import { formatDateTime } from '../../lib/format';
 import { MediaManagerPanel } from '../MediaManagerPanel';
+import { WorkspaceCollaborationPanel } from '../WorkspaceCollaborationPanel';
 import { SavedDocumentsPanel } from '../SavedDocumentsPanel';
 import { VersionHistoryPanel } from '../VersionHistoryPanel';
 import { Panel } from '../ui/Panel';
@@ -136,6 +137,8 @@ export function RightSidebar({
         onRestore={onRestoreVersion}
         onDownload={onDownloadVersion}
       />
+
+      <WorkspaceCollaborationPanel documentId={currentDocumentId} activeParaId={activeParaId} />
 
       <SavedDocumentsPanel
         documents={savedDocuments}

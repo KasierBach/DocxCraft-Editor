@@ -8,6 +8,7 @@ import {
 } from './blobStorage.ts';
 import { DocumentConflictError, DocumentNotFoundError } from './documentStore.ts';
 import { createDuplicateName, ensureDocxName } from './documentNaming.ts';
+import { extractDocxText } from './docxText.ts';
 import type {
   DocumentStorePort,
   ReadDocumentOptions,
@@ -83,21 +84,31 @@ export class PostgresDocumentStore implements DocumentStorePort {
 
   private readonly ownerId: string | null;
 
+  private readonly accessEmail: string | null;
+
+  private readonly accessRole: 'editor' | null;
+
   constructor({
     prisma,
     blobs,
     maxVersionsPerDocument = DEFAULT_MAX_VERSIONS_PER_DOCUMENT,
     ownerId = null,
+    accessEmail = null,
+    accessRole = null,
   }: {
     prisma: PrismaClient;
     blobs: BlobStoragePort;
     maxVersionsPerDocument?: number;
     ownerId?: string | null;
+    accessEmail?: string | null;
+    accessRole?: 'editor' | null;
   }) {
     this.prisma = prisma;
     this.blobs = blobs;
     this.maxVersionsPerDocument = maxVersionsPerDocument;
     this.ownerId = ownerId;
+    this.accessEmail = accessEmail?.trim().toLowerCase() ?? null;
+    this.accessRole = accessRole;
   }
 
   forOwner(ownerId: string): DocumentStorePort {
@@ -109,9 +120,37 @@ export class PostgresDocumentStore implements DocumentStorePort {
     });
   }
 
+  forAccess(userId: string, email: string): DocumentStorePort {
+    return new PostgresDocumentStore({
+      prisma: this.prisma,
+      blobs: this.blobs,
+      maxVersionsPerDocument: this.maxVersionsPerDocument,
+      ownerId: userId,
+      accessEmail: email,
+    });
+  }
+
+  forEditor(userId: string, email: string): DocumentStorePort {
+    return new PostgresDocumentStore({
+      prisma: this.prisma,
+      blobs: this.blobs,
+      maxVersionsPerDocument: this.maxVersionsPerDocument,
+      ownerId: userId,
+      accessEmail: email,
+      accessRole: 'editor',
+    });
+  }
+
   /** Owner filter applied to every query; `undefined` means "no scoping". */
   private get ownerFilter() {
-    return this.ownerId ? { ownerId: this.ownerId } : {};
+    if (!this.ownerId) return {};
+    if (!this.accessEmail) return { ownerId: this.ownerId };
+    return {
+      OR: [
+        { ownerId: this.ownerId },
+        { shares: { some: { email: this.accessEmail, ...(this.accessRole ? { role: this.accessRole } : {}) } } },
+      ],
+    };
   }
 
   async listDocuments() {
@@ -145,6 +184,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
     const documentName = ensureDocxName(name);
     const storageKey = documentVersionKey(documentId, versionId);
     const timestamp = new Date();
+    const searchText = await extractDocxText(buffer).catch(() => '');
 
     await this.blobs.put(storageKey, buffer);
     try {
@@ -157,6 +197,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
             sizeInBytes: BigInt(buffer.byteLength),
             versionCount: 1,
             revision: 1,
+            searchText,
             createdAt: timestamp,
             updatedAt: timestamp,
           },
@@ -187,6 +228,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
     const versionId = randomUUID();
     const storageKey = documentVersionKey(id, versionId);
     const timestamp = new Date();
+    const searchText = await extractDocxText(buffer).catch(() => '');
 
     await this.blobs.put(storageKey, buffer);
     try {
@@ -217,6 +259,7 @@ export class PostgresDocumentStore implements DocumentStorePort {
             sizeInBytes: BigInt(buffer.byteLength),
             versionCount: { increment: 1 },
             revision: { increment: 1 },
+            searchText,
             updatedAt: timestamp,
           },
         });

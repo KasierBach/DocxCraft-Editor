@@ -15,6 +15,13 @@ const AppConfigSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().positive().optional(),
   MAX_DOCUMENTS_PER_USER: z.coerce.number().int().positive().optional(),
   MAX_STORAGE_BYTES_PER_USER: z.coerce.number().int().positive().optional(),
+  AI_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  AI_API_KEY: z.string().min(1).optional(),
+  AI_PROVIDER: z.string().min(1).default('openai-compatible'),
+  AI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+  AI_MODEL: z.string().min(1).default('gpt-4o-mini'),
+  AI_MAX_REQUESTS_PER_HOUR: z.coerce.number().int().positive().default(30),
+  ERROR_TRACKING_URL: z.string().url().optional(),
 });
 
 export const DEFAULT_MAX_DOCUMENTS_PER_USER = 100;
@@ -41,6 +48,15 @@ export type AppConfig = {
   blobDir: string;
   auth: AuthConfig;
   quotas: { maxDocuments: number; maxStorageBytes: number };
+  ai: {
+    enabled: boolean;
+    apiKey?: string;
+    provider: string;
+    baseUrl: string;
+    model: string;
+    maxRequestsPerHour: number;
+  };
+  errorTrackingUrl?: string;
 };
 
 function readOAuthClient(
@@ -93,5 +109,14 @@ export function resolveAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfi
       maxStorageBytes:
         parsed.data.MAX_STORAGE_BYTES_PER_USER ?? DEFAULT_MAX_STORAGE_BYTES_PER_USER,
     },
+    ai: {
+      enabled: parsed.data.AI_ENABLED && Boolean(parsed.data.AI_API_KEY),
+      apiKey: parsed.data.AI_API_KEY,
+      provider: parsed.data.AI_PROVIDER,
+      baseUrl: parsed.data.AI_BASE_URL,
+      model: parsed.data.AI_MODEL,
+      maxRequestsPerHour: parsed.data.AI_MAX_REQUESTS_PER_HOUR,
+    },
+    errorTrackingUrl: parsed.data.ERROR_TRACKING_URL,
   };
 }

@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router';
 import { useTranslation } from '../../../i18n';
 import { listDocuments, type SavedDocumentSummary } from '../../../lib/documentApi';
 import { formatBytes, formatDateTime } from '../../../lib/format';
+import { WorkspaceToolsPanel } from './WorkspaceToolsPanel';
+import { getWorkspaceUsage } from '../../../lib/workspaceApi';
 
 const DOCUMENTS_KEY = ['account', 'documents'];
 const RECENT_LIMIT = 3;
@@ -30,6 +32,11 @@ export function WorkspaceSection() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const documentsQuery = useQuery({ queryKey: DOCUMENTS_KEY, queryFn: listDocuments });
+  const usageQuery = useQuery({
+    queryKey: ['workspace', 'usage'],
+    queryFn: getWorkspaceUsage,
+    enabled: !documentsQuery.isLoading && !documentsQuery.isError,
+  });
 
   const documents = documentsQuery.data ?? [];
   const openDocument = (documentId: string) => {
@@ -124,6 +131,17 @@ export function WorkspaceSection() {
           </Link>
         </div>
       </section>
+      {usageQuery.data && (
+        <section className="profile-section">
+          <h2>{t('profile.workspaceUsage')}</h2>
+          <p className="panel-copy">
+            {usageQuery.data.documents} {t('profile.workspaceUsageDocuments')} ·{' '}
+            {formatBytes(usageQuery.data.bytes)}
+            {usageQuery.data.limits && ` / ${formatBytes(usageQuery.data.limits.maxStorageBytes)}`}
+          </p>
+        </section>
+      )}
+      <WorkspaceToolsPanel />
     </div>
   );
 }

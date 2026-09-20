@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { SavedDocumentVersionSummary } from '../lib/documentApi';
+import { compareDocumentVersions, type SavedDocumentVersionSummary } from '../lib/documentApi';
 import { formatBytes, formatDateTime } from '../lib/format';
 import { Panel } from './ui/Panel';
 import { useTranslation } from '../i18n';
@@ -25,8 +25,9 @@ export function VersionHistoryPanel({
   const { t } = useTranslation();
   const [pendingAction, setPendingAction] = useState<{
     versionId: string;
-    type: 'restore' | 'download';
+    type: 'restore' | 'download' | 'compare';
   } | null>(null);
+  const [comparison, setComparison] = useState<{ added: string[]; removed: string[] } | null>(null);
 
   const handleAction = async (
     versionId: string,
@@ -45,6 +46,16 @@ export function VersionHistoryPanel({
       setPendingAction((currentAction) =>
         currentAction?.versionId === versionId && currentAction.type === type ? null : currentAction,
       );
+    }
+  };
+
+  const compareVersion = async (versionId: string) => {
+    if (!documentId || !versions[0] || versions[0].id === versionId) return;
+    setPendingAction({ versionId, type: 'compare' });
+    try {
+      setComparison(await compareDocumentVersions(documentId, versionId, versions[0].id));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -89,6 +100,16 @@ export function VersionHistoryPanel({
                       ? t('documents.downloading')
                       : t('documents.download')}
                   </button>
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      className="action-button"
+                      onClick={() => void compareVersion(version.id)}
+                      disabled={isPending}
+                    >
+                      {pendingAction?.versionId === version.id && pendingAction.type === 'compare' ? 'Comparing…' : 'Compare'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="action-button"
@@ -106,6 +127,14 @@ export function VersionHistoryPanel({
               </div>
             );
           })}
+        </div>
+      )}
+      {comparison && (
+        <div className="version-diff" role="status">
+          <strong>Compared with latest</strong>
+          {comparison.added.length > 0 && <pre className="version-diff__added">{comparison.added.map((line) => `+ ${line}`).join('\n')}</pre>}
+          {comparison.removed.length > 0 && <pre className="version-diff__removed">{comparison.removed.map((line) => `- ${line}`).join('\n')}</pre>}
+          {comparison.added.length === 0 && comparison.removed.length === 0 && <p className="panel-copy">No text differences.</p>}
         </div>
       )}
     </Panel>

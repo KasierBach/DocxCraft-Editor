@@ -296,3 +296,9 @@ export async function duplicateDocument(documentId: string) {
 
   return readJson<SavedDocumentSummary>(response);
 }
+
+export async function compareDocumentVersions(documentId: string, fromVersionId: string, toVersionId: string) {
+  const params = new URLSearchParams({ from: fromVersionId, to: toVersionId });
+  const response = await fetch(`${DOCUMENTS_API_PATH}/${encodeURIComponent(documentId)}/compare?${params}`, withRequestTimeout());
+  return readJson<{ added: string[]; removed: string[] }>(response);
+}
