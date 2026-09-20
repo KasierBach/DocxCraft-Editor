@@ -22,10 +22,36 @@
   letter-spacing: .04em;
 }
 
+.ai-panel__context {
+  padding: 6px 8px;
+  border: 1px solid var(--nb-divider);
+  color: var(--nb-text-muted);
+  font-size: .75rem;
+}
+
 .ai-panel__suggestions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.ai-panel__tools {
+  border: 1px solid var(--nb-divider);
+  padding: 6px 8px;
+  font-size: .75rem;
+}
+
+.ai-panel__tools summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.ai-panel__tool-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 6px;
+  color: var(--nb-text-muted);
 }
 
 .ai-panel__log {

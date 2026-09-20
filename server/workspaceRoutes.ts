@@ -16,6 +16,77 @@ export type AiGatewayConfig = {
   maxRequestsPerHour: number;
 };
 
+export const AI_PROVIDER_OPTIONS = [
+  {
+    id: 'openai-compatible',
+    label: 'OpenAI-compatible',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: ['gpt-4o-mini', 'gpt-4.1-mini'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'groq',
+    label: 'Groq',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'https://api.groq.com/openai/v1',
+    models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'ollama',
+    label: 'Ollama',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'http://127.0.0.1:11434/v1',
+    models: ['llama3.2', 'qwen2.5'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'mistral',
+    label: 'Mistral',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'https://api.mistral.ai/v1',
+    models: ['mistral-small-latest', 'mistral-large-latest'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    protocol: 'anthropic',
+    defaultBaseUrl: 'https://api.anthropic.com/v1',
+    models: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
+    capabilities: ['streaming', 'tools'],
+  },
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    protocol: 'gemini',
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
+    models: ['gemini-2.0-flash', 'gemini-2.5-flash'],
+    capabilities: ['streaming', 'tools'],
+  },
+] as const;
+
+function providerOption(provider: string) {
+  return AI_PROVIDER_OPTIONS.find((option) => option.id === provider) ?? AI_PROVIDER_OPTIONS[0];
+}
+
+function resolveAiBaseUrl(provider: string, config: AiGatewayConfig, preferenceBaseUrl: string | null) {
+  const configHasCatalogProvider = AI_PROVIDER_OPTIONS.some((option) => option.id === config.provider);
+  if (provider === config.provider || (!configHasCatalogProvider && provider === 'openai-compatible')) {
+    return preferenceBaseUrl ?? config.baseUrl;
+  }
+  return providerOption(provider).defaultBaseUrl;
+}
+
 const documentIdParams = z.object({ documentId: z.string().uuid() });
 const shareParams = z.object({ documentId: z.string().uuid(), shareId: z.string().uuid() });
 const commentParams = z.object({ commentId: z.string().uuid() });
@@ -59,6 +130,74 @@ function writeEvent(reply: FastifyReply, payload: unknown) {
   reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+type StreamChunk = { text?: string; done?: boolean };
+
+function openEventStream(reply: FastifyReply) {
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no',
+  });
+}
+
+async function pipeEventStream(
+  reply: FastifyReply,
+  response: Response,
+  parseChunk: (data: string) => StreamChunk,
+) {
+  openEventStream(reply);
+  const finish = () => {
+    if (reply.raw.writableEnded) return;
+    writeEvent(reply, { type: 'done' });
+    reply.raw.end();
+  };
+
+  if (!response.body) {
+    finish();
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  const consume = (line: string) => {
+    if (!line.startsWith('data:')) return false;
+    const data = line.slice(5).trim();
+    if (data === '[DONE]') {
+      finish();
+      return true;
+    }
+    try {
+      const chunk = parseChunk(data);
+      if (chunk.text) writeEvent(reply, { type: 'text', text: chunk.text });
+      if (chunk.done) {
+        finish();
+        return true;
+      }
+    } catch {
+      // Providers may split JSON across chunks; the next read completes it.
+    }
+    return false;
+  };
+
+  while (true) {
+    const chunk = await reader.read();
+    pending += decoder.decode(chunk.value ?? new Uint8Array(), { stream: !chunk.done });
+    const lines = pending.split('\n');
+    pending = lines.pop() ?? '';
+    for (const line of lines) {
+      if (consume(line)) return;
+    }
+    if (chunk.done) {
+      if (pending.trim()) consume(`data: ${pending.trim()}`);
+      break;
+    }
+  }
+  finish();
+}
+
 async function streamOpenAiCompatible(
   reply: FastifyReply,
   config: AiGatewayConfig,
@@ -74,49 +213,86 @@ async function streamOpenAiCompatible(
   if (!response.ok) {
     throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
   }
-
-  reply.hijack();
-  reply.raw.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache, no-transform',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no',
+  await pipeEventStream(reply, response, (data) => {
+    const payload = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
+    return { text: payload.choices?.[0]?.delta?.content };
   });
+}
 
-  if (!response.body) {
-    writeEvent(reply, { type: 'done' });
-    reply.raw.end();
-    return;
-  }
+async function streamAnthropic(
+  reply: FastifyReply,
+  config: AiGatewayConfig,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+) {
+  const system = messages.find((message) => message.role === 'system')?.content;
+  const response = await fetch(`${config.baseUrl.replace(/\/$/, '')}/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': config.apiKey ?? '',
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      stream: true,
+      ...(system ? { system } : {}),
+      messages: messages
+        .filter((message) => message.role !== 'system')
+        .map((message) => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content })),
+    }),
+  });
+  if (!response.ok) throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
+  await pipeEventStream(reply, response, (data) => {
+    const payload = JSON.parse(data) as { type?: string; delta?: { text?: string } };
+    return { text: payload.delta?.text, done: payload.type === 'message_stop' };
+  });
+}
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let pending = '';
-  while (true) {
-    const chunk = await reader.read();
-    pending += decoder.decode(chunk.value ?? new Uint8Array(), { stream: !chunk.done });
-    const lines = pending.split('\n');
-    pending = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data:')) continue;
-      const data = line.slice(5).trim();
-      if (data === '[DONE]') {
-        writeEvent(reply, { type: 'done' });
-        reply.raw.end();
-        return;
-      }
-      try {
-        const payload = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
-        const text = payload.choices?.[0]?.delta?.content;
-        if (text) writeEvent(reply, { type: 'text', text });
-      } catch {
-        // Providers may split JSON across chunks; the next read completes it.
-      }
-    }
-    if (chunk.done) break;
+async function streamGemini(
+  reply: FastifyReply,
+  config: AiGatewayConfig,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+) {
+  const baseUrl = config.baseUrl.replace(/\/$/, '');
+  const versionedBaseUrl = baseUrl.endsWith('/v1beta') ? baseUrl : `${baseUrl}/v1beta`;
+  const endpoint = `${versionedBaseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey ?? '')}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      contents: messages.map((message) => ({
+        role: message.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: message.content }],
+      })),
+    }),
+  });
+  if (!response.ok) throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
+  await pipeEventStream(reply, response, (data) => {
+    const payload = JSON.parse(data) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    return { text: payload.candidates?.[0]?.content?.parts?.[0]?.text };
+  });
+}
+
+async function streamAiProvider(
+  reply: FastifyReply,
+  config: AiGatewayConfig,
+  provider: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+) {
+  switch (providerOption(provider).protocol) {
+    case 'anthropic':
+      await streamAnthropic(reply, config, model, messages);
+      return;
+    case 'gemini':
+      await streamGemini(reply, config, model, messages);
+      return;
+    default:
+      await streamOpenAiCompatible(reply, config, model, messages);
   }
-  writeEvent(reply, { type: 'done' });
-  reply.raw.end();
 }
 
 export function registerWorkspaceRoutes(
@@ -247,11 +423,13 @@ export function registerWorkspaceRoutes(
     const session = await requireSession(request, reply, accounts);
     if (!session) return reply;
     const [preference, usage] = await Promise.all([workspace.getAiPreference(session.user.id), workspace.aiUsage(session.user.id)]);
+    const provider = preference.provider || ai.provider;
     return {
       enabled: ai.enabled && preference.enabled,
-      provider: preference.provider || ai.provider,
+      provider,
       model: preference.model || ai.model,
-      baseUrl: preference.baseUrl ?? ai.baseUrl,
+      baseUrl: resolveAiBaseUrl(provider, ai, preference.baseUrl),
+      providers: AI_PROVIDER_OPTIONS,
       keySource: 'operator-env',
       apiKeyConfigured: Boolean(ai.apiKey),
       usage,
@@ -265,9 +443,18 @@ export function registerWorkspaceRoutes(
     const input = parse(aiSettingsBody, request.body);
     const preference = await workspace.updateAiPreference(session.user.id, {
       ...input,
-      baseUrl: ai.baseUrl,
+      // Endpoints stay operator-owned; a null preference selects the catalog
+      // default for the chosen provider without carrying an old provider URL.
+      baseUrl: null,
     });
-    return { provider: preference.provider, model: preference.model, baseUrl: preference.baseUrl, enabled: preference.enabled };
+    const provider = preference.provider || ai.provider;
+    return {
+      provider,
+      model: preference.model,
+      baseUrl: resolveAiBaseUrl(provider, ai, preference.baseUrl),
+      enabled: ai.enabled && preference.enabled,
+      providers: AI_PROVIDER_OPTIONS,
+    };
   });
 
   app.post('/api/ai/chat', async (request, reply) => {
@@ -286,7 +473,9 @@ export function registerWorkspaceRoutes(
     ];
     await options.audit?.record({ action: 'ai.chat', actorUserId: session.user.id, ip: request.ip });
     try {
-      await streamOpenAiCompatible(reply, ai, preference.model || ai.model, messages);
+      const provider = preference.provider || ai.provider;
+      const config = { ...ai, baseUrl: resolveAiBaseUrl(provider, ai, preference.baseUrl) };
+      await streamAiProvider(reply, config, provider, preference.model || ai.model, messages);
     } catch (error) {
       if (error instanceof WorkspaceError) throw error;
       throw new WorkspaceError('The AI provider could not be reached.', 502);

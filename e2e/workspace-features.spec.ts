@@ -18,11 +18,11 @@ test('profile AI, notifications, organization tools, and template import flows w
 
   await page.route('**/api/ai/settings', async (route) => {
     if (route.request().method() === 'PATCH') {
-      const body = route.request().postDataJSON() as { model?: string; enabled?: boolean };
-      await route.fulfill({ json: { provider: 'openai-compatible', model: body.model ?? 'gpt-test', baseUrl: 'https://ai.example/v1', enabled: body.enabled ?? true } });
+      const body = route.request().postDataJSON() as { provider?: string; model?: string; enabled?: boolean };
+      await route.fulfill({ json: { provider: body.provider ?? 'openai-compatible', model: body.model ?? 'gpt-test', baseUrl: 'https://ai.example/v1', enabled: body.enabled ?? true, providers: [{ id: 'openai-compatible', label: 'OpenAI-compatible', protocol: 'openai-compatible', defaultBaseUrl: 'https://api.openai.com/v1', models: ['gpt-test'], capabilities: ['streaming', 'tools'] }] } });
       return;
     }
-    await route.fulfill({ json: { enabled: true, provider: 'openai-compatible', model: 'gpt-test', baseUrl: 'https://ai.example/v1', keySource: 'operator-env', apiKeyConfigured: true, usage: { requests: 2, inputTokens: 0, outputTokens: 0, windowStarted: '2026-09-20T00:00:00.000Z' }, maxRequestsPerHour: 30 } });
+    await route.fulfill({ json: { enabled: true, provider: 'openai-compatible', model: 'gpt-test', baseUrl: 'https://ai.example/v1', providers: [{ id: 'openai-compatible', label: 'OpenAI-compatible', protocol: 'openai-compatible', defaultBaseUrl: 'https://api.openai.com/v1', models: ['gpt-test'], capabilities: ['streaming', 'tools'] }], keySource: 'operator-env', apiKeyConfigured: true, usage: { requests: 2, inputTokens: 0, outputTokens: 0, windowStarted: '2026-09-20T00:00:00.000Z' }, maxRequestsPerHour: 30 } });
   });
   await page.route('**/api/workspace/notifications*', async (route) => {
     if (route.request().method() === 'POST') {
@@ -50,9 +50,15 @@ test('profile AI, notifications, organization tools, and template import flows w
 
   await page.goto('/settings/ai');
   await expect(page.getByRole('heading', { name: 'AI assistant' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Model' }).fill('gpt-next');
+  await page.getByRole('combobox', { name: 'Model' }).fill('gpt-next');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText(/2 of 30 requests/i)).toBeVisible();
+
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'AI assistant' }).click();
+  await expect(page.getByRole('region', { name: 'AI assistant' })).toBeVisible();
+  await page.goto('/settings/ai');
 
   await page.getByRole('link', { name: 'Notifications' }).click();
   await expect(page.getByText('document.shared')).toBeVisible();

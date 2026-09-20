@@ -36,6 +36,7 @@ type HeaderProps = {
   onShowHome?: () => void;
   onShowLibrary?: () => void;
   onShowSettings?: () => void;
+  onShowAssistant?: () => void;
   onShowSignIn?: () => void;
   signInProviders?: Array<{ id: string; label: string }>;
   isAnonymous?: boolean;
@@ -94,6 +95,7 @@ function HeaderComponent({
   onShowHome,
   onShowLibrary,
   onShowSettings,
+  onShowAssistant,
   onShowSignIn,
   signInProviders,
   isAnonymous = false,
@@ -518,6 +520,19 @@ function HeaderComponent({
                     }}
                   >
                     {t('header.settings')}
+                  </button>
+                )}
+                {onShowAssistant && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-button toolbar-dropdown__button"
+                    onClick={() => {
+                      closeMenus();
+                      onShowAssistant();
+                    }}
+                  >
+                    {t('header.aiAssistant')}
                   </button>
                 )}
                 {(onShowDocs || onShowChangelog || onShowHome) && <h4>{t('header.help')}</h4>}

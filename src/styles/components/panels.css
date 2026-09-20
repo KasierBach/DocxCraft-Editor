@@ -615,6 +615,65 @@
   max-width: 420px;
 }
 
+.profile-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-form__field > span {
+  color: var(--nb-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.profile-form__field input,
+.profile-form__field select {
+  width: 100%;
+  min-height: 34px;
+  border: var(--nb-border) solid var(--nb-black);
+  padding: 6px 8px;
+  background: var(--nb-white);
+  color: var(--nb-black);
+  font: inherit;
+}
+
+.profile-form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.profile-section__note {
+  margin: 0;
+  color: var(--nb-text-muted);
+  font-size: 0.75rem;
+}
+
+.profile-ai-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.profile-ai-provider {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: var(--nb-border) solid var(--nb-black);
+  background: var(--nb-white);
+}
+
+.profile-ai-provider span,
+.profile-ai-provider small {
+  color: var(--nb-text-muted);
+  font-size: 0.72rem;
+}
+
 .profile-field {
   display: flex;
   flex-direction: column;

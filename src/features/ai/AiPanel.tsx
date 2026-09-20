@@ -12,13 +12,16 @@ type AiPanelProps = {
 };
 
 const SUGGESTIONS = [
-  ['Rewrite selection', 'Rewrite the selected text for clarity while preserving its meaning.'],
-  ['Shorten selection', 'Shorten the selected text by about half without losing key facts.'],
-  ['Translate selection', 'Translate the selected text to Vietnamese and keep names and numbers unchanged.'],
+  { label: 'Rewrite selection', prompt: 'Rewrite the selected text for clarity while preserving its meaning.', requiresSelection: true, apply: true },
+  { label: 'Shorten selection', prompt: 'Shorten the selected text by about half without losing key facts.', requiresSelection: true, apply: true },
+  { label: 'Translate selection', prompt: 'Translate the selected text to Vietnamese and keep names and numbers unchanged.', requiresSelection: true, apply: true },
+  { label: 'Fix grammar', prompt: 'Fix grammar and spelling in the selected text without changing its meaning.', requiresSelection: true, apply: true },
+  { label: 'Summarize document', prompt: 'Summarize this document in five concise bullet points.', requiresSelection: false, apply: false },
+  { label: 'Explain selection', prompt: 'Explain the selected text in plain language and call out any assumptions.', requiresSelection: false, apply: false },
 ] as const;
 
 export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: AiPanelProps) {
-  const { getContext, executeToolCall } = useDocxAgentTools({ editorRef, author: 'DocxCraft AI' });
+  const { tools = [], getContext, executeToolCall } = useDocxAgentTools({ editorRef, author: 'DocxCraft AI' });
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +86,9 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
     [appendMessage, documentName, executeToolCall, getContext, isLoading, messages, onDocumentChanged],
   );
 
-  const selectionAvailable = Boolean(getContext().selection?.selectedText);
+  const context = getContext();
+  const selectionAvailable = Boolean(context.selection?.selectedText);
+  const toolNames = tools.map((tool) => tool.function.name);
   const emptyState = useMemo(
     () => <p className="ai-panel__empty">Ask about this document or select text for a tracked rewrite.</p>,
     [],
@@ -95,11 +100,20 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
         <span className="ai-panel__title">Assistant</span>
         <button type="button" className="action-button action-button--icon" onClick={close} aria-label="Close assistant">×</button>
       </div>
+      <div className="ai-panel__context" aria-live="polite">
+        {selectionAvailable ? 'Selection ready for tracked edits.' : 'Using the whole document context.'}
+      </div>
       <div className="ai-panel__suggestions">
-        {SUGGESTIONS.map(([label, prompt]) => (
-          <AgentSuggestionChip key={label} label={label} disabled={!selectionAvailable || isLoading} onClick={() => void send(prompt, true)} />
+        {SUGGESTIONS.map(({ label, prompt, requiresSelection, apply }) => (
+          <AgentSuggestionChip key={label} label={label} disabled={(requiresSelection && !selectionAvailable) || isLoading} onClick={() => void send(prompt, apply)} />
         ))}
       </div>
+      <details className="ai-panel__tools">
+        <summary>Document tools ({toolNames.length})</summary>
+        <div className="ai-panel__tool-list">
+          {toolNames.map((name) => <span key={name}>{name.replaceAll('_', ' ')}</span>)}
+        </div>
+      </details>
       <AgentChatLog
         messages={messages}
         loading={isLoading}

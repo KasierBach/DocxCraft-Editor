@@ -9,11 +9,16 @@ type TestNode = {
     children?: TestNode[];
 };
 
+type TestResolvedPos = {
+    depth: number;
+    node: (depth: number) => TestNode;
+};
+
 function node(name: string, attrs?: Record<string, unknown>, children?: TestNode[]): TestNode {
     return { type: { name }, attrs, children };
 }
 
-function createEditorRef(root: TestNode | null): DocxEditorRef {
+function createEditorRef(root: TestNode | null, resolve?: (position: number) => TestResolvedPos): DocxEditorRef {
     return {
         getEditorRef: () =>
             (root
@@ -30,6 +35,7 @@ function createEditorRef(root: TestNode | null): DocxEditorRef {
                                 };
                                 visit(root, 0, null);
                             },
+                            resolve,
                         },
                     }),
                 }
@@ -56,6 +62,7 @@ describe('scanForMedia', () => {
                 type: 'image',
                 label: 'Chart overview',
                 paraId: 'para-1',
+                position: expect.any(Number),
                 paragraphIndex: 1,
             },
         ]);
@@ -72,7 +79,7 @@ describe('scanForMedia', () => {
         expect(media[0]!.label).toBe('Image 1');
     });
 
-    it('numbers tables sequentially and ignores other node types', () => {
+    it('numbers tables sequentially and keeps media without a paragraph id', () => {
         const editor = createEditorRef(
             node('doc', undefined, [
                 node('paragraph', { paraId: 'para-1' }, [node('text')]),
@@ -89,6 +96,15 @@ describe('scanForMedia', () => {
                 type: 'table',
                 label: 'Table 1',
                 paraId: 'para-2',
+                position: expect.any(Number),
+                paragraphIndex: 1,
+            },
+            {
+                id: expect.stringMatching(/^table-/),
+                type: 'table',
+                label: 'Table 2',
+                paraId: null,
+                position: expect.any(Number),
                 paragraphIndex: 1,
             },
         ]);
@@ -105,5 +121,21 @@ describe('scanForMedia', () => {
 
         const media = scanForMedia(editor);
         expect(media.map((item) => item.paragraphIndex)).toEqual([2, 3]);
+    });
+
+    it('resolves the containing paragraph instead of using the image id', () => {
+        const paragraph = node('paragraph', { paraId: 'para-1' }, [node('image', { id: 'image-node-1' })]);
+        const editor = createEditorRef(
+            node('doc', undefined, [paragraph]),
+            () => ({ depth: 1, node: (depth) => (depth === 1 ? paragraph : node('doc')) }),
+        );
+
+        expect(scanForMedia(editor)[0]).toMatchObject({ paraId: 'para-1', position: 2 });
+    });
+
+    it('keeps a position fallback when no paragraph anchor exists', () => {
+        const media = scanForMedia(createEditorRef(node('doc', undefined, [node('image', { id: 'image-node-1' })])));
+
+        expect(media[0]).toMatchObject({ paraId: null, position: 1 });
     });
 });

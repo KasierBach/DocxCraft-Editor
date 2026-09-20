@@ -34,7 +34,7 @@ type RightSidebarProps = {
   onRefreshDocuments: () => void | Promise<void>;
   onRestoreVersion: (documentId: string, versionId: string) => void | Promise<void>;
   onDownloadVersion: (documentId: string, versionId: string) => void | Promise<void>;
-  onJumpToMedia: (paraId: string) => void;
+  onJumpToMedia: (item: MediaItem) => void;
   onClose?: () => void;
 };
 
@@ -99,7 +99,7 @@ export function RightSidebar({
         </dl>
       </Panel>
 
-      <MediaManagerPanel items={mediaItems} onJumpToParaId={onJumpToMedia} />
+      <MediaManagerPanel items={mediaItems} onJumpToMedia={onJumpToMedia} />
 
       {recoverySnapshot && (
         <Panel title={t('documents.recoveryDraft')}>

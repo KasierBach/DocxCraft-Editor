@@ -136,6 +136,14 @@ export type AiSettings = {
   provider: string;
   model: string;
   baseUrl: string | null;
+  providers: Array<{
+    id: string;
+    label: string;
+    protocol: string;
+    defaultBaseUrl: string;
+    models: string[];
+    capabilities: string[];
+  }>;
   keySource: string;
   apiKeyConfigured: boolean;
   usage: { requests: number; inputTokens: number; outputTokens: number; windowStarted: string };
@@ -147,7 +155,7 @@ export function getAiSettings() {
 }
 
 export function updateAiSettings(input: Partial<Pick<AiSettings, 'provider' | 'model' | 'baseUrl' | 'enabled'>>) {
-  return rootRequest<Pick<AiSettings, 'provider' | 'model' | 'baseUrl' | 'enabled'>>('/api/ai/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+  return rootRequest<Pick<AiSettings, 'provider' | 'model' | 'baseUrl' | 'enabled'> & { providers: AiSettings['providers'] }>('/api/ai/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
 }
 
 export type AiMessage = { role: 'user' | 'assistant'; content: string };

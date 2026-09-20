@@ -4,10 +4,10 @@ import { useTranslation } from '../i18n';
 
 type MediaManagerPanelProps = {
   items: MediaItem[];
-  onJumpToParaId: (paraId: string) => void;
+  onJumpToMedia: (item: MediaItem) => void;
 };
 
-export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelProps) {
+export function MediaManagerPanel({ items, onJumpToMedia }: MediaManagerPanelProps) {
   const { t } = useTranslation();
 
   if (items.length === 0) {
@@ -26,7 +26,7 @@ export function MediaManagerPanel({ items, onJumpToParaId }: MediaManagerPanelPr
             key={item.id}
             type="button"
             className="saved-document-card"
-            onClick={() => onJumpToParaId(item.paraId)}
+            onClick={() => onJumpToMedia(item)}
           >
             <span className="media-list__row">
               <span className="media-list__icon" aria-hidden="true">

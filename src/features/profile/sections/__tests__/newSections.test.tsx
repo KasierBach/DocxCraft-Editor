@@ -44,12 +44,15 @@ describe('new profile sections', () => {
       provider: 'openai-compatible',
       model: 'gpt-test',
       baseUrl: 'https://api.example.com/v1',
+      providers: [
+        { id: 'openai-compatible', label: 'OpenAI-compatible', protocol: 'openai-compatible', defaultBaseUrl: 'https://api.openai.com/v1', models: ['gpt-test'], capabilities: ['streaming', 'tools'] },
+      ],
       keySource: 'operator-env',
       apiKeyConfigured: true,
       usage: { requests: 2, inputTokens: 10, outputTokens: 4, windowStarted: '2026-09-20T10:00:00.000Z' },
       maxRequestsPerHour: 30,
     });
-    vi.mocked(updateAiSettings).mockResolvedValue({ provider: 'openai-compatible', model: 'gpt-next', baseUrl: 'https://api.example.com/v1', enabled: false });
+    vi.mocked(updateAiSettings).mockResolvedValue({ provider: 'openai-compatible', model: 'gpt-next', baseUrl: 'https://api.example.com/v1', enabled: false, providers: [] });
     vi.mocked(listWorkspaceNotifications).mockResolvedValue([
       { id: 'n1', type: 'document.shared', payload: null, readAt: null, createdAt: '2026-09-20T10:00:00.000Z' },
       { id: 'n2', type: 'comment.added', payload: null, readAt: '2026-09-20T11:00:00.000Z', createdAt: '2026-09-20T11:00:00.000Z' },
@@ -63,18 +66,19 @@ describe('new profile sections', () => {
     vi.mocked(bulkUpdateWorkspaceDocuments).mockResolvedValue({ updated: 1 });
   });
 
-  it('loads AI settings, keeps the operator endpoint read-only, and saves account preferences', async () => {
+  it('loads AI settings, keeps the operator endpoint read-only, and saves provider preferences', async () => {
     const user = userEvent.setup();
     renderProfile(<AiSettingsSection />);
 
     expect(await screen.findByRole('heading', { name: 'AI assistant' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Base URL' })).toHaveAttribute('readonly');
-    await user.clear(screen.getByRole('textbox', { name: 'Model' }));
-    await user.type(screen.getByRole('textbox', { name: 'Model' }), 'gpt-next');
+    await user.clear(screen.getByRole('combobox', { name: 'Model' }));
+    await user.type(screen.getByRole('combobox', { name: 'Model' }), 'gpt-next');
     await user.click(screen.getByRole('checkbox', { name: /enable ai/i }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(vi.mocked(updateAiSettings).mock.calls[0]?.[0]).toEqual({
+      provider: 'openai-compatible',
       model: 'gpt-next',
       baseUrl: 'https://api.example.com/v1',
       enabled: false,

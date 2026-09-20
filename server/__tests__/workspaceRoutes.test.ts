@@ -117,6 +117,8 @@ describe.skipIf(!databaseUrl)('workspace routes (integration)', () => {
     expect((await app.inject({ method: 'POST', url: '/api/workspace/notifications/read', headers: { cookie }, payload: {} })).statusCode).toBe(204);
     expect((await app.inject({ method: 'GET', url: '/api/ai/settings', headers: { cookie } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'PATCH', url: '/api/ai/settings', headers: { cookie }, payload: { model: 'test-model', enabled: true } })).statusCode).toBe(200);
+    const settings = await app.inject({ method: 'GET', url: '/api/ai/settings', headers: { cookie } });
+    expect(settings.json().providers.map((entry: { id: string }) => entry.id)).toEqual(expect.arrayContaining(['anthropic', 'gemini', 'groq', 'ollama']));
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
     try {
@@ -125,6 +127,28 @@ describe.skipIf(!databaseUrl)('workspace routes (integration)', () => {
       expect(chat.body).toContain('hello');
     } finally {
       fetchSpy.mockRestore();
+    }
+
+    await app.inject({ method: 'PATCH', url: '/api/ai/settings', headers: { cookie }, payload: { provider: 'anthropic', model: 'claude-3-5-haiku-latest' } });
+    const anthropicFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('data: {"type":"content_block_delta","delta":{"text":"anthropic"}}\n\ndata: {"type":"message_stop"}\n\n', { status: 200 }));
+    try {
+      const chat = await app.inject({ method: 'POST', url: '/api/ai/chat', headers: { cookie }, payload: { messages: [{ role: 'user', content: 'hello' }] } });
+      expect(chat.statusCode).toBe(200);
+      expect(chat.body).toContain('anthropic');
+      expect(anthropicFetch.mock.calls[0]?.[1]).toMatchObject({ headers: expect.objectContaining({ 'x-api-key': 'test-key', 'anthropic-version': '2023-06-01' }) });
+    } finally {
+      anthropicFetch.mockRestore();
+    }
+
+    await app.inject({ method: 'PATCH', url: '/api/ai/settings', headers: { cookie }, payload: { provider: 'gemini', model: 'gemini-2.0-flash' } });
+    const geminiFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('data: {"candidates":[{"content":{"parts":[{"text":"gemini"}]}}]}\n\n', { status: 200 }));
+    try {
+      const chat = await app.inject({ method: 'POST', url: '/api/ai/chat', headers: { cookie }, payload: { messages: [{ role: 'user', content: 'hello' }] } });
+      expect(chat.statusCode).toBe(200);
+      expect(chat.body).toContain('gemini');
+      expect(String(geminiFetch.mock.calls[0]?.[0])).toContain(':streamGenerateContent');
+    } finally {
+      geminiFetch.mockRestore();
     }
   });
 

@@ -18,6 +18,7 @@ export function AiSettingsSection() {
   }
 
   const settings = settingsQuery.data;
+  const providers = settings.providers ?? [];
   return (
     <div className="profile-section-stack">
       <section className="profile-section">
@@ -29,6 +30,7 @@ export function AiSettingsSection() {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
             saveMutation.mutate({
+              provider: String(form.get('provider') ?? settings.provider),
               model: String(form.get('model') ?? settings.model),
               baseUrl: String(form.get('baseUrl') ?? settings.baseUrl ?? '') || null,
               enabled: form.get('enabled') === 'on',
@@ -37,11 +39,23 @@ export function AiSettingsSection() {
         >
           <label className="profile-form__field">
             <span>{t('profile.aiProvider')}</span>
-            <input value={settings.provider} readOnly />
+            <select name="provider" defaultValue={settings.provider}>
+              {providers.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.label}
+                </option>
+              ))}
+              {providers.length === 0 && <option value={settings.provider}>{settings.provider}</option>}
+            </select>
           </label>
           <label className="profile-form__field">
             <span>{t('profile.aiModel')}</span>
-            <input name="model" defaultValue={settings.model} required />
+            <input name="model" list="ai-model-options" defaultValue={settings.model} required />
+            <datalist id="ai-model-options">
+              {[...new Set(providers.flatMap((provider) => provider.models))].map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
           </label>
           <label className="profile-form__field">
             <span>{t('profile.aiBaseUrl')}</span>
@@ -58,6 +72,18 @@ export function AiSettingsSection() {
             {saveMutation.isPending ? t('profile.saving') : t('profile.save')}
           </button>
         </form>
+      </section>
+      <section className="profile-section">
+        <h2>{t('profile.aiProviders')}</h2>
+        <div className="profile-ai-grid">
+          {providers.map((provider) => (
+            <article className="profile-ai-provider" key={provider.id}>
+              <strong>{provider.label}</strong>
+              <span>{provider.protocol}</span>
+              <small>{provider.capabilities.join(' · ')}</small>
+            </article>
+          ))}
+        </div>
       </section>
       <section className="profile-section">
         <h2>{t('profile.aiUsage')}</h2>

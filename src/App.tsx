@@ -168,6 +168,7 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const showSidebar = useAppStore((state) => state.showSidebar);
   const setShowSidebar = useAppStore((state) => state.setShowSidebar);
   const showInfo = useAppStore((state) => state.showInfo);
@@ -1098,6 +1099,21 @@ export default function App() {
     [anchors, setActiveParaId],
   );
 
+  const jumpToMedia = useCallback(
+    (item: MediaItem) => {
+      if (item.paraId) {
+        jumpToAnchor(item.paraId);
+        return;
+      }
+
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.scrollToPosition(item.position);
+      setCurrentPage(editor.getCurrentPage() ?? null);
+    },
+    [jumpToAnchor],
+  );
+
   const commandActions = useMemo(() => [
     { id: 'save', label: t('app.actionSave'), section: t('app.actionSection'), handler: handleSaveDocument },
     { id: 'save-as', label: t('app.actionSaveAs'), section: t('app.actionSection'), handler: handleSaveAsDocument },
@@ -1190,6 +1206,7 @@ export default function App() {
         onShowHome={() => openPage('landing')}
         onShowLibrary={openLibrary}
         onShowSettings={openSettings}
+        onShowAssistant={() => setShowAiPanel(true)}
         onShowSignIn={openSignIn}
         signInProviders={providers}
         isAnonymous={isAnonymous}
@@ -1243,7 +1260,9 @@ export default function App() {
               i18n={language === 'vi' ? editorVi : undefined}
               className="docx-editor-frame"
               agentPanel={{
-                title: 'Assistant',
+                title: t('header.aiAssistant'),
+                open: showAiPanel,
+                onOpenChange: setShowAiPanel,
                 render: ({ close }) => (
                   <AiPanel
                     editorRef={editorRef}
@@ -1253,7 +1272,10 @@ export default function App() {
                       setStatusMessage(t('app.unsavedChanges'));
                       scheduleAnchorRefresh();
                     }}
-                    close={close}
+                    close={() => {
+                      setShowAiPanel(false);
+                      close();
+                    }}
                   />
                 ),
               }}
@@ -1317,7 +1339,7 @@ export default function App() {
             onRefreshDocuments={handleRefreshDocuments}
             onRestoreVersion={handleRestoreVersion}
             onDownloadVersion={handleDownloadVersion}
-            onJumpToMedia={jumpToAnchor}
+              onJumpToMedia={jumpToMedia}
             onClose={closeInfo}
           />
         )}
