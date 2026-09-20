@@ -264,7 +264,7 @@ The shortcut list lives in `SHORTCUT_SPECS` in `src/App.tsx` and is rendered by 
 ## Known Limits
 
 - File storage is single-process and file-backed; use a database/object store before running multiple API instances
-- No authentication, authorization, sharing, or collaboration — see [SECURITY.md](SECURITY.md) before exposing the API beyond localhost
+- Self-host deployments use the optional passphrase/session gate; hosted deployments use guest/OAuth sessions with workspace roles. Sharing, comments and notifications are available in the hosted workspace, but real-time cursors, invitation email and offline sync are not implemented yet
 - ZIP validation covers the central directory and CRC32; deeply malformed OOXML content is only rejected by the editor runtime, not the API
 - Production bundle is large due to the editor runtime
 
@@ -278,15 +278,13 @@ The hosted build (Postgres + OAuth accounts) needs operational pieces the self-h
 
 - **Edge/WAF** — put Cloudflare (free plan) in front of Caddy for WAF, bot management, DDoS absorption, and CDN caching. Keep Caddy for TLS.
 - **Uptime + errors** — monitor `GET /api/health` and add error tracking (e.g. Sentry) via the edge or a log drain.
-- **Backups** — take logical dumps regularly and rehearse a restore:
+- **Backups** — take logical dumps regularly and rehearse a restore with the built-in scripts:
 
   ```sh
-  docker compose -f docker-compose.dev.yml exec -T postgres \
-    pg_dump -U docxcraft docxcraft > backup.sql
-  cat backup.sql | docker compose -f docker-compose.dev.yml exec -T postgres \
-    psql -U docxcraft -d docxcraft
+  TEST_DATABASE_URL=postgres://docxcraft:docxcraft@localhost:5434/docxcraft_test npm run db:backup
+  TEST_DATABASE_URL=postgres://docxcraft:docxcraft@localhost:5434/docxcraft_test npm run db:restore-drill
   ```
 
-  Enable versioning and a lifecycle policy on the blob bucket as well.
+  In production, schedule `npm run db:backup` against the Postgres service, encrypt and copy the dump off-host, and back up `/app/data` (or the configured blob store) in the same recovery window. The restore drill creates a temporary database, restores the dump, checks the public table count, then removes the temporary database.
 - **Migrations** — `docker compose -f deploy/docker-compose.yml up -d` runs a one-off `migrate` service (`prisma migrate deploy`) before the app starts, so the schema is applied on every deploy. It builds the repository's build stage, because the runtime image ships without the Prisma CLI.
 - **Blob storage** — the hosted build keeps `.docx` blobs in `BLOB_DIR` on the `docxcraft-data` volume. Back that volume up alongside the database, or swap in OCI Object Storage.

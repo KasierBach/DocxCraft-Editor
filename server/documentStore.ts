@@ -100,6 +100,17 @@ export class FileDocumentStore implements DocumentStorePort {
     return this;
   }
 
+  async checkReady() {
+    try {
+      await stat(this.indexPath);
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+  }
+
   async verifyIntegrity() {    const index = await this.readIndex();
     const documentIds = new Set(index.documents.map((document) => document.id));
     const versionIds = new Set(index.versions.map((version) => `${version.documentId}:${version.id}`));

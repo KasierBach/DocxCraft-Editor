@@ -239,7 +239,7 @@ export class WorkspaceService {
   async resolveComment(userId: string, commentId: string, resolved: boolean) {
     const comment = await this.prisma.documentComment.findUnique({ where: { id: commentId } });
     if (!comment) throw new WorkspaceError('Comment not found.', 404);
-    await this.requireAccess(userId, comment.documentId);
+    await this.requireAccess(userId, comment.documentId, 'editor');
     const row = await this.prisma.documentComment.update({
       where: { id: commentId },
       data: { resolvedAt: resolved ? new Date() : null },

@@ -7,7 +7,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import JSZip from 'jszip';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (hostname: string) => [{ address: hostname === '127.0.0.1' ? hostname : '93.184.216.34', family: 4 }]),
+}));
 
 import { API_VERSION, buildDocumentApiApp } from '../app.ts';
 import { hashPassphrase } from '../auth.ts';
@@ -26,6 +30,7 @@ describe('buildDocumentApiApp', () => {
   const tempDirectories: string[] = [];
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
       tempDirectories.splice(0).map((directory) =>
         rm(directory, { recursive: true, force: true }),
@@ -569,6 +574,90 @@ describe('buildDocumentApiApp', () => {
     }
   });
 
+  it('imports a bounded DOCX response and rejects unsafe upstream responses', async () => {
+    const app = await createApp();
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    try {
+      fetchMock.mockResolvedValueOnce(
+        new Response(await docxPayload([1, 2, 3]), {
+          headers: { 'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        }),
+      );
+
+      const imported = await app.inject({
+        method: 'POST',
+        url: '/api/documents/import-url',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 'https://public.example/template.docx' },
+      });
+
+      expect(imported.statusCode).toBe(201);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(URL),
+        expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) }),
+      );
+
+      fetchMock.mockResolvedValueOnce(
+        new Response('<html>not a document</html>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+      );
+      const html = await app.inject({
+        method: 'POST',
+        url: '/api/documents/import-url',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 'https://public.example/template.docx' },
+      });
+      expect(html.statusCode).toBe(400);
+
+      fetchMock.mockResolvedValueOnce(
+        new Response(null, {
+          headers: { 'content-type': 'application/octet-stream', 'content-length': String(50 * 1024 * 1024 + 1) },
+        }),
+      );
+      const oversized = await app.inject({
+        method: 'POST',
+        url: '/api/documents/import-url',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 'https://public.example/template.docx' },
+      });
+      expect(oversized.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects redirects to private addresses and upstream timeouts', async () => {
+    const app = await createApp();
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    try {
+      fetchMock.mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: 'https://127.0.0.1/internal.docx' } }),
+      );
+      const privateRedirect = await app.inject({
+        method: 'POST',
+        url: '/api/documents/import-url',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 'https://public.example/template.docx' },
+      });
+      expect(privateRedirect.statusCode).toBe(400);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      fetchMock.mockRejectedValueOnce(new Error('upstream timeout'));
+      const timeout = await app.inject({
+        method: 'POST',
+        url: '/api/documents/import-url',
+        headers: { 'content-type': 'application/json' },
+        payload: { url: 'https://public.example/template.docx' },
+      });
+      expect(timeout.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('exposes API health metadata for launcher compatibility checks', async () => {
     const app = await createApp();
 
@@ -611,6 +700,26 @@ describe('buildDocumentApiApp', () => {
       await app.close();
     }
   });
+
+  it('uses the bounded readiness probe instead of scanning document blobs', async () => {
+    const storageDirectory = await mkdtemp(path.join(tmpdir(), 'docx-editor-ready-'));
+    tempDirectories.push(storageDirectory);
+    const store = createDocumentStore({ rootDirectory: storageDirectory });
+    const checkReady = vi.spyOn(store, 'checkReady');
+    const verifyIntegrity = vi.spyOn(store, 'verifyIntegrity');
+    const app = buildDocumentApiApp({ store });
+    await app.ready();
+
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/ready' });
+      expect(response.statusCode).toBe(200);
+      expect(checkReady).toHaveBeenCalledOnce();
+      expect(verifyIntegrity).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects empty, non-DOCX, and overlong uploads', async () => {
     const app = await createApp();
 
@@ -839,6 +948,9 @@ describe('buildDocumentApiApp', () => {
         expect(policy).toContain("default-src 'self'");
         expect(policy).toContain("script-src 'self'");
         expect(policy).toContain("frame-ancestors 'none'");
+        expect(response.headers['permissions-policy']).toBe('camera=(), microphone=(), geolocation=(), payment=()');
+        expect(response.headers['cross-origin-opener-policy']).toBe('same-origin-allow-popups');
+        expect(response.headers['cross-origin-resource-policy']).toBe('same-origin');
         // Provider avatars are proxied through our own origin, so img-src needs
         // no remote hosts and stays as tight as possible.
         expect(policy).toContain("img-src 'self' data: blob:");

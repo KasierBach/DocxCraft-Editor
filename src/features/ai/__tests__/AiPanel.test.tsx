@@ -54,6 +54,7 @@ describe('AiPanel', () => {
       [{ role: 'user', content: 'Summarize this' }],
       { selection: undefined, paragraph: undefined, documentName: 'Report.docx' },
       expect.any(Function),
+      expect.any(AbortSignal),
     );
     await user.click(screen.getByRole('button', { name: 'Close assistant' }));
     expect(close).toHaveBeenCalledOnce();
@@ -74,6 +75,23 @@ describe('AiPanel', () => {
     }));
     expect(onDocumentChanged).toHaveBeenCalledOnce();
     expect(screen.getByText('Answer')).toBeInTheDocument();
+  });
+
+  it('stops an in-flight generation without showing an error', async () => {
+    vi.mocked(streamAiChat).mockImplementationOnce(async (_messages, _context, _onText, signal) => {
+      await new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+    });
+    const user = userEvent.setup();
+    renderPanel(vi.fn());
+
+    await user.type(screen.getByRole('textbox', { name: 'AI prompt' }), 'Stop this');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    await user.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    expect(await screen.findByText('Generation stopped.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('surfaces a provider error without crashing the panel', async () => {

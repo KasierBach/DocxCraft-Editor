@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { AgentChatLog, AgentComposer, AgentSuggestionChip, useDocxAgentTools, type AgentMessage, type AgentToolCall } from '@eigenpal/docx-editor-agents/react';
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 
@@ -26,6 +26,9 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => abortControllerRef.current?.abort(), []);
 
   const appendMessage = useCallback((message: AgentMessage) => {
     setMessages((current) => [...current, message]);
@@ -45,6 +48,8 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
       setInput('');
       setError(null);
       setIsLoading(true);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       let answer = '';
       try {
         await streamAiChat(
@@ -58,6 +63,7 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
             answer += text;
             setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, text: answer } : message)));
           },
+          controller.signal,
         );
         setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, text: answer, status: 'done' } : message)));
         if (applyToSelection && selection?.paraId && selection.selectedText && answer.trim()) {
@@ -76,15 +82,24 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
           onDocumentChanged();
         }
       } catch (caught) {
+        if (controller.signal.aborted) {
+          setMessages((current) => current.map((entry) => (entry.id === assistantId ? { ...entry, status: 'done', text: answer || 'Generation stopped.' } : entry)));
+          return;
+        }
         const message = caught instanceof Error ? caught.message : 'AI request failed.';
         setError(message);
         setMessages((current) => current.map((entry) => (entry.id === assistantId ? { ...entry, status: 'done', text: message } : entry)));
       } finally {
+        if (abortControllerRef.current === controller) abortControllerRef.current = null;
         setIsLoading(false);
       }
     },
     [appendMessage, documentName, executeToolCall, getContext, isLoading, messages, onDocumentChanged],
   );
+
+  const stop = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   const context = getContext();
   const selectionAvailable = Boolean(context.selection?.selectedText);
@@ -98,7 +113,8 @@ export function AiPanel({ editorRef, documentName, onDocumentChanged, close }: A
     <section className="ai-panel" aria-label="AI assistant">
       <div className="ai-panel__toolbar">
         <span className="ai-panel__title">Assistant</span>
-        <button type="button" className="action-button action-button--icon" onClick={close} aria-label="Close assistant">×</button>
+        {isLoading && <button type="button" className="action-button" onClick={stop}>Stop</button>}
+        <button type="button" className="action-button action-button--icon" onClick={() => { stop(); close(); }} aria-label="Close assistant">×</button>
       </div>
       <div className="ai-panel__context" aria-live="polite">
         {selectionAvailable ? 'Selection ready for tracked edits.' : 'Using the whole document context.'}

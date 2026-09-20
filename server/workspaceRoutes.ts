@@ -16,6 +16,8 @@ export type AiGatewayConfig = {
   maxRequestsPerHour: number;
 };
 
+const AI_PROVIDER_TIMEOUT_MS = 120_000;
+
 export const AI_PROVIDER_OPTIONS = [
   {
     id: 'openai-compatible',
@@ -23,7 +25,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'openai-compatible',
     defaultBaseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o-mini', 'gpt-4.1-mini'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'groq',
@@ -31,7 +33,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'openai-compatible',
     defaultBaseUrl: 'https://api.groq.com/openai/v1',
     models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'openrouter',
@@ -39,7 +41,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'openai-compatible',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
     models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'ollama',
@@ -47,7 +49,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'openai-compatible',
     defaultBaseUrl: 'http://127.0.0.1:11434/v1',
     models: ['llama3.2', 'qwen2.5'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'mistral',
@@ -55,7 +57,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'openai-compatible',
     defaultBaseUrl: 'https://api.mistral.ai/v1',
     models: ['mistral-small-latest', 'mistral-large-latest'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'anthropic',
@@ -63,7 +65,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'anthropic',
     defaultBaseUrl: 'https://api.anthropic.com/v1',
     models: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
   {
     id: 'gemini',
@@ -71,7 +73,7 @@ export const AI_PROVIDER_OPTIONS = [
     protocol: 'gemini',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com',
     models: ['gemini-2.0-flash', 'gemini-2.5-flash'],
-    capabilities: ['streaming', 'tools'],
+    capabilities: ['streaming'],
   },
 ] as const;
 
@@ -209,6 +211,7 @@ async function streamOpenAiCompatible(
     method: 'POST',
     headers: { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({ model, messages, stream: true }),
+    signal: AbortSignal.timeout(AI_PROVIDER_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
@@ -242,6 +245,7 @@ async function streamAnthropic(
         .filter((message) => message.role !== 'system')
         .map((message) => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content })),
     }),
+    signal: AbortSignal.timeout(AI_PROVIDER_TIMEOUT_MS),
   });
   if (!response.ok) throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
   await pipeEventStream(reply, response, (data) => {
@@ -268,6 +272,7 @@ async function streamGemini(
         parts: [{ text: message.content }],
       })),
     }),
+    signal: AbortSignal.timeout(AI_PROVIDER_TIMEOUT_MS),
   });
   if (!response.ok) throw new WorkspaceError(`AI provider returned ${response.status}.`, 502);
   await pipeEventStream(reply, response, (data) => {

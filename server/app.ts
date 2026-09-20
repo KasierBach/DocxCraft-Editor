@@ -44,6 +44,14 @@ export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const TRASH_RETENTION_DAYS = 30;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const IMPORT_FETCH_TIMEOUT_MS = 15_000;
+const IMPORT_CONTENT_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
+  'binary/octet-stream',
+]);
 
 // The app renders OOXML-derived DOM client-side, so the CSP is the backstop
 // for any rendering-layer flaw. Styles must stay inline-allowed because React
@@ -105,6 +113,7 @@ const PUBLIC_AUTH_ROUTES = new Set([
   '/api/auth/session',
   '/api/auth/setup',
 ]);
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 class RequestValidationError extends Error {
   constructor() {
@@ -174,6 +183,24 @@ function parseWithSchema<T>(schema: z.ZodType<T>, input: unknown) {
   return result.data;
 }
 
+function firstHeader(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function hasAllowedHostedOrigin(request: FastifyRequest, expectedOrigin: string) {
+  const origin = firstHeader(request.headers.origin);
+  const referer = firstHeader(request.headers.referer);
+  if (!origin && !referer) return true;
+
+  try {
+    if (origin && new URL(origin).origin !== expectedOrigin) return false;
+    if (referer && new URL(referer).origin !== expectedOrigin) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function assertPublicImportUrl(value: string) {
   try {
     const url = new URL(value);
@@ -206,13 +233,69 @@ function importedDocumentName(url: URL) {
 async function fetchImportedDocument(url: URL) {
   let currentUrl = url;
   for (let redirect = 0; redirect < 4; redirect += 1) {
-    const response = await fetch(currentUrl, { redirect: 'manual' });
+    let response: Response;
+    try {
+      response = await fetch(currentUrl, {
+        redirect: 'manual',
+        signal: AbortSignal.timeout(IMPORT_FETCH_TIMEOUT_MS),
+      });
+    } catch {
+      throw new RequestValidationError();
+    }
+
     if (response.status < 300 || response.status >= 400) return { response, url: currentUrl };
     const location = response.headers.get('location');
     if (!location) throw new RequestValidationError();
-    currentUrl = await assertPublicImportUrl(new URL(location, currentUrl).toString());
+    try {
+      currentUrl = await assertPublicImportUrl(new URL(location, currentUrl).toString());
+    } catch {
+      throw new RequestValidationError();
+    }
   }
   throw new RequestValidationError();
+}
+
+async function readImportedDocumentBody(response: Response) {
+  const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  if (contentType && !IMPORT_CONTENT_TYPES.has(contentType)) throw new RequestValidationError();
+
+  const contentLengthHeader = response.headers.get('content-length');
+  if (contentLengthHeader !== null) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > MAX_DOCUMENT_BYTES) {
+      throw new RequestValidationError();
+    }
+  }
+
+  if (!response.body) throw new RequestValidationError();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_DOCUMENT_BYTES) {
+        await reader.cancel();
+        throw new RequestValidationError();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const buffer = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return buffer;
 }
 
 export const RATE_LIMIT_MAX_REQUESTS = 300;
@@ -479,9 +562,28 @@ export function buildDocumentApiApp({
     reply.header('x-content-type-options', 'nosniff');
     reply.header('referrer-policy', 'no-referrer');
     reply.header('x-frame-options', 'DENY');
+    reply.header('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    reply.header('cross-origin-opener-policy', 'same-origin-allow-popups');
+    reply.header('cross-origin-resource-policy', 'same-origin');
     reply.header('x-request-id', request.id);
+    const forwardedProtocol = firstHeader(request.headers['x-forwarded-proto'])?.split(',')[0].trim();
+    if (forwardedProtocol === 'https' || accounts?.baseUrl.startsWith('https:')) {
+      reply.header('strict-transport-security', 'max-age=31536000; includeSubDomains');
+    }
     if (!reply.hasHeader('content-security-policy')) {
       reply.header('content-security-policy', CSP_DIRECTIVES);
+    }
+  });
+
+  app.addHook('preHandler', async (request, reply) => {
+    if (!accounts || !STATE_CHANGING_METHODS.has(request.method)) return;
+    if (PUBLIC_AUTH_ROUTES.has(request.routeOptions?.url ?? '')) return;
+    if (!readSessionCookie(request.headers as Record<string, unknown>)) return;
+
+    // SameSite=Lax is required for OAuth callbacks; reject an explicitly
+    // foreign Origin/Referer as defense-in-depth for hosted cookie mutations.
+    if (!hasAllowedHostedOrigin(request, new URL(accounts.baseUrl).origin)) {
+      return reply.code(403).send({ message: 'Request origin is not allowed.' });
     }
   });
 
@@ -545,7 +647,11 @@ export function buildDocumentApiApp({
 
   app.get('/api/ready', async (_request, reply) => {
     try {
-      await store.verifyIntegrity();
+      if (store.checkReady) {
+        await store.checkReady();
+      } else {
+        await store.verifyIntegrity();
+      }
       return { status: 'ready', apiVersion: API_VERSION };
     } catch {
       return reply.code(503).send({ status: 'not_ready', apiVersion: API_VERSION });
@@ -640,11 +746,8 @@ function registerDocumentRoutes(
     if (!scope) return reply;
     const url = await assertPublicImportUrl(parseWithSchema(importUrlBodySchema, request.body).url);
     const { response, url: resolvedUrl } = await fetchImportedDocument(url);
-    if (!response.ok || !response.body) throw new RequestValidationError();
-    const contentLength = Number(response.headers.get('content-length') ?? 0);
-    if (contentLength > MAX_DOCUMENT_BYTES) throw new RequestValidationError();
-    const buffer = new Uint8Array(await response.arrayBuffer());
-    if (buffer.byteLength > MAX_DOCUMENT_BYTES) throw new RequestValidationError();
+    if (!response.ok) throw new RequestValidationError();
+    const buffer = await readImportedDocumentBody(response);
     const validated = await readDocumentBuffer(buffer);
     await assertWithinQuota(scope.store, validated.byteLength, { countLimit: true });
     const document = await scope.store.saveNewDocument({ name: importedDocumentName(resolvedUrl), buffer: validated });

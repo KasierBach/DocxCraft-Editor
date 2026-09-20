@@ -375,6 +375,13 @@ export class PostgresDocumentStore implements DocumentStorePort {
     };
   }
 
+  async checkReady() {
+    await this.prisma.document.findFirst({
+      where: this.ownerFilter,
+      select: { id: true },
+    });
+  }
+
   async verifyIntegrity() {
     const documents = await this.prisma.document.findMany({
       where: { deletedAt: null, ...this.ownerFilter },

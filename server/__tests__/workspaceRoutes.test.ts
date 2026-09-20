@@ -118,13 +118,17 @@ describe.skipIf(!databaseUrl)('workspace routes (integration)', () => {
     expect((await app.inject({ method: 'GET', url: '/api/ai/settings', headers: { cookie } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'PATCH', url: '/api/ai/settings', headers: { cookie }, payload: { model: 'test-model', enabled: true } })).statusCode).toBe(200);
     const settings = await app.inject({ method: 'GET', url: '/api/ai/settings', headers: { cookie } });
-    expect(settings.json().providers.map((entry: { id: string }) => entry.id)).toEqual(expect.arrayContaining(['anthropic', 'gemini', 'groq', 'ollama']));
+    const settingsBody = settings.json() as { providers: Array<{ id: string; capabilities: string[] }> };
+    expect(settingsBody.providers.map((entry) => entry.id)).toEqual(expect.arrayContaining(['anthropic', 'gemini', 'groq', 'ollama']));
+    expect(settingsBody.providers.every((entry) => entry.capabilities.includes('streaming'))).toBe(true);
+    expect(settingsBody.providers.some((entry) => entry.capabilities.includes('tools'))).toBe(false);
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n', { status: 200 }));
     try {
       const chat = await app.inject({ method: 'POST', url: '/api/ai/chat', headers: { cookie }, payload: { messages: [{ role: 'user', content: 'hello' }] } });
       expect(chat.statusCode).toBe(200);
       expect(chat.body).toContain('hello');
+      expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ signal: expect.any(AbortSignal) });
     } finally {
       fetchSpy.mockRestore();
     }
@@ -162,6 +166,7 @@ describe.skipIf(!databaseUrl)('workspace routes (integration)', () => {
     await prisma.document.create({
       data: { id: documentId, ownerId: userId, name: 'Validation.docx', sizeInBytes: 1, versionCount: 1, revision: 1, createdAt: now, updatedAt: now },
     });
+    expect((await app.inject({ method: 'PATCH', url: `/api/workspace/documents/${documentId}`, headers: { cookie, origin: 'https://evil.example' }, payload: { folder: 'Blocked' } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'PATCH', url: `/api/workspace/documents/${documentId}`, headers: { cookie }, payload: { tags: 'not-an-array' } })).statusCode).toBe(400);
 
     const settings = await app.inject({ method: 'PATCH', url: '/api/ai/settings', headers: { cookie }, payload: { model: 'safe-model', baseUrl: 'https://attacker.example/v1' } });

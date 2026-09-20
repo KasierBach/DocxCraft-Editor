@@ -164,8 +164,19 @@ export async function streamAiChat(
   messages: AiMessage[],
   context: { selection?: string; paragraph?: string; documentName?: string } | undefined,
   onText: (text: string) => void,
+  signal?: AbortSignal,
 ) {
-  const response = await fetch('/api/ai/chat', withRequestTimeout({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages, context }) }, 120_000));
+  const timeoutSignal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(120_000) : undefined;
+  const requestSignal =
+    signal && timeoutSignal && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([signal, timeoutSignal])
+      : signal ?? timeoutSignal;
+  const response = await fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ messages, context }),
+    ...(requestSignal ? { signal: requestSignal } : {}),
+  });
   if (!response.ok) throw new Error(await readErrorMessage(response));
   if (!response.body) throw new Error('The AI response stream is unavailable.');
   const reader = response.body.getReader();

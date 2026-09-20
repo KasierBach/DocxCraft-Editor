@@ -17,6 +17,7 @@ describe('reportServerError', () => {
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce());
     const [, init] = fetchSpy.mock.calls[0]!;
     expect(init).toMatchObject({ method: 'POST', headers: { 'content-type': 'application/json' } });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(String(init?.body))).toMatchObject({ message: 'database password leaked', name: 'Error', requestId: 'req-2' });
   });
 });

@@ -42,6 +42,8 @@ export type CreateDocumentStoreOptions = {
 };
 
 export interface DocumentStorePort {
+  /** Cheap dependency probe for the readiness endpoint; does not scan blobs. */
+  checkReady?(): Promise<void>;
   verifyIntegrity(): Promise<void>;
   /**
    * Returns a view scoped to a single owner. The file store is single-tenant

@@ -108,6 +108,6 @@ describe('workspaceApi', () => {
     const text: string[] = [];
     await streamAiChat([{ role: 'user', content: 'hello' }], undefined, (value) => text.push(value));
     expect(text.join('')).toBe('Hello world');
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' });
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST', signal: expect.any(AbortSignal) });
   });
 });

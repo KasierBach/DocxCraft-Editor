@@ -59,13 +59,14 @@ describe.skipIf(!databaseUrl)('WorkspaceService (integration)', () => {
     expect((await workspace.updateMetadata(owner.id, document.id, { folder: 'Reports', tags: ['q1', 'q1'], isStarred: true })).tags).toEqual(['q1']);
     expect(await workspace.bulkUpdate(owner.id, [document.id], { folder: 'Archive' })).toEqual({ updated: 1 });
 
-    const share = await workspace.upsertShare(owner.id, document.id, reviewer.email!, 'editor');
-    expect((await workspace.listDocuments(reviewer.id))[0]?.role).toBe('editor');
+    const share = await workspace.upsertShare(owner.id, document.id, reviewer.email!, 'viewer');
+    expect((await workspace.listDocuments(reviewer.id))[0]?.role).toBe('viewer');
     expect((await workspace.listShares(owner.id, document.id))[0]?.email).toBe(reviewer.email);
 
     const comment = await workspace.addComment(reviewer.id, document.id, { body: 'Please review this.', paraId: 'p-1' });
     expect(comment.authorName).toBe('Reviewer');
     expect((await workspace.listComments(owner.id, document.id)).length).toBe(1);
+    await expect(workspace.resolveComment(reviewer.id, comment.id, true)).rejects.toMatchObject({ statusCode: 403 });
     expect((await workspace.resolveComment(owner.id, comment.id, true)).resolvedAt).not.toBeNull();
     expect((await workspace.listNotifications(owner.id)).some((entry) => entry.type === 'comment.added')).toBe(true);
     await workspace.markNotificationsRead(owner.id);
