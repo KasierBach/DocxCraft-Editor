@@ -39,6 +39,7 @@ export function useApiStatus({
   }, [healthUrl]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshStatus updates state after the health request settles.
     void refreshStatus();
 
     const intervalId = window.setInterval(() => {

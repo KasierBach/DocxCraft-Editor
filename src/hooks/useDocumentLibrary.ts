@@ -119,10 +119,12 @@ export function useDocumentLibrary({ initialDocumentName, api = defaultApi }: Us
   }, [api, currentDocumentId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this starts the async initial library load.
     void refreshDocuments().catch(() => undefined);
   }, [refreshDocuments]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- this starts the async version load for the selected document.
     void refreshVersions().catch(() => undefined);
   }, [currentDocumentId, refreshVersions]);
 
