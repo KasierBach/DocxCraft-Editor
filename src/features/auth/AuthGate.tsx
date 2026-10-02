@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 
 import { readAuthSession, type AuthProvider, type AuthSessionUser } from '../../lib/documentApi';
-import { DocumentsPage } from '../library/DocumentsPage';
-import { ProfilePage } from '../profile/ProfilePage';
 import { ChangelogPage } from '../landing/ChangelogPage';
 import { DocsPage } from '../landing/DocsPage';
 import { LandingPage } from '../landing/LandingPage';
@@ -13,6 +11,9 @@ import { AuthGateContext, type AppPage } from './AuthGateContext';
 import { LoginScreen } from './LoginScreen';
 import { SignInPage } from './SignInPage';
 import { SetupScreen } from './SetupScreen';
+
+const DocumentsPage = lazy(() => import('../library/DocumentsPage').then((module) => ({ default: module.DocumentsPage })));
+const ProfilePage = lazy(() => import('../profile/ProfilePage').then((module) => ({ default: module.ProfilePage })));
 
 type AuthGateProps = {
   children: ReactNode;

@@ -49,6 +49,13 @@ export default tseslint.config(
         },
     },
     {
+        // The entry mounts the React root once; it is not an HMR component boundary.
+        files: ['src/main.tsx'],
+        rules: {
+            'react-refresh/only-export-components': 'off',
+        },
+    },
+    {
         // The i18n module ships hooks and pure helpers alongside the provider;
         // it is not an HMR component boundary.
         files: ['src/i18n/**'],

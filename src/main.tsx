@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router';
 
 import '@eigenpal/docx-editor-react/styles.css';
-import App from './App';
+import './app.css';
 import { AuthGate } from './features/auth/AuthGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { I18nProvider } from './i18n';
+import { I18nProvider, useTranslation } from './i18n';
+
+const App = lazy(() => import('./App'));
+
+function EditorLoading() {
+  const { t } = useTranslation();
+  return <div className="login-screen" role="status" aria-busy="true">{t('profile.loading')}</div>;
+}
 
 const rootElement = document.getElementById('app');
 if (!rootElement) {
@@ -26,9 +33,11 @@ ReactDOM.createRoot(rootElement).render(
       <I18nProvider>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <AuthGate>
-              <App />
-            </AuthGate>
+            <Suspense fallback={<EditorLoading />}>
+              <AuthGate>
+                <App />
+              </AuthGate>
+            </Suspense>
           </QueryClientProvider>
         </ErrorBoundary>
       </I18nProvider>

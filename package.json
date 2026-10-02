@@ -32,6 +32,7 @@
     "test:e2e:auth": "playwright test --config playwright.auth.config.ts",
     "test:load": "tsx scripts/load-test.ts",
     "build": "tsc && vite build",
+    "check:bundle": "tsx scripts/check-bundle.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

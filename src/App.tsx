@@ -37,7 +37,6 @@ import { flashParagraphHighlight } from './lib/flashHighlight';
 import { scanForMedia, type MediaItem } from './lib/mediaScanner';
 import type { RecoverySnapshot } from './lib/recoveryStore';
 import { resolveActiveAnchorId } from './lib/resolveActiveAnchor';
-import './app.css';
 import './styles/components/modals.css';
 import './styles/components/command-palette.css';
 import './styles/components/ai-panel.css';
