@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/documents';
 
 test.beforeEach(() => {
   test.skip(
@@ -35,28 +35,25 @@ test.describe('resilience', () => {
     await expect(page.locator('.app-toast--error')).toContainText(/could not reach the server/i);
   });
 
-  test('opens a saved document from a deep link', async ({ page, request }) => {
+  test('opens a saved document from a deep link', async ({ page, documents }) => {
     await page.goto('/app');
     await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
+    const name = documents.name('Deep link');
+    await page.getByRole('textbox', { name: 'Document name' }).fill(name);
+    const savedResponse = page.waitForResponse((response) =>
+      response.url().endsWith('/api/documents') && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.locator('.app-toast')).toBeVisible({ timeout: 15_000 });
+    const response = await savedResponse;
+    const saved = await response.json() as { id: string };
+    documents.own(saved.id);
+    expect(response.status()).toBe(201);
+    await page.goto(`/app?source=saved&documentId=${saved.id}`);
+    await page.locator('.editor-panel').waitFor({ state: 'visible' });
 
-    const documents = await (await request.get('/api/documents')).json();
-    const saved = documents.find(
-      (document: { name: string }) => document.name === 'Built-in sample.docx',
-    );
-    expect(saved, 'the saved document is in the library').toBeTruthy();
-
-    try {
-      await page.goto(`/app?source=saved&documentId=${saved.id}`);
-      await page.locator('.editor-panel').waitFor({ state: 'visible' });
-
-      await expect(page.locator('.document-name-input')).toHaveValue('Built-in sample.docx', {
-        timeout: 15_000,
-      });
-    } finally {
-      await request.delete(`/api/documents/${saved.id}`);
-    }
+    await expect(page.locator('.document-name-input')).toHaveValue(name, {
+      timeout: 15_000,
+    });
+    await expect(page).toHaveURL(new RegExp(`documentId=${saved.id}`));
   });
 });

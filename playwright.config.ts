@@ -1,4 +1,12 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+// Never read or mutate the developer's default data/documents library.
+const dataRoot = mkdtempSync(path.join(os.tmpdir(), 'docxcraft-e2e-'));
+process.once('exit', () => rmSync(dataRoot, { recursive: true, force: true }));
 
 export default defineConfig({
   testDir: './e2e',
@@ -18,7 +26,7 @@ export default defineConfig({
     : 'list',
   use: {
     baseURL: 'http://127.0.0.1:5136',
-    // Skip the first-run onboarding modal in every test context.
+    // Ordinary workflows start onboarded; onboarding.spec uses fresh storage.
     storageState: {
       cookies: [],
       origins: [
@@ -41,14 +49,23 @@ export default defineConfig({
       // Starting our own server also prevents silently reusing a claim-mode
       // dev server (stop `npm run dev` before running the suite).
       // DOCUMENT_STORE=file keeps e2e independent of Postgres and `.env`.
-      env: { AUTH_MODE: 'off', DOCUMENT_STORE: 'file' },
+      env: {
+        AUTH_MODE: 'off',
+        DOCUMENT_STORE: 'file',
+        DATA_DIR: path.join(dataRoot, 'documents'),
+        BLOB_DIR: path.join(dataRoot, 'blobs'),
+        AUTH_STATE_FILE: path.join(dataRoot, 'auth.json'),
+        AI_ENABLED: 'false',
+        HOST: '127.0.0.1',
+        PORT: '4175',
+      },
       reuseExistingServer: false,
     },
     {
       command: 'npm run dev:web -- --host 127.0.0.1',
       url: 'http://127.0.0.1:5136',
       timeout: 30_000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
     },
   ],
   projects: [

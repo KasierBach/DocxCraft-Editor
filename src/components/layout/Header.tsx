@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { memo, useEffect, useRef, useState, type ChangeEvent, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { EditorMode } from '@eigenpal/docx-editor-react';
 import { Breadcrumbs } from './Breadcrumbs';
 import { LanguageSwitcher } from '../ui/LanguageSwitcher';
@@ -107,6 +107,7 @@ function HeaderComponent({
   const exportTriggerRef = useRef<HTMLButtonElement | null>(null);
   const utilityMenuRef = useRef<HTMLDivElement | null>(null);
   const utilityTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const tabExitRef = useRef(false);
 
   useEffect(() => {
     if (!openMenu) {
@@ -165,7 +166,33 @@ function HeaderComponent({
     setOpenMenu((current) => (current === menu ? null : menu));
   };
 
+  const handleMenuBlur = (event: ReactFocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget;
+    const isTabExit = tabExitRef.current;
+    tabExitRef.current = false;
+    if (isTabExit && (next === exportTriggerRef.current || next === utilityTriggerRef.current)) {
+      closeMenus();
+      return;
+    }
+    if (event.currentTarget.contains(next as Node | null)) return;
+
+    // The SDK can autofocus its hidden editor after the user opens a menu.
+    // Explicit pointer/Tab exits close it; a late SDK focus must not.
+    if (openMenu && !isTabExit && next instanceof HTMLElement && next.closest('.ProseMirror')) {
+      const previous = event.target as HTMLElement;
+      queueMicrotask(() => {
+        if (previous.isConnected && document.activeElement === next) previous.focus();
+      });
+      return;
+    }
+    closeMenus();
+  };
+
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      tabExitRef.current = true;
+      return;
+    }
     const menuItems = Array.from(
       event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
     );
@@ -348,11 +375,7 @@ function HeaderComponent({
           <div
             ref={exportMenuRef}
             className="toolbar__menu"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setOpenMenu(null);
-              }
-            }}
+            onBlur={handleMenuBlur}
           >
             <button
               ref={exportTriggerRef}
@@ -420,11 +443,7 @@ function HeaderComponent({
           <div
             ref={utilityMenuRef}
             className="toolbar__menu"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setOpenMenu(null);
-              }
-            }}
+            onBlur={handleMenuBlur}
           >
             <button
               ref={utilityTriggerRef}

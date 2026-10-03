@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +49,9 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
         onShowHome={onShowHome}
       />
       <button type="button">Outside</button>
+      <div className="editor-host">
+        <div className="ProseMirror" contentEditable tabIndex={0} aria-label="Document body" />
+      </div>
     </div>,
   );
 
@@ -68,6 +71,89 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
 }
 
 describe('Header action menus', () => {
+  it.each(['Export', 'More actions'])('keeps %s open if SDK focus arrives before the menu focus frame', async (menuName) => {
+    renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    act(() => trigger.focus());
+    fireEvent.click(trigger);
+    act(() => screen.getByLabelText('Document body').focus());
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(screen.getAllByRole('menuitem')[0]).toHaveFocus());
+  });
+
+  it.each(['Export', 'More actions'])('keeps %s usable when SDK focus arrives after the menu opens', async (menuName) => {
+    const { user } = renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    await user.click(trigger);
+    const firstItem = screen.getAllByRole('menuitem')[0];
+    await waitFor(() => expect(firstItem).toHaveFocus());
+    await user.keyboard('{ArrowDown}');
+    const chosenItem = screen.getAllByRole('menuitem')[1];
+    expect(chosenItem).toHaveFocus();
+
+    act(() => screen.getByLabelText('Document body').focus());
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(chosenItem).toHaveFocus());
+    await user.click(chosenItem);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it.each(['Export', 'More actions'])('allows Tab to leave %s without restoring menu focus', async (menuName) => {
+    const { user } = renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    await user.click(trigger);
+    const items = screen.getAllByRole('menuitem');
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    act(() => {
+      screen.getByRole('button', { name: 'Outside' }).tabIndex = -1;
+      if (menuName === 'Export') {
+        screen.getByRole('button', { name: 'More actions' }).tabIndex = -1;
+      }
+      items[items.length - 1].focus();
+    });
+    await user.tab();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Document body')).toHaveFocus();
+  });
+
+  it.each(['Export', 'More actions'])('allows an intentional editor click to close %s', async (menuName) => {
+    const { user } = renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    await user.click(trigger);
+    await user.click(screen.getByLabelText('Document body'));
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('Document body')).toHaveFocus();
+  });
+
+  it.each(['Export', 'More actions'])('allows Shift+Tab to leave %s without trapping focus', async (menuName) => {
+    const { user } = renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    await user.click(trigger);
+    await waitFor(() => expect(screen.getAllByRole('menuitem')[0]).toHaveFocus());
+    await user.tab({ shift: true });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it.each(['Export', 'More actions'])('does not restore stale %s focus after an outside interaction', async (menuName) => {
+    const { user } = renderHeader();
+    const trigger = screen.getByRole('button', { name: menuName });
+    await user.click(trigger);
+    await waitFor(() => expect(screen.getAllByRole('menuitem')[0]).toHaveFocus());
+    const outside = screen.getByRole('button', { name: 'Outside' });
+    act(() => {
+      screen.getByLabelText('Document body').focus();
+      fireEvent.pointerDown(outside);
+      outside.focus();
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(outside).toHaveFocus();
+  });
+
   it('opens the export menu, closes it on outside click and escape, and runs export actions', async () => {
     const { onDownloadCurrent, onExportMarkdown, onPrintPDF, user } = renderHeader();
     const exportButton = screen.getByRole('button', { name: /export/i });

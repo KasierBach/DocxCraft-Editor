@@ -474,7 +474,6 @@ export default function App() {
     const documentIdToOpen = deepLinkDocumentId ?? rememberedDocumentId;
 
     if (!hasHandledInitialDeepLink.current && documentIdToOpen) {
-      hasHandledInitialDeepLink.current = true;
       const fromDeepLink = Boolean(deepLinkDocumentId);
       void (async () => {
         try {
@@ -482,6 +481,9 @@ export default function App() {
           if (isCancelled) {
             return;
           }
+          // StrictMode cancels and replays startup effects. Only a live
+          // completion handles the link; a cancelled attempt must allow retry.
+          hasHandledInitialDeepLink.current = true;
 
           loadEditorSource({
             kind: 'saved-document',
@@ -498,6 +500,7 @@ export default function App() {
           if (isCancelled) {
             return;
           }
+          hasHandledInitialDeepLink.current = true;
 
           initialRestorePendingRef.current = false;
           // A remembered document that no longer exists (or is no longer

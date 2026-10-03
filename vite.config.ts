@@ -31,9 +31,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',
+      // Include unimported executable files; helpers must not inflate the total.
+      include: ['src/**/*.{ts,tsx}', 'server/**/*.ts', 'scripts/**/*.ts'],
       exclude: [
-        '**/*.test.{ts,tsx}',
+        '**/*.{test,spec}.{ts,tsx}',
+        '**/*.d.ts',
         'src/test/**',
+        'server/__tests__/**',
+        'scripts/__tests__/**',
         'src/main.tsx',
         // Translation catalogs are data (message tables), not logic.
         'src/i18n/locales/**',

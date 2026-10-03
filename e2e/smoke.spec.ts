@@ -1,13 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
-import JSZip from 'jszip';
-
-async function createDocxFixture() {
-  const zip = new JSZip();
-  zip.file('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>');
-  zip.file('word/document.xml', '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>');
-  return zip.generateAsync({ type: 'nodebuffer' });
-}
+import { expect, test } from './fixtures/documents';
 
 test('API health is available', async ({ request }) => {
   const response = await request.get('http://127.0.0.1:4175/api/health');
@@ -15,28 +7,17 @@ test('API health is available', async ({ request }) => {
   await expect(response.json()).resolves.toMatchObject({ status: 'ok' });
 });
 
-test('API document lifecycle works end to end', async ({ request }) => {
-  const buffer = await createDocxFixture();
-  const created = await request.post('http://127.0.0.1:4175/api/documents', {
-    headers: { 'content-type': 'application/octet-stream', 'x-document-name': encodeURIComponent('E2E lifecycle.docx') },
-    data: buffer,
-  });
-  expect(created.status()).toBe(201);
-  const document = await created.json();
-  const id = document.id as string;
+test('API document lifecycle works end to end', async ({ request, documents }) => {
+  const { id } = await documents.create(documents.name('lifecycle'), 'Lifecycle content');
 
-  try {
-    const content = await request.get(`http://127.0.0.1:4175/api/documents/${id}/content`);
-    expect(content.status()).toBe(200);
-    const renamed = await request.patch(`http://127.0.0.1:4175/api/documents/${id}`, { data: { name: 'E2E renamed.docx' } });
-    expect(renamed.status()).toBe(200);
-    const duplicate = await request.post(`http://127.0.0.1:4175/api/documents/${id}/duplicate`);
-    expect(duplicate.status()).toBe(201);
-    const duplicateId = (await duplicate.json()).id as string;
-    await request.delete(`http://127.0.0.1:4175/api/documents/${duplicateId}`);
-  } finally {
-    await request.delete(`http://127.0.0.1:4175/api/documents/${id}`);
-  }
+  const content = await request.get(`http://127.0.0.1:4175/api/documents/${id}/content`);
+  expect(content.status()).toBe(200);
+  const renamed = await request.patch(`http://127.0.0.1:4175/api/documents/${id}`, { data: { name: documents.name('renamed') } });
+  expect(renamed.status()).toBe(200);
+  const duplicate = await request.post(`http://127.0.0.1:4175/api/documents/${id}/duplicate`);
+  const duplicateId = (await duplicate.json()).id as string;
+  documents.own(duplicateId);
+  expect(duplicate.status()).toBe(201);
 });
 
 test('editor loads the sample workspace and core overlays work', async ({ page }, testInfo) => {

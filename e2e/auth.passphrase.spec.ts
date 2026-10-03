@@ -26,7 +26,15 @@ test('claims the instance, signs in, keeps the session, and signs out', async ({
   await page.reload();
   await expect(page.getByRole('heading', { name: 'DOCX Workspace' })).toBeVisible();
 
+  const editor = page.locator('.ProseMirror').first();
+  await expect(editor).toBeAttached();
   await page.getByRole('button', { name: 'More actions' }).click();
+  const firstMenuItem = page.getByRole('menuitem', { name: 'Save as copy' });
+  await expect(firstMenuItem).toBeFocused();
+  // Reproduce the SDK's late autofocus at its DOM boundary, without a sleep.
+  await editor.evaluate((element: HTMLElement) => element.focus());
+  await expect(page.getByRole('menu', { name: 'More actions' })).toBeVisible();
+  await expect(firstMenuItem).toBeFocused();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 

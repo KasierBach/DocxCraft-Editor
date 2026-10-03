@@ -1,108 +1,78 @@
-import { expect, test } from '@playwright/test';
-import JSZip from 'jszip';
+import { createDocxFixture, expect, test } from './fixtures/documents';
 
 const API_BASE = 'http://127.0.0.1:4175';
 
-async function createDocxFixture(content: string) {
-    const zip = new JSZip();
-    zip.file(
-        '[Content_Types].xml',
-        '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
-    );
-    zip.file(
-        'word/document.xml',
-        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${content}</w:t></w:r></w:p></w:body></w:document>`,
-    );
-    return zip.generateAsync({ type: 'nodebuffer' });
-}
-
-async function createDocument(request: import('@playwright/test').APIRequestContext, name: string, content: string) {
-    const created = await request.post(`${API_BASE}/api/documents`, {
-        headers: {
-            'content-type': 'application/octet-stream',
-            'x-document-name': encodeURIComponent(name),
-        },
-        data: await createDocxFixture(content),
-    });
-    expect(created.status()).toBe(201);
-    return (await created.json()) as { id: string; name: string };
-}
-
-test('open a saved document, duplicate it, and reopen after reload', async ({ page, request }) => {
+test('open a saved document, duplicate it, and reopen after reload', async ({ page, documents }) => {
     test.skip(
-        test.info().project.name !== 'chromium',
-        'Desktop Chromium owns the full interaction path.',
+    test.info().project.name !== 'chromium',
+    'Desktop Chromium owns the full interaction path.',
     );
 
-    const created = await createDocument(request, 'E2E Save Flow.docx', 'E2E Save Flow');
+    const created = await documents.create(documents.name('Save Flow'), 'E2E Save Flow');
+    const copyName = created.name.replace(/\.docx$/, ' Copy.docx');
 
-    try {
-        await page.goto('/app');
-        await page.getByRole('button', { name: 'Open E2E Save Flow.docx' }).click();
-        await expect(page.getByRole('textbox', { name: 'Document name' })).toHaveValue(
-            'E2E Save Flow.docx',
-        );
+    await page.goto('/app');
+    await page.getByRole('button', { name: `Open ${created.name}`, exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document name' })).toHaveValue(
+        created.name,
+    );
+    await expect(page.locator('.editor-panel')).toContainText('E2E Save Flow');
 
-        await page.reload();
-        await page.getByRole('button', { name: 'Open E2E Save Flow.docx' }).click();
-        await expect(page.getByRole('textbox', { name: 'Document name' })).toHaveValue(
-            'E2E Save Flow.docx',
-        );
-        await expect(page.getByText('Online')).toBeVisible();
+    await page.reload();
+    await page.getByRole('button', { name: `Open ${created.name}`, exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document name' })).toHaveValue(
+        created.name,
+    );
+    await expect(page.getByText('Online')).toBeVisible();
 
-        await page.getByRole('button', { name: 'Duplicate E2E Save Flow.docx' }).click();
-        await expect(
-            page.getByRole('button', { name: 'Open E2E Save Flow Copy.docx' }),
-        ).toBeVisible();
-    } finally {
-        const listResponse = await request.get(`${API_BASE}/api/documents`);
-        const documents = (await listResponse.json()) as Array<{ id: string; name: string }>;
-        for (const document of documents.filter((entry) => entry.name.startsWith('E2E Save Flow'))) {
-            await request.delete(`${API_BASE}/api/documents/${document.id}`);
-        }
-    }
+    const duplicateResponse = page.waitForResponse((response) =>
+        response.url().endsWith(`/api/documents/${created.id}/duplicate`) && response.request().method() === 'POST');
+    await page.getByRole('button', { name: `Duplicate ${created.name}`, exact: true }).click();
+    const response = await duplicateResponse;
+    const duplicate = await response.json() as { id: string };
+    documents.own(duplicate.id);
+    expect(response.status()).toBe(201);
+    await expect(
+        page.getByRole('button', { name: `Open ${copyName}`, exact: true }),
+    ).toBeVisible();
 });
 
-test('version history grows with updates and restores an older version', async ({ request }) => {
-    const created = await createDocument(request, 'E2E Versions.docx', 'E2E Versions');
+test('version history grows with updates and restores an older version', async ({ request, documents }) => {
+    const created = await documents.create(documents.name('Versions'), 'E2E Versions');
 
-    try {
-        const updated = await request.put(`${API_BASE}/api/documents/${created.id}`, {
-            headers: {
-                'content-type': 'application/octet-stream',
-                'x-document-name': encodeURIComponent('E2E Versions.docx'),
-            },
-            data: await createDocxFixture('E2E Versions Updated'),
-        });
-        expect(updated.status()).toBe(200);
+    const updated = await request.put(`${API_BASE}/api/documents/${created.id}`, {
+        headers: {
+            'content-type': 'application/octet-stream',
+            'x-document-name': encodeURIComponent(created.name),
+        },
+        data: await createDocxFixture('E2E Versions Updated'),
+    });
+    expect(updated.status()).toBe(200);
 
-        const versionsResponse = await request.get(`${API_BASE}/api/documents/${created.id}/versions`);
-        const versions = (await versionsResponse.json()) as Array<{ id: string }>;
-        expect(versions.length).toBe(2);
+    const versionsResponse = await request.get(`${API_BASE}/api/documents/${created.id}/versions`);
+    const versions = (await versionsResponse.json()) as Array<{ id: string }>;
+    expect(versions.length).toBe(2);
 
-        const oldest = versions[versions.length - 1]!;
-        const restoreResponse = await request.get(
-            `${API_BASE}/api/documents/${created.id}/versions/${oldest.id}/content`,
-        );
-        expect(restoreResponse.status()).toBe(200);
-        const restoredBody = await restoreResponse.body();
-        expect(restoredBody.byteLength).toBeGreaterThan(0);
+    const oldest = versions[versions.length - 1]!;
+    const restoreResponse = await request.get(
+        `${API_BASE}/api/documents/${created.id}/versions/${oldest.id}/content`,
+    );
+    expect(restoreResponse.status()).toBe(200);
+    const restoredBody = await restoreResponse.body();
+    expect(restoredBody.byteLength).toBeGreaterThan(0);
 
-        const restored = await request.put(`${API_BASE}/api/documents/${created.id}`, {
-            headers: {
-                'content-type': 'application/octet-stream',
-                'x-document-name': encodeURIComponent('E2E Versions.docx'),
-            },
-            data: restoredBody,
-        });
-        expect(restored.status()).toBe(200);
+    const restored = await request.put(`${API_BASE}/api/documents/${created.id}`, {
+        headers: {
+            'content-type': 'application/octet-stream',
+            'x-document-name': encodeURIComponent(created.name),
+        },
+        data: restoredBody,
+    });
+    expect(restored.status()).toBe(200);
 
-        const finalVersions = await request.get(`${API_BASE}/api/documents/${created.id}/versions`);
-        const finalList = (await finalVersions.json()) as Array<{ id: string }>;
-        expect(finalList.length).toBe(3);
-    } finally {
-        await request.delete(`${API_BASE}/api/documents/${created.id}`);
-    }
+    const finalVersions = await request.get(`${API_BASE}/api/documents/${created.id}/versions`);
+    const finalList = (await finalVersions.json()) as Array<{ id: string }>;
+    expect(finalList.length).toBe(3);
 });
 
 test('theme toggle switches surfaces and persists across reloads', async ({ page }) => {

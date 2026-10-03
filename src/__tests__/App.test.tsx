@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -205,6 +206,27 @@ describe('App', () => {
     triggerEditorSelectionChange.mockReset();
     mockedRecoverySnapshot = null;
     mockState.nextSelectionInfo = null;
+  });
+
+  it('opens the requested buffer after StrictMode replays startup effects', async () => {
+    const previousUrl = window.location.href;
+    window.history.replaceState(null, '', '/app?source=saved&documentId=strict-document');
+    openSavedDocument.mockResolvedValue({
+      id: 'strict-document', name: 'Requested.docx',
+      buffer: Uint8Array.from([7, 8, 9]).buffer,
+    });
+    try {
+      render(<StrictMode><App /></StrictMode>);
+      await waitFor(() => {
+        const buffer = docxEditorRenderLog.at(-1)?.documentBuffer;
+        expect(buffer && Array.from(new Uint8Array(buffer))).toEqual([7, 8, 9]);
+        expect(window.location.search).toContain('documentId=strict-document');
+      });
+      expect(screen.getByRole('textbox', { name: 'Document name' })).toHaveValue('Requested.docx');
+    } finally {
+      cleanup();
+      window.history.replaceState(null, '', previousUrl);
+    }
   });
 
   it('reloads the current local docx source', async () => {
