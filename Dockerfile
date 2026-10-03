@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 WORKDIR /app
 
 # Prisma's CLI needs OpenSSL on the slim base image (without it it falls back
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run db:generate
 RUN npm run build
 
-FROM node:22-slim AS runtime
+FROM node:25-slim AS runtime
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4175 \
