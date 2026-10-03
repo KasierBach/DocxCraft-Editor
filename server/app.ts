@@ -1,5 +1,9 @@
 import { existsSync } from 'node:fs';
-import { lookup } from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
+import type { IncomingMessage } from 'node:http';
+import { request as httpsRequest, type RequestOptions } from 'node:https';
+import { BlockList, isIP } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +49,19 @@ export const TRASH_RETENTION_DAYS = 30;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const IMPORT_FETCH_TIMEOUT_MS = 15_000;
+const MAX_CONCURRENT_IMPORTS = 4;
+const NON_PUBLIC_IMPORT_ADDRESSES = new BlockList();
+for (const [address, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3],
+] as const) NON_PUBLIC_IMPORT_ADDRESSES.addSubnet(address, prefix, 'ipv4');
+for (const [address, prefix] of [
+  ['2001::', 23], ['2001:db8::', 32], ['2002::', 16], ['3fff::', 20],
+] as const) NON_PUBLIC_IMPORT_ADDRESSES.addSubnet(address, prefix, 'ipv6');
+const GLOBAL_IMPORT_IPV6 = new BlockList();
+GLOBAL_IMPORT_IPV6.addSubnet('2000::', 3, 'ipv6');
 const IMPORT_CONTENT_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/octet-stream',
@@ -201,26 +218,48 @@ function hasAllowedHostedOrigin(request: FastifyRequest, expectedOrigin: string)
   }
 }
 
-async function assertPublicImportUrl(value: string) {
+function isPublicImportAddress(address: string) {
+  const family = isIP(address);
+  if (family === 4) return !NON_PUBLIC_IMPORT_ADDRESSES.check(address, 'ipv4');
+  return family === 6 && GLOBAL_IMPORT_IPV6.check(address, 'ipv6') &&
+    !NON_PUBLIC_IMPORT_ADDRESSES.check(address, 'ipv6');
+}
+
+async function assertPublicImportUrl(value: string, signal: AbortSignal) {
   try {
+    signal.throwIfAborted();
     const url = new URL(value);
-    if (url.protocol !== 'https:') throw new RequestValidationError();
-    const addresses = await lookup(url.hostname, { all: true });
-    if (
-      addresses.some(({ address }) =>
-        /^(10\.|127\.|169\.254\.|192\.168\.|0\.)/.test(address) ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(address) ||
-        address === '::1' ||
-        address.startsWith('fc') ||
-        address.startsWith('fd') ||
-        address.startsWith('fe80:')
-      )
-    ) {
+    if (url.protocol !== 'https:' || url.username || url.password) throw new RequestValidationError();
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');
+    const family = isIP(hostname);
+    const addresses: LookupAddress[] = [];
+    if (family) {
+      addresses.push({ address: hostname, family });
+    } else {
+      const resolver = new Resolver({ timeout: IMPORT_FETCH_TIMEOUT_MS, tries: 1 });
+      const cancel = () => resolver.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const results = await Promise.allSettled([resolver.resolve4(hostname), resolver.resolve6(hostname)]);
+        signal.throwIfAborted();
+        for (const [index, result] of results.entries()) {
+          if (result.status === 'fulfilled') {
+            addresses.push(...result.value.map((address) => ({ address, family: index === 0 ? 4 : 6 })));
+            continue;
+          }
+          // Missing one DNS record family is normal; other resolver failures fail closed.
+          if (!['ENODATA', 'ENOTFOUND'].includes(result.reason?.code)) throw new RequestValidationError();
+        }
+      } finally {
+        signal.removeEventListener('abort', cancel);
+        resolver.cancel();
+      }
+    }
+    if (!addresses.length || addresses.some(({ address }) => !isPublicImportAddress(address))) {
       throw new RequestValidationError();
     }
-    return url;
-  } catch (error) {
-    if (error instanceof RequestValidationError) throw error;
+    return { url, addresses };
+  } catch {
     throw new RequestValidationError();
   }
 }
@@ -230,72 +269,90 @@ function importedDocumentName(url: URL) {
   return (lastSegment || 'Imported document').slice(0, 255);
 }
 
-async function fetchImportedDocument(url: URL) {
-  let currentUrl = url;
-  for (let redirect = 0; redirect < 4; redirect += 1) {
-    let response: Response;
-    try {
-      response = await fetch(currentUrl, {
-        redirect: 'manual',
-        signal: AbortSignal.timeout(IMPORT_FETCH_TIMEOUT_MS),
+async function fetchImportedDocument(value: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), IMPORT_FETCH_TIMEOUT_MS);
+  timeout.unref();
+  try {
+    for (let redirect = 0; redirect < 4; redirect += 1) {
+      const { url, addresses } = await assertPublicImportUrl(value, controller.signal);
+      const response = await new Promise<IncomingMessage>((resolve, reject) => {
+        // Keep the original hostname for Host/SNI/certificate verification. Never
+        // re-resolve or reuse a socket from outside this validated address set.
+        const options: RequestOptions & { autoSelectFamily: boolean } = {
+          agent: false,
+          autoSelectFamily: true,
+          signal: controller.signal,
+          headers: { 'accept-encoding': 'identity' },
+          lookup: (_hostname, options, callback) => {
+            if (options.all) {
+              const allCallback = callback as unknown as (error: null, addresses: LookupAddress[]) => void;
+              allCallback(null, addresses);
+              return;
+            }
+            callback(null, addresses[0].address, addresses[0].family);
+          },
+        };
+        const request = httpsRequest(url, options, resolve);
+        request.once('error', reject);
+        request.once('close', () => reject(new RequestValidationError()));
+        request.end();
       });
-    } catch {
-      throw new RequestValidationError();
+      try {
+        const status = response.statusCode ?? 0;
+        if (status >= 300 && status < 400) {
+          const location = response.headers.location;
+          if (!location) throw new RequestValidationError();
+          value = new URL(location, url).toString();
+          continue;
+        }
+        if (status < 200 || status >= 300) throw new RequestValidationError();
+        return { buffer: await readImportedDocumentBody(response, controller.signal), url };
+      } finally {
+        response.destroy();
+      }
     }
-
-    if (response.status < 300 || response.status >= 400) return { response, url: currentUrl };
-    const location = response.headers.get('location');
-    if (!location) throw new RequestValidationError();
-    try {
-      currentUrl = await assertPublicImportUrl(new URL(location, currentUrl).toString());
-    } catch {
-      throw new RequestValidationError();
-    }
+    throw new RequestValidationError();
+  } catch {
+    throw new RequestValidationError();
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
   }
-  throw new RequestValidationError();
 }
 
-async function readImportedDocumentBody(response: Response) {
-  const contentType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+async function readImportedDocumentBody(response: IncomingMessage, signal: AbortSignal) {
+  signal.throwIfAborted();
+  const encoding = response.headers['content-encoding']?.trim().toLowerCase();
+  if (encoding && encoding !== 'identity') throw new RequestValidationError();
+  const contentType = response.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
   if (contentType && !IMPORT_CONTENT_TYPES.has(contentType)) throw new RequestValidationError();
 
-  const contentLengthHeader = response.headers.get('content-length');
-  if (contentLengthHeader !== null) {
+  const contentLengthHeader = response.headers['content-length'];
+  if (contentLengthHeader !== undefined) {
     const contentLength = Number(contentLengthHeader);
     if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > MAX_DOCUMENT_BYTES) {
       throw new RequestValidationError();
     }
   }
 
-  if (!response.body) throw new RequestValidationError();
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const chunks: Buffer[] = [];
   let totalBytes = 0;
+  const cancel = () => response.destroy(new RequestValidationError());
+  signal.addEventListener('abort', cancel, { once: true });
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-
-      totalBytes += value.byteLength;
+    for await (const chunk of response) {
+      totalBytes += chunk.byteLength;
       if (totalBytes > MAX_DOCUMENT_BYTES) {
-        await reader.cancel();
         throw new RequestValidationError();
       }
-      chunks.push(value);
+      chunks.push(chunk);
     }
+    signal.throwIfAborted();
+    return Buffer.concat(chunks, totalBytes);
   } finally {
-    reader.releaseLock();
+    signal.removeEventListener('abort', cancel);
   }
-
-  const buffer = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    buffer.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return buffer;
 }
 
 export const RATE_LIMIT_MAX_REQUESTS = 300;
@@ -711,6 +768,8 @@ function registerDocumentRoutes(
   accounts?: AccountsOptions,
   quotas?: { maxDocuments: number; maxStorageBytes: number },
 ) {
+  // ponytail: per-instance admission cap; externalize it before multi-instance hosting.
+  let activeImports = 0;
   // With hosted accounts every document call runs against a store scoped to the
   // session's user. Without an account layer (self-host) the base store is used
   // directly and behaviour is unchanged.
@@ -788,15 +847,21 @@ function registerDocumentRoutes(
   app.post('/api/documents/import-url', async (request, reply) => {
     const scope = await resolveScope(request, reply, 'owner');
     if (!scope) return reply;
-    const url = await assertPublicImportUrl(parseWithSchema(importUrlBodySchema, request.body).url);
-    const { response, url: resolvedUrl } = await fetchImportedDocument(url);
-    if (!response.ok) throw new RequestValidationError();
-    const buffer = await readImportedDocumentBody(response);
-    const validated = await readDocumentBuffer(buffer);
-    await assertWithinQuota(scope.store, validated.byteLength, { countLimit: true });
-    const document = await scope.store.saveNewDocument({ name: importedDocumentName(resolvedUrl), buffer: validated });
-    await accounts?.audit?.record({ action: 'document.create', actorUserId: scope.userId, documentId: document.id, ip: request.ip });
-    return reply.code(201).send(document);
+    const { url } = parseWithSchema(importUrlBodySchema, request.body);
+    if (activeImports >= MAX_CONCURRENT_IMPORTS) {
+      return reply.code(429).header('retry-after', '15').send({ message: 'Too many document imports. Try again shortly.' });
+    }
+    activeImports += 1;
+    try {
+      const { buffer, url: resolvedUrl } = await fetchImportedDocument(url);
+      const validated = await readDocumentBuffer(buffer);
+      await assertWithinQuota(scope.store, validated.byteLength, { countLimit: true });
+      const document = await scope.store.saveNewDocument({ name: importedDocumentName(resolvedUrl), buffer: validated });
+      await accounts?.audit?.record({ action: 'document.create', actorUserId: scope.userId, documentId: document.id, ip: request.ip });
+      return reply.code(201).send(document);
+    } finally {
+      activeImports -= 1;
+    }
   });
 
   app.put('/api/documents/:documentId', async (request, reply) => {
