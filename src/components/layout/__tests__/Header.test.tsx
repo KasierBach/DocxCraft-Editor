@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Header } from '../Header';
 
-function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' }) {
+function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark'; props?: Partial<ComponentProps<typeof Header>> }) {
   const onExportMarkdown = vi.fn();
   const onPrintPDF = vi.fn();
   const onDownloadCurrent = vi.fn();
@@ -47,6 +48,7 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
         onShowDocs={onShowDocs}
         onShowChangelog={onShowChangelog}
         onShowHome={onShowHome}
+        {...options?.props}
       />
       <button type="button">Outside</button>
       <div className="editor-host">
@@ -71,6 +73,37 @@ function renderHeader(options?: { canReload?: boolean; theme?: 'light' | 'dark' 
 }
 
 describe('Header action menus', () => {
+  it.each([
+    ['My documents', 'onShowLibrary'],
+    ['Settings', 'onShowSettings'],
+    ['AI assistant', 'onShowAssistant'],
+    ['Sign out', 'onSignOut'],
+    ['Refresh Map', 'onRefresh'],
+  ] as const)('routes %s to its own action and closes the menu', async (label, prop) => {
+    const action = vi.fn();
+    const { user } = renderHeader({ props: { [prop]: action } });
+    const trigger = screen.getByRole('button', { name: 'More actions' });
+    await user.click(trigger);
+    await user.click(screen.getByRole('menuitem', { name: label }));
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it.each([
+    ['ArrowRight', 'suggesting'],
+    ['ArrowDown', 'suggesting'],
+    ['ArrowLeft', 'viewing'],
+    ['ArrowUp', 'viewing'],
+  ] as const)('selects and focuses the expected mode with %s', async (key, mode) => {
+    const onEditorModeChange = vi.fn();
+    const { user } = renderHeader({ props: { onEditorModeChange } });
+    act(() => screen.getByRole('radio', { name: 'editing' }).focus());
+    await user.keyboard(`{${key}}`);
+    expect(onEditorModeChange).toHaveBeenCalledExactlyOnceWith(mode);
+    expect(screen.getByRole('radio', { name: mode })).toHaveFocus();
+  });
+
   it.each(['Export', 'More actions'])('keeps %s open if SDK focus arrives before the menu focus frame', async (menuName) => {
     renderHeader();
     const trigger = screen.getByRole('button', { name: menuName });
